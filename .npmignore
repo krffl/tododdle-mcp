@@ -1,0 +1,15 @@
+src/
+node_modules/
+.env
+.env.example
+*.log
+.DS_Store
+*.tsbuildinfo
+.git/
+.gitignore
+tsconfig.json
+.eslintrc.json
+.prettierrc.json
+node-mcp-server-plan.md
+EXTERNAL_API_ENDPOINTS.md
+
