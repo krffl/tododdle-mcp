@@ -1,5 +1,7 @@
 import type { McpConfig } from './config.js';
 
+const TRACKINGTIME_ORIGIN = 'https://trackingti.me';
+
 interface TokenResponse {
   access_token: string;
   expires_in: number;
@@ -42,7 +44,7 @@ export class TrackingTimeApiClient implements TrackingTimeApi {
       client_id: this.config.clientId,
       client_secret: this.config.clientSecret,
     });
-    const response = await fetch(`${this.config.baseUrl}/api/external/oauth/token`, {
+    const response = await fetch(`${TRACKINGTIME_ORIGIN}/api/external/oauth/token`, {
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
       body: form,
@@ -66,7 +68,7 @@ export class TrackingTimeApiClient implements TrackingTimeApi {
     idempotencyKey?: string,
     retry = true
   ): Promise<Record<string, unknown>> {
-    const url = new URL(`${this.config.baseUrl}${path}`);
+    const url = new URL(`${TRACKINGTIME_ORIGIN}${path}`);
     Object.entries(query || {}).forEach(([key, value]) => {
       if (value !== undefined) url.searchParams.set(key, String(value));
     });

@@ -41,14 +41,13 @@ test('discovers the bounded production tool surface', async () => {
   await server.close()
 })
 
-test('uses production by default and requires only Agent Connection credentials', () => {
+test('requires only Agent Connection credentials', () => {
   assert.deepEqual(
     loadMcpConfig({
       TRACKINGTIME_CLIENT_ID: 'client-id',
       TRACKINGTIME_CLIENT_SECRET: 'client-secret',
     }),
     {
-      baseUrl: 'https://trackingti.me',
       clientId: 'client-id',
       clientSecret: 'client-secret',
     }

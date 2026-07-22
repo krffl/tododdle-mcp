@@ -1,6 +1,6 @@
 # trackingti.me MCP Server
 
-The official local Model Context Protocol server for [trackingti.me](https://trackingti.me). It gives MCP-compatible agents a bounded interface for project context, task management, comments, and time tracking through trackingti.me's external API.
+The official Model Context Protocol stdio server for [trackingti.me](https://trackingti.me). It gives MCP-compatible agents a bounded interface for project context, task management, comments, and time tracking through trackingti.me's hosted API.
 
 The package contains no trackingti.me application or database code. It is a small stdio client that authenticates as an Agent Connection and calls the hosted API.
 
@@ -30,14 +30,6 @@ Use a pinned package version so tool changes are deliberate:
 ```
 
 Restart the MCP client after changing its configuration. The package is downloaded to npm's cache; cloning the trackingti.me repository is not required.
-
-For self-hosted or local trackingti.me environments, also set:
-
-```json
-"TRACKINGTIME_BASE_URL": "http://localhost:3000"
-```
-
-The production default is `https://trackingti.me`.
 
 ## Tools
 
@@ -111,9 +103,8 @@ Common scopes include:
 | --- | --- | --- | --- |
 | `TRACKINGTIME_CLIENT_ID` | Yes | None | Agent Connection identifier |
 | `TRACKINGTIME_CLIENT_SECRET` | Yes | None | Agent Connection secret |
-| `TRACKINGTIME_BASE_URL` | No | `https://trackingti.me` | Hosted or local trackingti.me origin |
 
-Tokens are held in memory only and refreshed automatically. The client secret is sent only to the configured trackingti.me token endpoint. Server diagnostics go to stderr so stdout remains reserved for MCP JSON-RPC.
+Tokens are held in memory only and refreshed automatically. The client secret is sent only to trackingti.me's hosted token endpoint. Server diagnostics go to stderr so stdout remains reserved for MCP JSON-RPC.
 
 ## Development
 
@@ -124,10 +115,9 @@ npm test
 npm pack --dry-run
 ```
 
-Run against a development trackingti.me instance:
+Run the MCP package from source:
 
 ```bash
-TRACKINGTIME_BASE_URL=http://localhost:3000 \
 TRACKINGTIME_CLIENT_ID=... \
 TRACKINGTIME_CLIENT_SECRET=... \
 npm run dev
