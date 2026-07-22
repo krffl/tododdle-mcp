@@ -1,7 +1,7 @@
 {
   "name": "trackingtime-mcp",
-  "version": "1.0.0",
-  "description": "MCP server for trackingti.me external API",
+  "version": "2.0.0",
+  "description": "Agent-first task, project context, and time tracking for trackingti.me",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -16,10 +16,12 @@
     "build": "tsc",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
-    "lint": "eslint src --ext .ts",
     "format": "prettier --write \"src/**/*.ts\"",
+    "format:check": "prettier --check \"src/**/*.ts\"",
     "type-check": "tsc --noEmit",
-    "prepublishOnly": "npm run build"
+    "test": "npm run build && node --test test/*.test.mjs",
+    "prepack": "npm run build",
+    "prepublishOnly": "npm test"
   },
   "keywords": [
     "mcp",
@@ -27,25 +29,31 @@
     "trackingtime",
     "project-management"
   ],
-  "author": "",
+  "author": "trackingti.me",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/krffl/trackingti.me-mcp.git"
+  },
+  "homepage": "https://trackingti.me",
+  "bugs": {
+    "url": "https://github.com/krffl/trackingti.me-mcp/issues"
+  },
+  "publishConfig": {
+    "access": "public",
+    "provenance": true
+  },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.0.4",
-    "axios": "^1.7.7",
-    "dotenv": "^16.4.5",
-    "zod": "^3.23.8"
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^3.24.1"
   },
   "devDependencies": {
-    "@types/node": "^20.14.12",
-    "@typescript-eslint/eslint-plugin": "^7.18.0",
-    "@typescript-eslint/parser": "^7.18.0",
-    "eslint": "^8.57.0",
+    "@types/node": "^22.15.0",
     "prettier": "^3.3.3",
-    "tsx": "^4.16.2",
-    "typescript": "^5.5.4"
+    "tsx": "^4.23.1",
+    "typescript": "^7.0.2"
   },
   "engines": {
     "node": ">=18.0.0"
   }
 }
-

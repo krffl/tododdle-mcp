@@ -1,391 +1,147 @@
 # trackingti.me MCP Server
 
-A Model Context Protocol (MCP) server that enables AI systems (Claude, ChatGPT, etc.) to interact with trackingti.me's external API. This server translates MCP tool calls into HTTP requests to the trackingti.me external API using OAuth2 client credentials flow.
+The official local Model Context Protocol server for [trackingti.me](https://trackingti.me). It gives MCP-compatible agents a bounded interface for project context, task management, comments, and time tracking through trackingti.me's external API.
 
-## Features
+The package contains no trackingti.me application or database code. It is a small stdio client that authenticates as an Agent Connection and calls the hosted API.
 
-- **23 MCP Tools**: Full access to projects, plans, tasks, notes, and todos
-- **OAuth2 Authentication**: Automatic token management with refresh
-- **Type Safety**: Full TypeScript implementation with Zod validation
-- **Error Handling**: Comprehensive error mapping and rate limit detection
-- **Retry Logic**: Automatic retry for transient failures with exponential backoff
-- **Logging**: Structured logging with configurable levels
+## Requirements
 
-## Prerequisites
+- Node.js 18 or newer
+- A trackingti.me Agent Connection client ID and client secret
+- Scopes and project grants configured for that Agent Connection in trackingti.me
 
-- Node.js v18+ (LTS recommended)
-- npm or yarn
-- trackingti.me API credentials (Client ID and Client Secret)
+## Configure An MCP Client
 
-## Installation
-
-### Option 1: Install from npm (Recommended)
-
-```bash
-npm install -g trackingtime-mcp
-```
-
-Or use with npx (no installation needed):
-```bash
-npx trackingtime-mcp
-```
-
-### Option 2: Install from source
-
-1. Clone the repository:
-```bash
-git clone <repository-url>
-cd trackingti.me-mcp
-```
-
-2. Install dependencies:
-```bash
-npm install
-```
-
-3. Build the project:
-```bash
-npm run build
-```
-
-## Configuration
-
-### Environment Variables
-
-Create a `.env` file in the project root (or copy from `.env.example`):
-
-```env
-# External API Configuration
-TRACKINGTIME_API_BASE_URL=https://api.trackingti.me
-TRACKINGTIME_CLIENT_ID=your_client_id
-TRACKINGTIME_CLIENT_SECRET=your_client_secret
-TRACKINGTIME_SCOPES=projects:read projects:write tasks:read tasks:write plans:read plans:write notes:read notes:write todos:read todos:write
-
-# MCP Server Configuration
-MCP_SERVER_NAME=trackingtime-mcp
-MCP_SERVER_VERSION=1.0.0
-LOG_LEVEL=info
-```
-
-### Required Environment Variables
-
-- `TRACKINGTIME_CLIENT_ID`: Your trackingti.me API client ID
-- `TRACKINGTIME_CLIENT_SECRET`: Your trackingti.me API client secret
-- `TRACKINGTIME_SCOPES`: Space-separated list of OAuth2 scopes
-
-### Optional Environment Variables
-
-- `TRACKINGTIME_API_BASE_URL`: API base URL (default: `https://api.trackingti.me`)
-- `MCP_SERVER_NAME`: MCP server name (default: `trackingtime-mcp`)
-- `MCP_SERVER_VERSION`: Server version (default: `1.0.0`)
-- `LOG_LEVEL`: Logging level - `debug`, `info`, `warn`, or `error` (default: `info`)
-- `LOG_FORMAT`: Log format - `json` for JSON format, or omit for text format
-
-## Usage
-
-### Development Mode
-
-Run the server in development mode with hot reload:
-
-```bash
-npm run dev
-```
-
-### Production Mode
-
-Build and run:
-
-```bash
-npm run build
-npm start
-```
-
-### Claude Desktop Configuration
-
-Add the following to your Claude Desktop MCP settings file (typically `~/Library/Application Support/Claude/claude_desktop_config.json` on macOS):
-
-**Option A: Using npm package (Recommended)**
-
-If you installed globally with `npm install -g trackingtime-mcp`:
-```json
-{
-  "mcpServers": {
-    "trackingtime": {
-      "command": "trackingtime-mcp",
-      "env": {
-        "TRACKINGTIME_API_BASE_URL": "https://api.trackingti.me",
-        "TRACKINGTIME_CLIENT_ID": "your_client_id",
-        "TRACKINGTIME_CLIENT_SECRET": "your_client_secret",
-        "TRACKINGTIME_SCOPES": "projects:read projects:write tasks:read tasks:write plans:read plans:write notes:read notes:write todos:read todos:write",
-        "LOG_LEVEL": "info"
-      }
-    }
-  }
-}
-```
-
-**Option B: Using npx (no installation needed)**
+Use a pinned package version so tool changes are deliberate:
 
 ```json
 {
   "mcpServers": {
     "trackingtime": {
       "command": "npx",
-      "args": ["-y", "trackingtime-mcp"],
+      "args": ["-y", "trackingtime-mcp@2.0.0"],
       "env": {
-        "TRACKINGTIME_API_BASE_URL": "https://api.trackingti.me",
         "TRACKINGTIME_CLIENT_ID": "your_client_id",
-        "TRACKINGTIME_CLIENT_SECRET": "your_client_secret",
-        "TRACKINGTIME_SCOPES": "projects:read projects:write tasks:read tasks:write plans:read plans:write notes:read notes:write todos:read todos:write",
-        "LOG_LEVEL": "info"
+        "TRACKINGTIME_CLIENT_SECRET": "your_client_secret"
       }
     }
   }
 }
 ```
 
-**Option C: Using local installation**
+Restart the MCP client after changing its configuration. The package is downloaded to npm's cache; cloning the trackingti.me repository is not required.
 
-If you cloned and built the repository locally:
+For self-hosted or local trackingti.me environments, also set:
+
 ```json
-{
-  "mcpServers": {
-    "trackingtime": {
-      "command": "node",
-      "args": ["/absolute/path/to/trackingti.me-mcp/dist/index.js"],
-      "env": {
-        "TRACKINGTIME_API_BASE_URL": "https://api.trackingti.me",
-        "TRACKINGTIME_CLIENT_ID": "your_client_id",
-        "TRACKINGTIME_CLIENT_SECRET": "your_client_secret",
-        "TRACKINGTIME_SCOPES": "projects:read projects:write tasks:read tasks:write plans:read plans:write notes:read notes:write todos:read todos:write",
-        "LOG_LEVEL": "info"
-      }
-    }
-  }
-}
+"TRACKINGTIME_BASE_URL": "http://localhost:3000"
 ```
 
-**Note**: Replace `/absolute/path/to/trackingti.me-mcp/dist/index.js` with the actual absolute path to your built server file.
+The production default is `https://trackingti.me`.
 
-## Available Tools
+## Tools
 
-### Projects (5 tools)
+### Read And Plan
 
-- `list_projects` - List all projects with optional filtering
-- `get_project` - Get details of a specific project
-- `create_project` - Create a new project
-- `update_project` - Update an existing project
-- `delete_project` - Delete a project
+- `list_projects`
+- `get_project_context`
+- `get_work_queue`
+- `get_task`
+- `get_project_brief`
+- `list_project_artifacts`
+- `get_project_artifact`
+- `get_agent_inbox`
 
-### Plans (5 tools)
+### Manage Tasks
 
-- `list_plans` - List all plans for a project
-- `get_plan` - Get details of a specific plan
-- `create_plan` - Create a new plan
-- `update_plan` - Update an existing plan
-- `delete_plan` - Delete a plan
+- `create_task`
+- `update_task`
+- `transition_task`
+- `move_task`
+- `set_task_blocker`
+- `add_task_comment`
+- `acknowledge_agent_reply`
+- `archive_task`
 
-### Tasks (5 tools)
+`archive_task` is destructive and requires client approval. Task deletion is intentionally unavailable.
 
-- `list_tasks` - List tasks with extensive filtering options
-- `get_task` - Get details of a specific task
-- `create_task` - Create a new task
-- `update_task` - Update an existing task
-- `delete_task` - Delete a task
+### Track Time
 
-### Notes (5 tools)
+- `get_active_time_entries`
+- `list_project_time`
+- `list_task_time`
+- `start_task_timer`
+- `stop_task_timer`
+- `log_task_time`
+- `update_time_entry`
+- `archive_time_entry`
 
-- `list_notes` - List notes in an organization
-- `get_note` - Get details of a specific note
-- `create_note` - Create a new note
-- `update_note` - Update an existing note
-- `delete_note` - Delete a note
+`archive_time_entry` is destructive and requires client approval.
 
-### Todos (3 tools)
+### Manage Project Context
 
-- `list_todos` - List user's todo items
-- `add_todo` - Add a task to user's todo list
-- `remove_todo` - Remove a task from user's todo list
+- `create_project_artifact`
+- `update_project_artifact`
+- `transition_project_artifact`
+- `link_artifact_task`
+- `add_artifact_comment`
 
-## Example Usage
+The server also provides task, project, and project-artifact resource templates plus `triage_work` and `daily_status` prompts.
 
-### Creating a Project and Task
+## Permissions
 
-```
-1. Create a project: create_project(name="My Project", description="A new project")
-2. List projects to get the project ID
-3. Create a plan: create_plan(projectId="...", name="Sprint 1")
-4. Create a task: create_task(projectId="...", planId="...", sectionId="...", title="Complete feature")
-```
+Tools never expand the Agent Connection's authority. Every request is checked against all three layers:
 
-### Managing Todos
+1. The Agent Connection's granted scopes.
+2. Its granted projects.
+3. The authorizing user's organization and project permissions.
 
-```
-1. List todos: list_todos()
-2. Add a task to todos: add_todo(taskId="...")
-3. Remove from todos: remove_todo(taskId="...")
-```
+Configure scopes and project grants in trackingti.me under **Agent Connections**. Scopes are not requested by or stored in this package.
 
-## Error Handling
+Common scopes include:
 
-The server provides comprehensive error handling:
+- `projects:read` and `projects:write`
+- `tasks:read` and `tasks:write`
+- `context:read` and `context:write`
+- `time:read` and `time:write`
 
-- **401 Unauthorized**: Authentication failed - credentials are invalid
-- **403 Forbidden**: Access denied - insufficient permissions
-- **404 Not Found**: Resource not found
-- **429 Rate Limit**: Rate limit exceeded - includes reset time information
-- **500+ Server Errors**: Server-side errors with automatic retry
+## Environment
 
-All errors include context information for debugging, including:
-- HTTP method and URL
-- Status code
-- Rate limit information (when available)
-- Error messages from the API
+| Variable | Required | Default | Purpose |
+| --- | --- | --- | --- |
+| `TRACKINGTIME_CLIENT_ID` | Yes | None | Agent Connection identifier |
+| `TRACKINGTIME_CLIENT_SECRET` | Yes | None | Agent Connection secret |
+| `TRACKINGTIME_BASE_URL` | No | `https://trackingti.me` | Hosted or local trackingti.me origin |
 
-## Rate Limiting
-
-The server respects rate limits from the API:
-- Detects `X-RateLimit-*` headers
-- Provides reset time information in error messages
-- Logs rate limit information for monitoring
-
-## Retry Logic
-
-The server automatically retries failed requests:
-- Retries network errors and 5xx server errors
-- Uses exponential backoff (1s, 2s, 4s)
-- Maximum 3 retries per request
-- Does not retry 4xx client errors
-
-## Logging
-
-Structured logging is available with configurable levels:
-
-- `debug`: Detailed information for debugging
-- `info`: General information (default)
-- `warn`: Warning messages
-- `error`: Error messages
-
-Set `LOG_FORMAT=json` for JSON-formatted logs.
+Tokens are held in memory only and refreshed automatically. The client secret is sent only to the configured trackingti.me token endpoint. Server diagnostics go to stderr so stdout remains reserved for MCP JSON-RPC.
 
 ## Development
 
-### Scripts
-
-- `npm run build` - Build TypeScript to JavaScript
-- `npm run dev` - Run in development mode with tsx
-- `npm start` - Run the built server
-- `npm run lint` - Run ESLint
-- `npm run format` - Format code with Prettier
-- `npm run type-check` - Type check without building
-
-### Project Structure
-
-```
-src/
-├── index.ts              # Entry point
-├── server.ts             # MCP server setup
-├── tools/                # Tool implementations
-│   ├── index.ts          # Tool registry
-│   ├── projects.ts       # Project tools
-│   ├── plans.ts          # Plan tools
-│   ├── tasks.ts          # Task tools
-│   ├── notes.ts          # Note tools
-│   └── todos.ts          # Todo tools
-├── api/
-│   ├── client.ts         # HTTP client
-│   ├── auth.ts           # OAuth2 authentication
-│   └── types.ts          # API types
-├── errors/
-│   └── handler.ts        # Error handling
-└── utils/
-    ├── validation.ts      # Validation utilities
-    └── logger.ts          # Logging
+```bash
+npm install
+npm run type-check
+npm test
+npm pack --dry-run
 ```
 
-## Troubleshooting
+Run against a development trackingti.me instance:
 
-### Authentication Errors
+```bash
+TRACKINGTIME_BASE_URL=http://localhost:3000 \
+TRACKINGTIME_CLIENT_ID=... \
+TRACKINGTIME_CLIENT_SECRET=... \
+npm run dev
+```
 
-- Verify `TRACKINGTIME_CLIENT_ID` and `TRACKINGTIME_CLIENT_SECRET` are correct
-- Ensure the API client has the required scopes
-- Check that the API base URL is correct
+The npm `prepack` lifecycle builds `dist/` automatically. `prepublishOnly` runs the complete package test before publication.
 
-### Connection Errors
+## Release Safety
 
-- Verify network connectivity
-- Check that `TRACKINGTIME_API_BASE_URL` is accessible
-- Review firewall/proxy settings
-
-### Tool Not Found Errors
-
-- Ensure the server is built (`npm run build`)
-- Verify the tool name is correct (case-sensitive)
-- Check server logs for registration errors
-
-### Rate Limit Errors
-
-- Review rate limit headers in error messages
-- Wait until the reset time before retrying
-- Consider reducing request frequency
-
-## Security Considerations
-
-1. **Credentials**: Never commit `.env` files or expose credentials
-2. **Token Storage**: Tokens are cached in memory only, never persisted
-3. **HTTPS**: Always use HTTPS for API communication
-4. **Scopes**: Use minimal required scopes for your use case
-5. **Error Messages**: Error messages don't expose sensitive information
-
-## Publishing to npm
-
-To publish this package to npm:
-
-1. **Ensure you're logged in to npm:**
-   ```bash
-   npm login
-   ```
-
-2. **Verify package name availability:**
-   Check if `trackingtime-mcp` is available on npm. If not, update the `name` field in `package.json`.
-
-3. **Build the project:**
-   ```bash
-   npm run build
-   ```
-
-4. **Verify what will be published:**
-   ```bash
-   npm pack --dry-run
-   ```
-   This shows what files will be included in the package.
-
-5. **Publish to npm:**
-   ```bash
-   npm publish
-   ```
-   
-   For the first publish, you may want to use:
-   ```bash
-   npm publish --access public
-   ```
-
-6. **Update version for subsequent releases:**
-   ```bash
-   npm version patch  # for bug fixes (1.0.0 -> 1.0.1)
-   npm version minor  # for new features (1.0.0 -> 1.1.0)
-   npm version major  # for breaking changes (1.0.0 -> 2.0.0)
-   npm publish
-   ```
-
-**Note**: The `prepublishOnly` script will automatically build the project before publishing, so you don't need to manually build unless you want to test first.
+- Review `npm pack --dry-run` and verify that only `dist/`, `README.md`, `LICENSE`, and package metadata are present.
+- Publish from a tagged release with npm trusted publishing/provenance where available.
+- Treat tool removal, renaming, or incompatible input changes as major releases.
+- Keep generated trackingti.me connection snippets pinned to a tested package version.
 
 ## License
 
 MIT
-
-## References
-
-- [MCP Specification](https://modelcontextprotocol.io)
-- [MCP SDK for Node.js](https://github.com/modelcontextprotocol/typescript-sdk)
-- [trackingti.me External API Documentation](./EXTERNAL_API_ENDPOINTS.md)
