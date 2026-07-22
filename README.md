@@ -10,9 +10,45 @@ The package contains no trackingti.me application or database code. It is a smal
 - A trackingti.me Agent Connection client ID and client secret
 - Scopes and project grants configured for that Agent Connection in trackingti.me
 
-## Configure An MCP Client
+## Configure
 
-Use a pinned package version so tool changes are deliberate:
+Create an Agent Connection in trackingti.me, grant it only the scopes and projects it needs, and copy its client ID and one-time client secret. Use a pinned package version so tool changes are deliberate.
+
+### Codex
+
+Add the server from a terminal:
+
+```bash
+codex mcp add trackingtime \
+  --env TRACKINGTIME_CLIENT_ID=your_client_id \
+  --env TRACKINGTIME_CLIENT_SECRET=your_client_secret \
+  -- npx -y trackingtime-mcp@2.0.0
+
+codex mcp list
+```
+
+Codex desktop, the CLI, and the IDE extension share the MCP configuration in `~/.codex/config.toml`. For project-specific configuration, add the same server to `.codex/config.toml` in a trusted project. Restart the server after changing credentials or scopes.
+
+See the [Codex MCP documentation](https://learn.chatgpt.com/docs/extend/mcp) for configuration and troubleshooting.
+
+### Claude Code
+
+Install the server for your user account so it is available across projects:
+
+```bash
+claude mcp add trackingtime --scope user \
+  --env TRACKINGTIME_CLIENT_ID=your_client_id \
+  --env TRACKINGTIME_CLIENT_SECRET=your_client_secret \
+  -- npx -y trackingtime-mcp@2.0.0
+
+claude mcp get trackingtime
+```
+
+Run `/mcp` inside Claude Code to inspect the connection. On native Windows, place `cmd /c` before `npx` in the command. See the [Claude Code MCP documentation](https://docs.anthropic.com/en/docs/claude-code/mcp) for scope options and diagnostics.
+
+### Cursor
+
+Add this configuration to `~/.cursor/mcp.json` for all projects, or to `.cursor/mcp.json` for one project:
 
 ```json
 {
@@ -29,7 +65,9 @@ Use a pinned package version so tool changes are deliberate:
 }
 ```
 
-Restart the MCP client after changing its configuration. The package is downloaded to npm's cache; cloning the trackingti.me repository is not required.
+Do not commit a project-level configuration containing real credentials. Restart Cursor after changing the configuration; trackingti.me tools will then be available to Agent. See the [Cursor MCP documentation](https://docs.cursor.com/context/model-context-protocol) for configuration and status controls.
+
+For every client, `npx` downloads the package to npm's cache. Cloning trackingti.me or running a local trackingti.me service is not required.
 
 ## Tools
 
