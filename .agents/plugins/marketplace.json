@@ -1,14 +1,14 @@
 {
-  "name": "trackingtime",
+  "name": "tododdle",
   "interface": {
-    "displayName": "trackingti.me"
+    "displayName": "ToDoddle"
   },
   "plugins": [
     {
-      "name": "trackingtime",
+      "name": "tododdle",
       "source": {
         "source": "npm",
-        "package": "trackingtime-mcp",
+        "package": "tododdle-mcp",
         "version": "^2.0.0",
         "registry": "https://registry.npmjs.org"
       },

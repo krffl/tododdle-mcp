@@ -3,7 +3,7 @@ import test from 'node:test'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { loadMcpConfig } from '../dist/config.js'
-import { createTrackingTimeMcpServer } from '../dist/server.js'
+import { createToDoddleMcpServer } from '../dist/server.js'
 
 const api = {
   get: async () => ({ items: [] }),
@@ -15,11 +15,12 @@ const api = {
 
 test('discovers the bounded production tool surface', async () => {
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
-  const server = createTrackingTimeMcpServer(api)
+  const server = createToDoddleMcpServer(api)
   const client = new Client({ name: 'package-test', version: '1.0.0' })
 
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
   const result = await client.listTools()
+  const resources = await client.listResourceTemplates()
   const names = result.tools.map(tool => tool.name)
 
   assert.equal(result.tools.length, 29)
@@ -36,6 +37,14 @@ test('discovers the bounded production tool surface', async () => {
       openWorldHint: false,
     }
   )
+  assert.deepEqual(
+    resources.resourceTemplates.map(resource => resource.uriTemplate),
+    [
+      'tododdle://tasks/{taskId}',
+      'tododdle://projects/{projectId}',
+      'tododdle://projects/{projectId}/artifacts/{artifactId}',
+    ]
+  )
 
   await client.close()
   await server.close()
@@ -44,8 +53,8 @@ test('discovers the bounded production tool surface', async () => {
 test('requires only Agent Connection credentials', () => {
   assert.deepEqual(
     loadMcpConfig({
-      TRACKINGTIME_CLIENT_ID: 'client-id',
-      TRACKINGTIME_CLIENT_SECRET: 'client-secret',
+      TODODDLE_CLIENT_ID: 'client-id',
+      TODODDLE_CLIENT_SECRET: 'client-secret',
     }),
     {
       clientId: 'client-id',
@@ -53,5 +62,5 @@ test('requires only Agent Connection credentials', () => {
     }
   )
 
-  assert.throws(() => loadMcpConfig({}), /TRACKINGTIME_CLIENT_ID and TRACKINGTIME_CLIENT_SECRET/)
+  assert.throws(() => loadMcpConfig({}), /TODODDLE_CLIENT_ID and TODODDLE_CLIENT_SECRET/)
 })

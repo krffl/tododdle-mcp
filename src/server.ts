@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import type { TrackingTimeApi } from './api-client.js';
+import type { ToDoddleApi } from './api-client.js';
 
 const statusSchema = z.enum([
   'TODO',
@@ -44,8 +44,8 @@ function toolResult(value: Record<string, unknown>) {
   };
 }
 
-export function createTrackingTimeMcpServer(api: TrackingTimeApi): McpServer {
-  const server = new McpServer({ name: 'trackingti.me', version: '2.0.0' });
+export function createToDoddleMcpServer(api: ToDoddleApi): McpServer {
+  const server = new McpServer({ name: 'tododdle', version: '2.0.0' });
 
   server.registerTool(
     'list_projects',
@@ -735,9 +735,9 @@ export function createTrackingTimeMcpServer(api: TrackingTimeApi): McpServer {
 
   server.registerResource(
     'task',
-    new ResourceTemplate('trackingtime://tasks/{taskId}', { list: undefined }),
+    new ResourceTemplate('tododdle://tasks/{taskId}', { list: undefined }),
     {
-      title: 'trackingti.me task',
+      title: 'ToDoddle task',
       description: 'Complete task context by ID.',
       mimeType: 'application/json',
     },
@@ -758,9 +758,9 @@ export function createTrackingTimeMcpServer(api: TrackingTimeApi): McpServer {
 
   server.registerResource(
     'project',
-    new ResourceTemplate('trackingtime://projects/{projectId}', { list: undefined }),
+    new ResourceTemplate('tododdle://projects/{projectId}', { list: undefined }),
     {
-      title: 'trackingti.me project context',
+      title: 'ToDoddle project context',
       description: 'Bounded project-plan and section context by project ID.',
       mimeType: 'application/json',
     },
@@ -781,11 +781,11 @@ export function createTrackingTimeMcpServer(api: TrackingTimeApi): McpServer {
 
   server.registerResource(
     'project-artifact',
-    new ResourceTemplate('trackingtime://projects/{projectId}/artifacts/{artifactId}', {
+    new ResourceTemplate('tododdle://projects/{projectId}/artifacts/{artifactId}', {
       list: undefined,
     }),
     {
-      title: 'trackingti.me project artifact',
+      title: 'ToDoddle project artifact',
       description: 'Complete project context artifact by project and artifact ID.',
       mimeType: 'application/json',
     },

@@ -1,26 +1,26 @@
 {
-  "name": "trackingtime",
+  "name": "tododdle",
   "version": "2.0.0",
-  "description": "Disciplined agent workflows for projects managed in trackingti.me.",
+  "description": "Disciplined agent workflows for projects managed in ToDoddle.",
   "author": {
-    "name": "trackingti.me",
-    "url": "https://trackingti.me"
+    "name": "ToDoddle",
+    "url": "https://tododdle.com"
   },
-  "homepage": "https://trackingti.me",
-  "repository": "https://github.com/krffl/trackingti.me-mcp",
+  "homepage": "https://tododdle.com",
+  "repository": "https://github.com/krffl/tododdle-mcp",
   "license": "MIT",
   "keywords": ["project-management", "tasks", "time-tracking", "mcp"],
   "skills": "./skills/",
   "interface": {
-    "displayName": "trackingti.me",
+    "displayName": "ToDoddle",
     "shortDescription": "Manage tracked work with project context",
-    "longDescription": "Use trackingti.me as the shared work ledger for project context, task execution, durable status updates, blockers, comments, and time tracking.",
-    "developerName": "trackingti.me",
+    "longDescription": "Use ToDoddle as the shared work ledger for project context, task execution, durable status updates, blockers, comments, and time tracking.",
+    "developerName": "ToDoddle",
     "category": "Productivity",
     "capabilities": ["Read", "Write"],
-    "websiteURL": "https://trackingti.me",
+    "websiteURL": "https://tododdle.com",
     "defaultPrompt": [
-      "Review my trackingti.me work queue and recommend what to do next.",
+      "Review my ToDoddle work queue and recommend what to do next.",
       "Read the project context and begin the relevant task.",
       "Summarize progress and update the tracked work."
     ],

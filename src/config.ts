@@ -4,11 +4,11 @@ export interface McpConfig {
 }
 
 export function loadMcpConfig(environment: NodeJS.ProcessEnv = process.env): McpConfig {
-  const clientId = environment.TRACKINGTIME_CLIENT_ID;
-  const clientSecret = environment.TRACKINGTIME_CLIENT_SECRET;
+  const clientId = environment.TODODDLE_CLIENT_ID;
+  const clientSecret = environment.TODODDLE_CLIENT_SECRET;
 
   if (!clientId || !clientSecret) {
-    throw new Error('TRACKINGTIME_CLIENT_ID and TRACKINGTIME_CLIENT_SECRET are required');
+    throw new Error('TODODDLE_CLIENT_ID and TODODDLE_CLIENT_SECRET are required');
   }
 
   return { clientId, clientSecret };

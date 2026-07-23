@@ -1,0 +1,14 @@
+interface:
+  display_name: "ToDoddle Workflow"
+  short_description: "Run disciplined project workflows in ToDoddle"
+  default_prompt: "Use $tododdle-workflow to inspect project context and manage this work in ToDoddle."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "tododdle"
+      description: "ToDoddle project, task, context, comment, and time tools"
+      transport: "stdio"
+
+policy:
+  allow_implicit_invocation: true

@@ -1,11 +1,11 @@
 {
-  "name": "trackingtime-mcp",
+  "name": "tododdle-mcp",
   "version": "2.0.0",
-  "description": "Agent-first task, project context, and time tracking for trackingti.me",
+  "description": "Agent-first task, project context, and time tracking for ToDoddle",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "trackingtime-mcp": "./dist/index.js"
+    "tododdle-mcp": "./dist/index.js"
   },
   "files": [
     "dist",
@@ -29,18 +29,18 @@
   "keywords": [
     "mcp",
     "model-context-protocol",
-    "trackingtime",
+    "tododdle",
     "project-management"
   ],
-  "author": "trackingti.me",
+  "author": "ToDoddle",
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/krffl/trackingti.me-mcp.git"
+    "url": "git+https://github.com/krffl/tododdle-mcp.git"
   },
-  "homepage": "https://trackingti.me",
+  "homepage": "https://tododdle.com",
   "bugs": {
-    "url": "https://github.com/krffl/trackingti.me-mcp/issues"
+    "url": "https://github.com/krffl/tododdle-mcp/issues"
   },
   "publishConfig": {
     "access": "public",

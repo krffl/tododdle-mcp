@@ -1,11 +1,11 @@
 ---
-name: trackingtime-workflow
-description: Use trackingti.me as the work ledger for project planning, implementation, status updates, blockers, comments, and time tracking. Trigger when the user asks to inspect, plan, start, update, complete, or report on work managed in trackingti.me, or when repository instructions require trackingti.me updates. Do not trigger for casual discussion that does not change or review tracked work.
+name: tododdle-workflow
+description: Use ToDoddle as the work ledger for project planning, implementation, status updates, blockers, comments, and time tracking. Trigger when the user asks to inspect, plan, start, update, complete, or report on work managed in ToDoddle, or when repository instructions require ToDoddle updates. Do not trigger for casual discussion that does not change or review tracked work.
 ---
 
-# Trackingti.me Workflow
+# ToDoddle Workflow
 
-Use the `trackingtime` MCP tools for live project state. Never infer IDs, statuses, scopes, or relationships from memory.
+Use the `tododdle` MCP tools for live project state. Never infer IDs, statuses, scopes, or relationships from memory.
 
 ## Start With Context
 

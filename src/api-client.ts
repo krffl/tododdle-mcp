@@ -1,13 +1,13 @@
 import type { McpConfig } from './config.js';
 
-const TRACKINGTIME_ORIGIN = 'https://trackingti.me';
+const TODODDLE_ORIGIN = 'https://tododdle.com';
 
 interface TokenResponse {
   access_token: string;
   expires_in: number;
 }
 
-export class TrackingTimeApiError extends Error {
+export class ToDoddleApiError extends Error {
   constructor(
     readonly status: number,
     readonly code: string,
@@ -15,11 +15,11 @@ export class TrackingTimeApiError extends Error {
     readonly details?: unknown
   ) {
     super(message);
-    this.name = 'TrackingTimeApiError';
+    this.name = 'ToDoddleApiError';
   }
 }
 
-export interface TrackingTimeApi {
+export interface ToDoddleApi {
   get(
     path: string,
     query?: Record<string, string | number | boolean | undefined>
@@ -30,7 +30,7 @@ export interface TrackingTimeApi {
   delete(path: string, body: unknown): Promise<Record<string, unknown>>;
 }
 
-export class TrackingTimeApiClient implements TrackingTimeApi {
+export class ToDoddleApiClient implements ToDoddleApi {
   private accessToken: string | null = null;
   private tokenExpiresAt = 0;
 
@@ -44,7 +44,7 @@ export class TrackingTimeApiClient implements TrackingTimeApi {
       client_id: this.config.clientId,
       client_secret: this.config.clientSecret,
     });
-    const response = await fetch(`${TRACKINGTIME_ORIGIN}/api/external/oauth/token`, {
+    const response = await fetch(`${TODODDLE_ORIGIN}/api/external/oauth/token`, {
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
       body: form,
@@ -68,7 +68,7 @@ export class TrackingTimeApiClient implements TrackingTimeApi {
     idempotencyKey?: string,
     retry = true
   ): Promise<Record<string, unknown>> {
-    const url = new URL(`${TRACKINGTIME_ORIGIN}${path}`);
+    const url = new URL(`${TODODDLE_ORIGIN}${path}`);
     Object.entries(query || {}).forEach(([key, value]) => {
       if (value !== undefined) url.searchParams.set(key, String(value));
     });
@@ -103,14 +103,14 @@ export class TrackingTimeApiClient implements TrackingTimeApi {
   }
 
   private toError(status: number, payload: Record<string, unknown>) {
-    return new TrackingTimeApiError(
+    return new ToDoddleApiError(
       status,
       typeof payload.error === 'string' ? payload.error : 'server_error',
       typeof payload.message === 'string'
         ? payload.message
         : typeof payload.error_description === 'string'
           ? payload.error_description
-          : `trackingti.me request failed (${status})`,
+          : `ToDoddle request failed (${status})`,
       payload.details
     );
   }

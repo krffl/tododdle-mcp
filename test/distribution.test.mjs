@@ -18,7 +18,7 @@ test('Codex plugin and marketplace target the published package', async () => {
   const marketplace = await readJson('../.agents/plugins/marketplace.json');
   const entry = marketplace.plugins[0];
 
-  assert.equal(plugin.name, 'trackingtime');
+  assert.equal(plugin.name, 'tododdle');
   assert.equal(plugin.version, packageJson.version);
   assert.equal(plugin.skills, './skills/');
   assert.equal(entry.name, plugin.name);
@@ -28,15 +28,15 @@ test('Codex plugin and marketplace target the published package', async () => {
 });
 
 test('workflow skill declares the MCP dependency and core safety rules', async () => {
-  const skill = await readFile(new URL('../skills/trackingtime-workflow/SKILL.md', import.meta.url), 'utf8');
+  const skill = await readFile(new URL('../skills/tododdle-workflow/SKILL.md', import.meta.url), 'utf8');
   const metadata = await readFile(
-    new URL('../skills/trackingtime-workflow/agents/openai.yaml', import.meta.url),
+    new URL('../skills/tododdle-workflow/agents/openai.yaml', import.meta.url),
     'utf8',
   );
 
   assert.match(skill, /get_project_brief/);
   assert.match(skill, /COMPLETE/);
   assert.match(skill, /Do not invent elapsed time/);
-  assert.match(metadata, /value: "trackingtime"/);
+  assert.match(metadata, /value: "tododdle"/);
   assert.match(metadata, /allow_implicit_invocation: true/);
 });
