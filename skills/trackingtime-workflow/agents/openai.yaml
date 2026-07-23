@@ -1,0 +1,14 @@
+interface:
+  display_name: "Trackingti.me Workflow"
+  short_description: "Run disciplined project workflows in trackingti.me"
+  default_prompt: "Use $trackingtime-workflow to inspect project context and manage this work in trackingti.me."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "trackingtime"
+      description: "trackingti.me project, task, context, comment, and time tools"
+      transport: "stdio"
+
+policy:
+  allow_implicit_invocation: true

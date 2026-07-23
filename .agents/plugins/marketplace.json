@@ -1,0 +1,22 @@
+{
+  "name": "trackingtime",
+  "interface": {
+    "displayName": "trackingti.me"
+  },
+  "plugins": [
+    {
+      "name": "trackingtime",
+      "source": {
+        "source": "npm",
+        "package": "trackingtime-mcp",
+        "version": "^2.0.0",
+        "registry": "https://registry.npmjs.org"
+      },
+      "policy": {
+        "installation": "AVAILABLE",
+        "authentication": "ON_INSTALL"
+      },
+      "category": "Productivity"
+    }
+  ]
+}

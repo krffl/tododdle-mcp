@@ -1,0 +1,29 @@
+{
+  "name": "trackingtime",
+  "version": "2.0.0",
+  "description": "Disciplined agent workflows for projects managed in trackingti.me.",
+  "author": {
+    "name": "trackingti.me",
+    "url": "https://trackingti.me"
+  },
+  "homepage": "https://trackingti.me",
+  "repository": "https://github.com/krffl/trackingti.me-mcp",
+  "license": "MIT",
+  "keywords": ["project-management", "tasks", "time-tracking", "mcp"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "trackingti.me",
+    "shortDescription": "Manage tracked work with project context",
+    "longDescription": "Use trackingti.me as the shared work ledger for project context, task execution, durable status updates, blockers, comments, and time tracking.",
+    "developerName": "trackingti.me",
+    "category": "Productivity",
+    "capabilities": ["Read", "Write"],
+    "websiteURL": "https://trackingti.me",
+    "defaultPrompt": [
+      "Review my trackingti.me work queue and recommend what to do next.",
+      "Read the project context and begin the relevant task.",
+      "Summarize progress and update the tracked work."
+    ],
+    "brandColor": "#0F766E"
+  }
+}

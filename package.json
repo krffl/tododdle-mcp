@@ -10,7 +10,10 @@
   "files": [
     "dist",
     "README.md",
-    "LICENSE"
+    "LICENSE",
+    ".codex-plugin",
+    "skills",
+    "examples"
   ],
   "scripts": {
     "build": "tsc",

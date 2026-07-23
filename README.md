@@ -69,6 +69,24 @@ Do not commit a project-level configuration containing real credentials. Restart
 
 For every client, `npx` downloads the package to npm's cache. Cloning trackingti.me or running a local trackingti.me service is not required.
 
+## Codex Workflow Guidance
+
+The MCP server provides capabilities; the optional `trackingtime-workflow` skill provides a disciplined operating process for choosing and using them. It tells Codex to read project context first, reuse existing tasks, keep status and blockers accurate, leave durable comments, verify before completion, and avoid inventing time.
+
+The npm package includes a Codex plugin containing this skill. Configure the MCP server first using the Codex instructions above, then add the trackingti.me plugin marketplace:
+
+```bash
+codex plugin marketplace add krffl/trackingti.me-mcp
+```
+
+Restart Codex, open the Plugins Directory, select **trackingti.me**, and install the plugin. Codex can invoke the skill automatically when a request concerns tracked work, or you can invoke it explicitly as `$trackingtime-workflow`.
+
+Installing the plugin does not create or expand trackingti.me credentials, scopes, or project grants. The skill declares the separately configured `trackingtime` MCP server as a dependency.
+
+### Repository Policy
+
+When trackingti.me should be mandatory for one repository, merge the relevant rules from [`examples/AGENTS.trackingtime.md`](examples/AGENTS.trackingtime.md) into that repository's `AGENTS.md`. The policy makes tracking updates durable repository guidance; the skill remains the reusable workflow.
+
 ## Tools
 
 ### Read And Plan
