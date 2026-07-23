@@ -1,6 +1,6 @@
 import type { McpConfig } from './config.js';
 
-const TODODDLE_ORIGIN = 'https://tododdle.com';
+const TODODDLE_ORIGIN = 'https://www.tododdle.com';
 
 interface TokenResponse {
   access_token: string;
