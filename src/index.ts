@@ -5,7 +5,11 @@ import { loadMcpConfig } from './config.js';
 import { createToDoddleMcpServer } from './server.js';
 
 async function main() {
-  const server = createToDoddleMcpServer(new ToDoddleApiClient(loadMcpConfig()));
+  const config = loadMcpConfig();
+  const server = createToDoddleMcpServer(new ToDoddleApiClient(config), {
+    uploadRoots: config.uploadRoots,
+    maxUploadBytes: config.maxUploadBytes,
+  });
   await server.connect(new StdioServerTransport());
   console.error('ToDoddle MCP server connected over stdio');
 }

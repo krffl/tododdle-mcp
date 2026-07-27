@@ -2,6 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { ToDoddleApi } from './api-client.js';
+import { prepareUploadSource } from './upload-source.js';
 
 const statusSchema = z.enum([
   'TODO',
@@ -44,8 +45,118 @@ function toolResult(value: Record<string, unknown>) {
   };
 }
 
-export function createToDoddleMcpServer(api: ToDoddleApi): McpServer {
-  const server = new McpServer({ name: 'tododdle', version: '2.0.0' });
+export interface ToDoddleMcpServerOptions {
+  uploadRoots?: string[];
+  maxUploadBytes?: number;
+}
+
+interface UploadSession {
+  documentId: string;
+  uploadUrl: string;
+  headers: Record<string, string>;
+}
+
+function readUploadSession(value: Record<string, unknown>): UploadSession {
+  const session = value.session;
+  if (!session || typeof session !== 'object') throw new Error('Upload API returned no session');
+  const record = session as Record<string, unknown>;
+  if (
+    typeof record.documentId !== 'string' ||
+    typeof record.uploadUrl !== 'string' ||
+    !record.headers ||
+    typeof record.headers !== 'object'
+  ) {
+    throw new Error('Upload API returned an invalid session');
+  }
+  return {
+    documentId: record.documentId,
+    uploadUrl: record.uploadUrl,
+    headers: Object.fromEntries(
+      Object.entries(record.headers as Record<string, unknown>).filter(
+        (entry): entry is [string, string] => typeof entry[1] === 'string'
+      )
+    ),
+  };
+}
+
+const uploadInputBaseSchema = z.object({
+  projectId: z.string().min(1),
+  filePath: z.string().min(1).optional(),
+  sourceUrl: z.string().url().optional(),
+  fileName: z.string().min(1).max(255).optional(),
+  contentType: z.string().min(1).max(255).optional(),
+  description: z.string().max(5000).optional(),
+  folderId: z.string().min(1).optional(),
+  idempotencyKey: z.string().min(8).optional(),
+});
+const uploadInputSchema = uploadInputBaseSchema.refine(
+  (value) => Boolean(value.filePath) !== Boolean(value.sourceUrl),
+  {
+    message: 'Provide exactly one of filePath or sourceUrl',
+  }
+);
+const taskUploadInputSchema = uploadInputBaseSchema
+  .extend({ taskId: z.string().min(1) })
+  .refine((value) => Boolean(value.filePath) !== Boolean(value.sourceUrl), {
+    message: 'Provide exactly one of filePath or sourceUrl',
+  });
+
+async function uploadDocument(
+  api: ToDoddleApi,
+  options: Required<ToDoddleMcpServerOptions>,
+  input: z.infer<typeof uploadInputBaseSchema> & { taskId?: string }
+) {
+  const prepared = await prepareUploadSource(input, options.uploadRoots, options.maxUploadBytes);
+  let session: UploadSession | null = null;
+  let bytesUploaded = false;
+  const idempotencyKey = input.idempotencyKey || randomUUID();
+  try {
+    session = readUploadSession(
+      await api.post(
+        `/api/external/projects/${input.projectId}/documents/upload-sessions`,
+        {
+          fileName: prepared.fileName,
+          fileSize: prepared.fileSize,
+          contentType: prepared.contentType,
+          description: input.description,
+          folderId: input.folderId,
+          creationSource: input.taskId ? 'TASK_ATTACHMENT' : 'UPLOAD',
+        },
+        idempotencyKey
+      )
+    );
+    await api.uploadFile(session.uploadUrl, session.headers, prepared.filePath, prepared.fileSize);
+    bytesUploaded = true;
+    return await api.post(
+      `/api/external/projects/${input.projectId}/documents/${session.documentId}/finalize`,
+      { success: true, taskId: input.taskId },
+      `${idempotencyKey}-finalize`
+    );
+  } catch (error) {
+    if (session && !bytesUploaded) {
+      await api
+        .post(
+          `/api/external/projects/${input.projectId}/documents/${session.documentId}/finalize`,
+          { success: false, error: error instanceof Error ? error.message : 'Upload failed' },
+          `${idempotencyKey}-failure`
+        )
+        .catch(() => undefined);
+    }
+    throw error;
+  } finally {
+    await prepared.cleanup();
+  }
+}
+
+export function createToDoddleMcpServer(
+  api: ToDoddleApi,
+  serverOptions: ToDoddleMcpServerOptions = {}
+): McpServer {
+  const options: Required<ToDoddleMcpServerOptions> = {
+    uploadRoots: serverOptions.uploadRoots ?? [],
+    maxUploadBytes: serverOptions.maxUploadBytes ?? 1024 * 1024 * 1024,
+  };
+  const server = new McpServer({ name: 'tododdle', version: '2.1.0' });
 
   server.registerTool(
     'list_projects',
@@ -80,6 +191,38 @@ export function createToDoddleMcpServer(api: ToDoddleApi): McpServer {
     },
     async ({ projectId }) =>
       toolResult(await api.get(`/api/external/projects/${projectId}/context`))
+  );
+
+  server.registerTool(
+    'upload_project_document',
+    {
+      description:
+        'Upload an approved local file or HTTPS URL to a project document library. Local paths must be inside TODODDLE_UPLOAD_ROOTS.',
+      inputSchema: uploadInputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    async (input) => toolResult(await uploadDocument(api, options, input))
+  );
+
+  server.registerTool(
+    'attach_file_to_task',
+    {
+      description:
+        'Upload an approved local file or HTTPS URL and attach it to a task in the same project.',
+      inputSchema: taskUploadInputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    async (input) => toolResult(await uploadDocument(api, options, input))
   );
 
   server.registerTool(

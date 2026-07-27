@@ -1,4 +1,5 @@
 import type { McpConfig } from './config.js';
+import { createReadStream } from 'node:fs';
 
 const TODODDLE_ORIGIN = 'https://www.tododdle.com';
 
@@ -28,6 +29,12 @@ export interface ToDoddleApi {
   put(path: string, body: unknown): Promise<Record<string, unknown>>;
   patch(path: string, body: unknown): Promise<Record<string, unknown>>;
   delete(path: string, body: unknown): Promise<Record<string, unknown>>;
+  uploadFile(
+    url: string,
+    headers: Record<string, string>,
+    filePath: string,
+    fileSize: number
+  ): Promise<void>;
 }
 
 export class ToDoddleApiClient implements ToDoddleApi {
@@ -133,5 +140,22 @@ export class ToDoddleApiClient implements ToDoddleApi {
 
   delete(path: string, body: unknown) {
     return this.request('DELETE', path, body);
+  }
+
+  async uploadFile(
+    url: string,
+    headers: Record<string, string>,
+    filePath: string,
+    fileSize: number
+  ): Promise<void> {
+    const response = await fetch(url, {
+      method: 'PUT',
+      headers: { ...headers, 'content-length': String(fileSize) },
+      body: createReadStream(filePath) as never,
+      duplex: 'half',
+    } as RequestInit & { duplex: 'half' });
+    if (!response.ok) {
+      throw new Error(`Direct upload failed (${response.status})`);
+    }
   }
 }

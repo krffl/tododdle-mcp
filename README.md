@@ -22,7 +22,7 @@ Add the server from a terminal:
 codex mcp add tododdle \
   --env TODODDLE_CLIENT_ID=your_client_id \
   --env TODODDLE_CLIENT_SECRET=your_client_secret \
-  -- npx -y tododdle-mcp@2.0.0
+  -- npx -y tododdle-mcp@2.1.0
 
 codex mcp list
 ```
@@ -39,7 +39,7 @@ Install the server for your user account so it is available across projects:
 claude mcp add tododdle --scope user \
   --env TODODDLE_CLIENT_ID=your_client_id \
   --env TODODDLE_CLIENT_SECRET=your_client_secret \
-  -- npx -y tododdle-mcp@2.0.0
+  -- npx -y tododdle-mcp@2.1.0
 
 claude mcp get tododdle
 ```
@@ -55,7 +55,7 @@ Add this configuration to `~/.cursor/mcp.json` for all projects, or to `.cursor/
   "mcpServers": {
     "tododdle": {
       "command": "npx",
-      "args": ["-y", "tododdle-mcp@2.0.0"],
+      "args": ["-y", "tododdle-mcp@2.1.0"],
       "env": {
         "TODODDLE_CLIENT_ID": "your_client_id",
         "TODODDLE_CLIENT_SECRET": "your_client_secret"
@@ -134,6 +134,13 @@ When ToDoddle should be mandatory for one repository, merge the relevant rules f
 - `link_artifact_task`
 - `add_artifact_comment`
 
+### Upload Files
+
+- `upload_project_document`
+- `attach_file_to_task`
+
+Each tool accepts either an approved local `filePath` or an HTTPS `sourceUrl`. Local paths are disabled until `TODODDLE_UPLOAD_ROOTS` is configured. Files stream directly from this local MCP process to ToDoddle's short-lived Bunny upload URL; file bodies are never placed in MCP JSON messages.
+
 The server also provides task, project, and project-artifact resource templates plus `triage_work` and `daily_status` prompts.
 
 ## Permissions
@@ -152,6 +159,9 @@ Common scopes include:
 - `tasks:read` and `tasks:write`
 - `context:read` and `context:write`
 - `time:read` and `time:write`
+- `documents:read` and `documents:write`
+
+Uploading a project document requires `projects:read` and `documents:write`. Attaching a new upload to a task also requires `tasks:write`.
 
 ## Environment
 
@@ -159,6 +169,10 @@ Common scopes include:
 | --- | --- | --- | --- |
 | `TODODDLE_CLIENT_ID` | Yes | None | Agent Connection identifier |
 | `TODODDLE_CLIENT_SECRET` | Yes | None | Agent Connection secret |
+| `TODODDLE_UPLOAD_ROOTS` | For local uploads | None | Platform path-delimited list of directories the MCP may read for uploads |
+| `TODODDLE_MAX_UPLOAD_BYTES` | No | `1073741824` | Local safety ceiling; the hosted API may enforce a lower limit |
+
+On macOS and Linux, separate upload roots with `:`; on Windows, use `;`. The server resolves symlinks and rejects files outside these roots. Add only directories whose contents you are comfortable allowing an approved MCP tool call to upload. HTTPS sources reject embedded credentials, private-network destinations, unsafe redirects, oversized responses, and empty files.
 
 Tokens are held in memory only and refreshed automatically. The client secret is sent only to ToDoddle's hosted token endpoint. Server diagnostics go to stderr so stdout remains reserved for MCP JSON-RPC.
 
@@ -176,6 +190,7 @@ Run the MCP package from source:
 ```bash
 TODODDLE_CLIENT_ID=... \
 TODODDLE_CLIENT_SECRET=... \
+TODODDLE_UPLOAD_ROOTS="$PWD:/Users/you/Desktop" \
 npm run dev
 ```
 
