@@ -22,7 +22,7 @@ Add the server from a terminal:
 codex mcp add tododdle \
   --env TODODDLE_CLIENT_ID=your_client_id \
   --env TODODDLE_CLIENT_SECRET=your_client_secret \
-  -- npx -y tododdle-mcp@2.1.0
+  -- npx -y tododdle-mcp@2.2.0
 
 codex mcp list
 ```
@@ -39,7 +39,7 @@ Install the server for your user account so it is available across projects:
 claude mcp add tododdle --scope user \
   --env TODODDLE_CLIENT_ID=your_client_id \
   --env TODODDLE_CLIENT_SECRET=your_client_secret \
-  -- npx -y tododdle-mcp@2.1.0
+  -- npx -y tododdle-mcp@2.2.0
 
 claude mcp get tododdle
 ```
@@ -55,7 +55,7 @@ Add this configuration to `~/.cursor/mcp.json` for all projects, or to `.cursor/
   "mcpServers": {
     "tododdle": {
       "command": "npx",
-      "args": ["-y", "tododdle-mcp@2.1.0"],
+      "args": ["-y", "tododdle-mcp@2.2.0"],
       "env": {
         "TODODDLE_CLIENT_ID": "your_client_id",
         "TODODDLE_CLIENT_SECRET": "your_client_secret"
@@ -94,6 +94,10 @@ When ToDoddle should be mandatory for one repository, merge the relevant rules f
 - `list_projects`
 - `get_project_context`
 - `get_work_queue`
+- `get_focus_list`
+- `add_task_to_focus`
+- `move_focus_task`
+- `remove_task_from_focus`
 - `get_task`
 - `get_project_brief`
 - `list_project_artifacts`

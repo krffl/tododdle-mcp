@@ -27,11 +27,15 @@ test('discovers the bounded production tool surface', async () => {
   const resources = await client.listResourceTemplates()
   const names = result.tools.map(tool => tool.name)
 
-  assert.equal(result.tools.length, 31)
+  assert.equal(result.tools.length, 35)
   assert.equal(names.includes('delete_task'), false)
   assert.equal(names.includes('archive_task'), true)
   assert.equal(names.includes('get_project_brief'), true)
   assert.equal(names.includes('get_active_time_entries'), true)
+  assert.equal(names.includes('get_focus_list'), true)
+  assert.equal(names.includes('add_task_to_focus'), true)
+  assert.equal(names.includes('move_focus_task'), true)
+  assert.equal(names.includes('remove_task_from_focus'), true)
   assert.deepEqual(
     result.tools.find(tool => tool.name === 'archive_time_entry')?.annotations,
     {
@@ -69,6 +73,38 @@ test('requires only Agent Connection credentials', () => {
   )
 
   assert.throws(() => loadMcpConfig({}), /TODODDLE_CLIENT_ID and TODODDLE_CLIENT_SECRET/)
+})
+
+test('serializes Focus tools to the bounded external API', async () => {
+  const calls = []
+  const focusApi = {
+    ...api,
+    get: async (path, query) => { calls.push({ method: 'GET', path, query }); return { items: [] } },
+    post: async (path, body, idempotencyKey) => { calls.push({ method: 'POST', path, body, idempotencyKey }); return { entity: {} } },
+    patch: async (path, body) => { calls.push({ method: 'PATCH', path, body }); return { entity: {} } },
+    delete: async (path, body) => { calls.push({ method: 'DELETE', path, body }); return { entity: {} } },
+  }
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer(focusApi)
+  const client = new Client({ name: 'focus-test', version: '1.0.0' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+
+  try {
+    await client.callTool({ name: 'get_focus_list', arguments: { bucket: 'TODAY', page: 2, limit: 20 } })
+    await client.callTool({ name: 'add_task_to_focus', arguments: { taskId: 'task-1', bucket: 'NEXT', idempotencyKey: 'focus-key-1' } })
+    await client.callTool({ name: 'move_focus_task', arguments: { taskId: 'task-1', bucket: 'LATER', position: 3, expectedUpdatedAt: '2026-07-28T12:00:00.000Z' } })
+    await client.callTool({ name: 'remove_task_from_focus', arguments: { taskId: 'task-1' } })
+
+    assert.deepEqual(calls, [
+      { method: 'GET', path: '/api/external/focus', query: { bucket: 'TODAY', page: 2, limit: 20 } },
+      { method: 'POST', path: '/api/external/focus', body: { taskId: 'task-1', bucket: 'NEXT' }, idempotencyKey: 'focus-key-1' },
+      { method: 'PATCH', path: '/api/external/focus/task-1', body: { bucket: 'LATER', position: 3, expectedUpdatedAt: '2026-07-28T12:00:00.000Z' } },
+      { method: 'DELETE', path: '/api/external/focus/task-1', body: {} },
+    ])
+  } finally {
+    await client.close()
+    await server.close()
+  }
 })
 
 test('uploads a local file and attaches it to a task through the hosted API', async () => {

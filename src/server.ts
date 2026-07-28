@@ -33,6 +33,7 @@ const commentKindSchema = z.enum([
   'DECISION',
   'HANDOFF',
 ]);
+const focusBucketSchema = z.enum(['TODAY', 'NEXT', 'LATER']);
 const expectedUpdatedAtSchema = z
   .string()
   .datetime({ offset: true })
@@ -156,7 +157,7 @@ export function createToDoddleMcpServer(
     uploadRoots: serverOptions.uploadRoots ?? [],
     maxUploadBytes: serverOptions.maxUploadBytes ?? 1024 * 1024 * 1024,
   };
-  const server = new McpServer({ name: 'tododdle', version: '2.1.0' });
+  const server = new McpServer({ name: 'tododdle', version: '2.2.0' });
 
   server.registerTool(
     'list_projects',
@@ -246,6 +247,84 @@ export function createToDoddleMcpServer(
       },
     },
     async (input) => toolResult(await api.get('/api/external/work-queue', input))
+  );
+
+  server.registerTool(
+    'get_focus_list',
+    {
+      description: 'List the current user’s deliberately curated Focus tasks.',
+      inputSchema: z.object({
+        projectId: z.string().optional(),
+        status: statusSchema.optional(),
+        search: z.string().optional(),
+        bucket: focusBucketSchema.optional(),
+        page: z.number().int().min(1).default(1),
+        limit: z.number().int().min(1).max(100).default(50),
+      }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (input) => toolResult(await api.get('/api/external/focus', input))
+  );
+
+  server.registerTool(
+    'add_task_to_focus',
+    {
+      description: 'Add an accessible active task to Focus. Repeated additions are idempotent.',
+      inputSchema: z.object({
+        taskId: z.string().min(1),
+        bucket: focusBucketSchema.default('NEXT'),
+        idempotencyKey: z.string().min(8).optional(),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ idempotencyKey, ...body }) =>
+      toolResult(await api.post('/api/external/focus', body, idempotencyKey || randomUUID()))
+  );
+
+  server.registerTool(
+    'move_focus_task',
+    {
+      description: 'Move or reorder a Focus task using optimistic concurrency.',
+      inputSchema: z.object({
+        taskId: z.string().min(1),
+        bucket: focusBucketSchema,
+        position: z.number().int().min(0),
+        expectedUpdatedAt: expectedUpdatedAtSchema,
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ taskId, ...body }) =>
+      toolResult(await api.patch(`/api/external/focus/${taskId}`, body))
+  );
+
+  server.registerTool(
+    'remove_task_from_focus',
+    {
+      description: 'Remove personal Focus metadata without changing the underlying task.',
+      inputSchema: z.object({ taskId: z.string().min(1) }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ taskId }) => toolResult(await api.delete(`/api/external/focus/${taskId}`, {}))
   );
 
   server.registerTool(
