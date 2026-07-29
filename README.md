@@ -12,7 +12,7 @@ The package contains no ToDoddle application or database code. It is a small std
 
 ## Configure
 
-Create an Agent Connection in ToDoddle, grant it only the scopes and projects it needs, and copy its client ID and one-time client secret. Use a pinned package version so tool changes are deliberate.
+Create an Agent Connection in ToDoddle, grant it only the scopes and projects it needs, and copy its client ID and one-time client secret. The examples follow npm's current `latest` release so restarted clients receive capability and security updates.
 
 ### Codex
 
@@ -22,7 +22,7 @@ Add the server from a terminal:
 codex mcp add tododdle \
   --env TODODDLE_CLIENT_ID=your_client_id \
   --env TODODDLE_CLIENT_SECRET=your_client_secret \
-  -- npx -y tododdle-mcp@2.3.0
+  -- npx --yes --prefer-online tododdle-mcp@latest
 
 codex mcp list
 ```
@@ -39,7 +39,7 @@ Install the server for your user account so it is available across projects:
 claude mcp add tododdle --scope user \
   --env TODODDLE_CLIENT_ID=your_client_id \
   --env TODODDLE_CLIENT_SECRET=your_client_secret \
-  -- npx -y tododdle-mcp@2.3.0
+  -- npx --yes --prefer-online tododdle-mcp@latest
 
 claude mcp get tododdle
 ```
@@ -55,7 +55,7 @@ Add this configuration to `~/.cursor/mcp.json` for all projects, or to `.cursor/
   "mcpServers": {
     "tododdle": {
       "command": "npx",
-      "args": ["-y", "tododdle-mcp@2.3.0"],
+      "args": ["--yes", "--prefer-online", "tododdle-mcp@latest"],
       "env": {
         "TODODDLE_CLIENT_ID": "your_client_id",
         "TODODDLE_CLIENT_SECRET": "your_client_secret"
@@ -92,7 +92,16 @@ When ToDoddle should be mandatory for one repository, merge the relevant rules f
 ### Read And Plan
 
 - `list_projects`
+- `get_project`
 - `get_project_context`
+- `list_plans`
+- `get_plan`
+- `list_sections`
+- `get_section`
+- `list_project_members`
+- `list_project_documents`
+- `list_notes`
+- `get_note`
 - `get_work_queue`
 - `get_focus_list`
 - `add_task_to_focus`
@@ -118,6 +127,22 @@ When ToDoddle should be mandatory for one repository, merge the relevant rules f
 
 `preview_task_move` reports section automation and hierarchy blockers before a same-project plan move. `move_task` and `archive_task` are marked destructive because a destination section may archive the task. Task deletion is intentionally unavailable.
 
+### Manage Project Structure
+
+- `create_project`, `update_project`, `archive_project`, `restore_project`
+- `create_plan`, `update_plan`, `move_plan`, `archive_plan`, `restore_plan`
+- `create_section`, `update_section`, `move_section`, `archive_section`, `restore_section`
+
+Archive operations are destructive and require client approval. Permanent deletion is intentionally unavailable.
+
+### Manage Notes
+
+- `create_note`
+- `update_note`
+- `archive_note`
+
+Notes are organization-scoped and unavailable to project-only connections.
+
 ### Track Time
 
 - `get_active_time_entries`
@@ -138,6 +163,8 @@ When ToDoddle should be mandatory for one repository, merge the relevant rules f
 - `transition_project_artifact`
 - `link_artifact_task`
 - `add_artifact_comment`
+- `list_artifact_revisions`
+- `link_project_artifacts`
 
 ### Upload Files
 
@@ -174,6 +201,7 @@ Uploading a project document requires `projects:read` and `documents:write`. Att
 | --- | --- | --- | --- |
 | `TODODDLE_CLIENT_ID` | Yes | None | Agent Connection identifier |
 | `TODODDLE_CLIENT_SECRET` | Yes | None | Agent Connection secret |
+| `TODODDLE_BASE_URL` | No | `https://www.tododdle.com` | Hosted API origin; HTTPS is required except for loopback development |
 | `TODODDLE_UPLOAD_ROOTS` | For local uploads | None | Platform path-delimited list of directories the MCP may read for uploads |
 | `TODODDLE_MAX_UPLOAD_BYTES` | No | `1073741824` | Local safety ceiling; the hosted API may enforce a lower limit |
 

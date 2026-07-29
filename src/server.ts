@@ -1,8 +1,13 @@
 import { randomUUID } from 'node:crypto';
+import { readFileSync } from 'node:fs';
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import type { ToDoddleApi } from './api-client.js';
 import { prepareUploadSource } from './upload-source.js';
+
+const packageVersion = JSON.parse(
+  readFileSync(new URL('../package.json', import.meta.url), 'utf8')
+) as { version: string };
 
 const statusSchema = z.enum([
   'TODO',
@@ -34,10 +39,18 @@ const commentKindSchema = z.enum([
   'HANDOFF',
 ]);
 const focusBucketSchema = z.enum(['TODAY', 'NEXT', 'LATER']);
+const projectStatusSchema = z.enum(['ACTIVE', 'ARCHIVED', 'COMPLETED']);
+const sectionEntryActionSchema = z.discriminatedUnion('type', [
+  z.object({ type: z.literal('SET_STATUS'), status: statusSchema }),
+  z.object({ type: z.literal('SET_PRIORITY'), priority: prioritySchema }),
+  z.object({ type: z.literal('SET_ASSIGNEE'), assigneeId: z.string().min(1).nullable() }),
+  z.object({ type: z.literal('ARCHIVE_TASK') }),
+]);
+const artifactRelationTypeSchema = z.enum(['RELATED_TO', 'SUPERSEDES', 'IMPLEMENTS', 'SUPPORTS']);
 const expectedUpdatedAtSchema = z
   .string()
   .datetime({ offset: true })
-  .describe('updatedAt from the latest task read');
+  .describe('updatedAt from the latest read of this resource');
 
 function toolResult(value: Record<string, unknown>) {
   return {
@@ -157,7 +170,7 @@ export function createToDoddleMcpServer(
     uploadRoots: serverOptions.uploadRoots ?? [],
     maxUploadBytes: serverOptions.maxUploadBytes ?? 1024 * 1024 * 1024,
   };
-  const server = new McpServer({ name: 'tododdle', version: '2.3.0' });
+  const server = new McpServer({ name: 'tododdle', version: packageVersion.version });
 
   server.registerTool(
     'list_projects',
@@ -176,6 +189,564 @@ export function createToDoddleMcpServer(
       },
     },
     async (input) => toolResult(await api.get('/api/external/projects', input))
+  );
+
+  server.registerTool(
+    'get_project',
+    {
+      description: 'Get one accessible project and its current update timestamp.',
+      inputSchema: z.object({ projectId: z.string().min(1) }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId }) => toolResult(await api.get(`/api/external/projects/${projectId}`))
+  );
+
+  server.registerTool(
+    'create_project',
+    {
+      description: 'Create a project in the Agent Connection organization.',
+      inputSchema: z.object({
+        name: z.string().min(1).max(500),
+        description: z.string().max(50_000).nullable().optional(),
+        color: z
+          .string()
+          .regex(/^#[0-9A-Fa-f]{6}$/)
+          .optional(),
+        idempotencyKey: z.string().min(8).optional(),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async ({ idempotencyKey, ...body }) =>
+      toolResult(await api.post('/api/external/projects', body, idempotencyKey))
+  );
+
+  server.registerTool(
+    'update_project',
+    {
+      description: 'Update project details using optimistic concurrency.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        expectedUpdatedAt: expectedUpdatedAtSchema,
+        name: z.string().min(1).max(500).optional(),
+        description: z.string().max(50_000).nullable().optional(),
+        color: z
+          .string()
+          .regex(/^#[0-9A-Fa-f]{6}$/)
+          .optional(),
+        status: projectStatusSchema.optional(),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, ...body }) =>
+      toolResult(await api.put(`/api/external/projects/${projectId}`, body))
+  );
+
+  for (const [name, archived, description, destructiveHint] of [
+    [
+      'archive_project',
+      true,
+      'Archive a project without deleting its tasks. Requires explicit approval.',
+      true,
+    ],
+    ['restore_project', false, 'Restore an archived project.', false],
+  ] as const) {
+    server.registerTool(
+      name,
+      {
+        description,
+        inputSchema: z.object({
+          projectId: z.string().min(1),
+          expectedUpdatedAt: expectedUpdatedAtSchema,
+        }),
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+      },
+      async ({ projectId, expectedUpdatedAt }) =>
+        toolResult(
+          await api.put(`/api/external/projects/${projectId}`, { archived, expectedUpdatedAt })
+        )
+    );
+  }
+
+  server.registerTool(
+    'list_plans',
+    {
+      description: 'List bounded active or archived plans in a project.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        search: z.string().optional(),
+        includeArchived: z.boolean().default(false),
+        page: z.number().int().min(1).default(1),
+        limit: z.number().int().min(1).max(100).default(50),
+      }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, ...query }) =>
+      toolResult(await api.get(`/api/external/projects/${projectId}/plans`, query))
+  );
+
+  server.registerTool(
+    'get_plan',
+    {
+      description: 'Get one plan in a project.',
+      inputSchema: z.object({ projectId: z.string().min(1), planId: z.string().min(1) }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, planId }) =>
+      toolResult(await api.get(`/api/external/projects/${projectId}/plans/${planId}`))
+  );
+
+  server.registerTool(
+    'create_plan',
+    {
+      description: 'Create a plan in a project.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        name: z.string().min(1).max(500),
+        description: z.string().max(50_000).nullable().optional(),
+        startDate: z.string().datetime({ offset: true }).nullable().optional(),
+        endDate: z.string().datetime({ offset: true }).nullable().optional(),
+        idempotencyKey: z.string().min(8).optional(),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, idempotencyKey, ...body }) =>
+      toolResult(await api.post(`/api/external/projects/${projectId}/plans`, body, idempotencyKey))
+  );
+
+  server.registerTool(
+    'update_plan',
+    {
+      description: 'Update plan details using optimistic concurrency.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        planId: z.string().min(1),
+        expectedUpdatedAt: expectedUpdatedAtSchema,
+        name: z.string().min(1).max(500).optional(),
+        description: z.string().max(50_000).nullable().optional(),
+        startDate: z.string().datetime({ offset: true }).nullable().optional(),
+        endDate: z.string().datetime({ offset: true }).nullable().optional(),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, planId, ...body }) =>
+      toolResult(await api.put(`/api/external/projects/${projectId}/plans/${planId}`, body))
+  );
+
+  server.registerTool(
+    'move_plan',
+    {
+      description: 'Reorder a plan within its project using optimistic concurrency.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        planId: z.string().min(1),
+        position: z.number().int().min(0),
+        expectedUpdatedAt: expectedUpdatedAtSchema,
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, planId, ...body }) =>
+      toolResult(await api.put(`/api/external/projects/${projectId}/plans/${planId}`, body))
+  );
+
+  for (const [name, archived, description, destructiveHint] of [
+    [
+      'archive_plan',
+      true,
+      'Archive a plan without changing its tasks. Requires explicit approval.',
+      true,
+    ],
+    ['restore_plan', false, 'Restore an archived plan.', false],
+  ] as const) {
+    server.registerTool(
+      name,
+      {
+        description,
+        inputSchema: z.object({
+          projectId: z.string().min(1),
+          planId: z.string().min(1),
+          expectedUpdatedAt: expectedUpdatedAtSchema,
+        }),
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+      },
+      async ({ projectId, planId, expectedUpdatedAt }) =>
+        toolResult(
+          await api.put(`/api/external/projects/${projectId}/plans/${planId}`, {
+            archived,
+            expectedUpdatedAt,
+          })
+        )
+    );
+  }
+
+  server.registerTool(
+    'list_sections',
+    {
+      description: 'List bounded sections and entry automations in a plan.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        planId: z.string().min(1),
+        search: z.string().optional(),
+        includeArchived: z.boolean().default(false),
+        page: z.number().int().min(1).default(1),
+        limit: z.number().int().min(1).max(100).default(50),
+      }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, planId, ...query }) =>
+      toolResult(
+        await api.get(`/api/external/projects/${projectId}/plans/${planId}/sections`, query)
+      )
+  );
+
+  server.registerTool(
+    'get_section',
+    {
+      description: 'Get one plan section and its entry automations.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        planId: z.string().min(1),
+        sectionId: z.string().min(1),
+      }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, planId, sectionId }) =>
+      toolResult(
+        await api.get(`/api/external/projects/${projectId}/plans/${planId}/sections/${sectionId}`)
+      )
+  );
+
+  server.registerTool(
+    'create_section',
+    {
+      description: 'Create a section with optional typed entry automations.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        planId: z.string().min(1),
+        name: z.string().min(1).max(500),
+        description: z.string().max(50_000).nullable().optional(),
+        color: z
+          .string()
+          .regex(/^#[0-9A-Fa-f]{6}$/)
+          .optional(),
+        entryActions: z.array(sectionEntryActionSchema).max(4).optional(),
+        idempotencyKey: z.string().min(8).optional(),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, planId, idempotencyKey, ...body }) =>
+      toolResult(
+        await api.post(
+          `/api/external/projects/${projectId}/plans/${planId}/sections`,
+          body,
+          idempotencyKey
+        )
+      )
+  );
+
+  server.registerTool(
+    'update_section',
+    {
+      description: 'Update a section and its entry automations using optimistic concurrency.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        planId: z.string().min(1),
+        sectionId: z.string().min(1),
+        expectedUpdatedAt: expectedUpdatedAtSchema,
+        name: z.string().min(1).max(500).optional(),
+        description: z.string().max(50_000).nullable().optional(),
+        color: z
+          .string()
+          .regex(/^#[0-9A-Fa-f]{6}$/)
+          .optional(),
+        entryActions: z.array(sectionEntryActionSchema).max(4).optional(),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, planId, sectionId, ...body }) =>
+      toolResult(
+        await api.put(
+          `/api/external/projects/${projectId}/plans/${planId}/sections/${sectionId}`,
+          body
+        )
+      )
+  );
+
+  server.registerTool(
+    'move_section',
+    {
+      description: 'Reorder a section within its plan using optimistic concurrency.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        planId: z.string().min(1),
+        sectionId: z.string().min(1),
+        position: z.number().int().min(0),
+        expectedUpdatedAt: expectedUpdatedAtSchema,
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, planId, sectionId, ...body }) =>
+      toolResult(
+        await api.put(
+          `/api/external/projects/${projectId}/plans/${planId}/sections/${sectionId}`,
+          body
+        )
+      )
+  );
+
+  for (const [name, archived, description, destructiveHint] of [
+    [
+      'archive_section',
+      true,
+      'Archive a section without changing its tasks. Requires explicit approval.',
+      true,
+    ],
+    ['restore_section', false, 'Restore an archived section.', false],
+  ] as const) {
+    server.registerTool(
+      name,
+      {
+        description,
+        inputSchema: z.object({
+          projectId: z.string().min(1),
+          planId: z.string().min(1),
+          sectionId: z.string().min(1),
+          expectedUpdatedAt: expectedUpdatedAtSchema,
+        }),
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+      },
+      async ({ projectId, planId, sectionId, expectedUpdatedAt }) =>
+        toolResult(
+          await api.put(
+            `/api/external/projects/${projectId}/plans/${planId}/sections/${sectionId}`,
+            { archived, expectedUpdatedAt }
+          )
+        )
+    );
+  }
+
+  server.registerTool(
+    'list_project_members',
+    {
+      description: 'List bounded project member summaries for assignee and owner selection.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        search: z.string().optional(),
+        page: z.number().int().min(1).default(1),
+        limit: z.number().int().min(1).max(100).default(50),
+      }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, ...query }) =>
+      toolResult(await api.get(`/api/external/projects/${projectId}/members`, query))
+  );
+
+  server.registerTool(
+    'list_project_documents',
+    {
+      description: 'List bounded document metadata for a project.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        search: z.string().optional(),
+        folderId: z.string().optional(),
+        page: z.number().int().min(1).default(1),
+        limit: z.number().int().min(1).max(100).default(50),
+      }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, ...query }) =>
+      toolResult(await api.get(`/api/external/projects/${projectId}/documents`, query))
+  );
+
+  server.registerTool(
+    'list_notes',
+    {
+      description: 'List bounded organization Notes. Project-only connections cannot access Notes.',
+      inputSchema: z.object({
+        search: z.string().optional(),
+        parentId: z.string().nullable().optional(),
+        page: z.number().int().min(1).default(1),
+        limit: z.number().int().min(1).max(100).default(50),
+      }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ parentId, ...query }) =>
+      toolResult(
+        await api.get('/api/external/notes', {
+          ...query,
+          parentId: parentId ?? undefined,
+        })
+      )
+  );
+
+  server.registerTool(
+    'get_note',
+    {
+      description: 'Get one organization Note.',
+      inputSchema: z.object({ noteId: z.string().min(1) }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ noteId }) => toolResult(await api.get(`/api/external/notes/${noteId}`))
+  );
+
+  server.registerTool(
+    'create_note',
+    {
+      description: 'Create an organization Note.',
+      inputSchema: z.object({
+        title: z.string().min(1).max(500),
+        content: z.string().max(200_000).default(''),
+        parentId: z.string().nullable().optional(),
+        idempotencyKey: z.string().min(8).optional(),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async ({ idempotencyKey, ...body }) =>
+      toolResult(await api.post('/api/external/notes', body, idempotencyKey))
+  );
+
+  server.registerTool(
+    'update_note',
+    {
+      description: 'Update an organization Note using optimistic concurrency.',
+      inputSchema: z.object({
+        noteId: z.string().min(1),
+        expectedUpdatedAt: expectedUpdatedAtSchema,
+        title: z.string().min(1).max(500).optional(),
+        content: z.string().max(200_000).optional(),
+        parentId: z.string().nullable().optional(),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ noteId, ...body }) => toolResult(await api.put(`/api/external/notes/${noteId}`, body))
+  );
+
+  server.registerTool(
+    'archive_note',
+    {
+      description: 'Archive an organization Note. Requires explicit approval.',
+      inputSchema: z.object({
+        noteId: z.string().min(1),
+        expectedUpdatedAt: expectedUpdatedAtSchema,
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ noteId, expectedUpdatedAt }) =>
+      toolResult(await api.delete(`/api/external/notes/${noteId}`, { expectedUpdatedAt }))
   );
 
   server.registerTool(
@@ -203,7 +774,7 @@ export function createToDoddleMcpServer(
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
-        idempotentHint: true,
+        idempotentHint: false,
         openWorldHint: true,
       },
     },
@@ -219,7 +790,7 @@ export function createToDoddleMcpServer(
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
-        idempotentHint: true,
+        idempotentHint: false,
         openWorldHint: true,
       },
     },
@@ -319,7 +890,7 @@ export function createToDoddleMcpServer(
       inputSchema: z.object({ taskId: z.string().min(1) }),
       annotations: {
         readOnlyHint: false,
-        destructiveHint: false,
+        destructiveHint: true,
         idempotentHint: true,
         openWorldHint: false,
       },
@@ -363,7 +934,7 @@ export function createToDoddleMcpServer(
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
-        idempotentHint: true,
+        idempotentHint: false,
         openWorldHint: false,
       },
     },
@@ -495,7 +1066,7 @@ export function createToDoddleMcpServer(
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
-        idempotentHint: true,
+        idempotentHint: false,
         openWorldHint: false,
       },
     },
@@ -636,7 +1207,8 @@ export function createToDoddleMcpServer(
   server.registerTool(
     'start_task_timer',
     {
-      description: 'Start a live timer on an active task. Overlapping timers are allowed.',
+      description:
+        'Start a live timer on an active task. A task allows one active timer; different tasks may run concurrently.',
       inputSchema: z.object({
         projectId: z.string().min(1),
         taskId: z.string().min(1),
@@ -648,7 +1220,7 @@ export function createToDoddleMcpServer(
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
-        idempotentHint: true,
+        idempotentHint: false,
         openWorldHint: false,
       },
     },
@@ -705,7 +1277,7 @@ export function createToDoddleMcpServer(
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
-        idempotentHint: true,
+        idempotentHint: false,
         openWorldHint: false,
       },
     },
@@ -849,7 +1421,7 @@ export function createToDoddleMcpServer(
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
-        idempotentHint: true,
+        idempotentHint: false,
         openWorldHint: false,
       },
     },
@@ -859,6 +1431,52 @@ export function createToDoddleMcpServer(
           `/api/external/projects/${projectId}/artifacts`,
           body,
           idempotencyKey || randomUUID()
+        )
+      )
+  );
+
+  server.registerTool(
+    'list_artifact_revisions',
+    {
+      description: 'List the bounded immutable revision history for a project artifact.',
+      inputSchema: z.object({ projectId: z.string().min(1), artifactId: z.string().min(1) }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, artifactId }) =>
+      toolResult(
+        await api.get(`/api/external/projects/${projectId}/artifacts/${artifactId}/revisions`)
+      )
+  );
+
+  server.registerTool(
+    'link_project_artifacts',
+    {
+      description: 'Create a typed same-project relationship between two context artifacts.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        artifactId: z.string().min(1),
+        targetArtifactId: z.string().min(1),
+        type: artifactRelationTypeSchema.default('RELATED_TO'),
+        idempotencyKey: z.string().min(8).optional(),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, artifactId, idempotencyKey, ...body }) =>
+      toolResult(
+        await api.post(
+          `/api/external/projects/${projectId}/artifacts/${artifactId}/relations`,
+          body,
+          idempotencyKey
         )
       )
   );
@@ -905,7 +1523,7 @@ export function createToDoddleMcpServer(
       }),
       annotations: {
         readOnlyHint: false,
-        destructiveHint: false,
+        destructiveHint: true,
         idempotentHint: true,
         openWorldHint: false,
       },
@@ -931,20 +1549,21 @@ export function createToDoddleMcpServer(
         type: z
           .enum(['RELATED', 'IMPLEMENTS', 'INFORMS', 'EVIDENCE', 'ACTION_FROM'])
           .default('RELATED'),
+        idempotencyKey: z.string().min(8).optional(),
       }),
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
-        idempotentHint: true,
+        idempotentHint: false,
         openWorldHint: false,
       },
     },
-    async ({ projectId, artifactId, ...body }) =>
+    async ({ projectId, artifactId, idempotencyKey, ...body }) =>
       toolResult(
         await api.post(
           `/api/external/projects/${projectId}/artifacts/${artifactId}/task-links`,
           body,
-          randomUUID()
+          idempotencyKey
         )
       )
   );
@@ -965,7 +1584,7 @@ export function createToDoddleMcpServer(
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
-        idempotentHint: true,
+        idempotentHint: false,
         openWorldHint: false,
       },
     },

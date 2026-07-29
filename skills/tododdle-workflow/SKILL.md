@@ -16,6 +16,15 @@ Use the `tododdle` MCP tools for live project state. Never infer IDs, statuses, 
 
 Keep list requests bounded and paginate rather than requesting an entire organization history.
 
+## Build Project Structure
+
+- Use project, plan, and section read tools before creating structure so names and workflow stages are not duplicated.
+- Create plans for distinct workstreams or boards and sections for workflow stages. Configure section entry actions only when the requested workflow is explicit.
+- Use `list_project_members` to select assignees and artifact owners; never guess a user ID.
+- Use `list_project_documents`, Note tools, revisions, and artifact relationships when the work depends on existing supporting context.
+- Use optimistic concurrency for project, plan, section, and Note updates or ordering. Reload after a conflict.
+- Archive projects, plans, sections, or Notes only with explicit approval. Permanent deletion is unavailable.
+
 ## Manage Execution
 
 - Transition the relevant task to the active status when substantive work begins.

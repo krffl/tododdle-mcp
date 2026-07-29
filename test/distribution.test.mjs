@@ -41,6 +41,8 @@ test('workflow skill declares the MCP dependency and core safety rules', async (
   );
 
   assert.match(skill, /get_project_brief/);
+  assert.match(skill, /list_project_members/);
+  assert.match(skill, /Archive projects, plans, sections, or Notes only with explicit approval/);
   assert.match(skill, /COMPLETE/);
   assert.match(skill, /Do not invent elapsed time/);
   assert.match(metadata, /value: "tododdle"/);

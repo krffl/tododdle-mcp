@@ -1,8 +1,6 @@
 import type { McpConfig } from './config.js';
 import { createReadStream } from 'node:fs';
 
-const TODODDLE_ORIGIN = 'https://www.tododdle.com';
-
 interface TokenResponse {
   access_token: string;
   expires_in: number;
@@ -51,7 +49,7 @@ export class ToDoddleApiClient implements ToDoddleApi {
       client_id: this.config.clientId,
       client_secret: this.config.clientSecret,
     });
-    const response = await fetch(`${TODODDLE_ORIGIN}/api/external/oauth/token`, {
+    const response = await fetch(`${this.config.baseUrl}/api/external/oauth/token`, {
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
       body: form,
@@ -75,7 +73,7 @@ export class ToDoddleApiClient implements ToDoddleApi {
     idempotencyKey?: string,
     retry = true
   ): Promise<Record<string, unknown>> {
-    const url = new URL(`${TODODDLE_ORIGIN}${path}`);
+    const url = new URL(path, this.config.baseUrl);
     Object.entries(query || {}).forEach(([key, value]) => {
       if (value !== undefined) url.searchParams.set(key, String(value));
     });

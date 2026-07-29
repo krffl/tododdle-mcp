@@ -6,6 +6,7 @@ import { join } from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { loadMcpConfig } from '../dist/config.js'
+import { ToDoddleApiClient } from '../dist/api-client.js'
 import { createToDoddleMcpServer } from '../dist/server.js'
 
 const api = {
@@ -26,8 +27,10 @@ test('discovers the bounded production tool surface', async () => {
   const result = await client.listTools()
   const resources = await client.listResourceTemplates()
   const names = result.tools.map(tool => tool.name)
+  const packageJson = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
 
-  assert.equal(result.tools.length, 36)
+  assert.equal(client.getServerVersion()?.version, packageJson.version)
+  assert.equal(result.tools.length, 64)
   assert.equal(names.includes('delete_task'), false)
   assert.equal(names.includes('archive_task'), true)
   assert.equal(names.includes('get_project_brief'), true)
@@ -37,7 +40,19 @@ test('discovers the bounded production tool surface', async () => {
   assert.equal(names.includes('move_focus_task'), true)
   assert.equal(names.includes('remove_task_from_focus'), true)
   assert.equal(names.includes('preview_task_move'), true)
+  for (const name of [
+    'get_project', 'create_project', 'update_project', 'archive_project', 'restore_project',
+    'list_plans', 'get_plan', 'create_plan', 'update_plan', 'move_plan', 'archive_plan', 'restore_plan',
+    'list_sections', 'get_section', 'create_section', 'update_section', 'move_section', 'archive_section', 'restore_section',
+    'list_project_members', 'list_project_documents', 'list_notes', 'get_note', 'create_note', 'update_note',
+    'archive_note', 'list_artifact_revisions', 'link_project_artifacts',
+  ]) assert.equal(names.includes(name), true, `${name} should be discoverable`)
   assert.equal(result.tools.find(tool => tool.name === 'move_task')?.annotations?.destructiveHint, true)
+  assert.equal(result.tools.find(tool => tool.name === 'archive_project')?.annotations?.destructiveHint, true)
+  assert.equal(result.tools.find(tool => tool.name === 'restore_project')?.annotations?.destructiveHint, false)
+  assert.equal(result.tools.find(tool => tool.name === 'create_section')?.annotations?.idempotentHint, false)
+  assert.equal(result.tools.find(tool => tool.name === 'remove_task_from_focus')?.annotations?.destructiveHint, true)
+  assert.match(result.tools.find(tool => tool.name === 'start_task_timer')?.description || '', /one active timer/)
   assert.deepEqual(
     result.tools.find(tool => tool.name === 'archive_time_entry')?.annotations,
     {
@@ -67,6 +82,7 @@ test('requires only Agent Connection credentials', () => {
       TODODDLE_CLIENT_SECRET: 'client-secret',
     }),
     {
+      baseUrl: 'https://www.tododdle.com',
       clientId: 'client-id',
       clientSecret: 'client-secret',
       uploadRoots: [],
@@ -75,6 +91,93 @@ test('requires only Agent Connection credentials', () => {
   )
 
   assert.throws(() => loadMcpConfig({}), /TODODDLE_CLIENT_ID and TODODDLE_CLIENT_SECRET/)
+  assert.equal(loadMcpConfig({
+    TODODDLE_BASE_URL: 'http://localhost:3000',
+    TODODDLE_CLIENT_ID: 'client-id',
+    TODODDLE_CLIENT_SECRET: 'client-secret',
+  }).baseUrl, 'http://localhost:3000')
+  assert.throws(() => loadMcpConfig({
+    TODODDLE_BASE_URL: 'http://tododdle.example',
+    TODODDLE_CLIENT_ID: 'client-id',
+    TODODDLE_CLIENT_SECRET: 'client-secret',
+  }), /must use HTTPS/)
+  assert.throws(() => loadMcpConfig({
+    TODODDLE_BASE_URL: 'https://tododdle.example/api?token=nope',
+    TODODDLE_CLIENT_ID: 'client-id',
+    TODODDLE_CLIENT_SECRET: 'client-secret',
+  }), /must be an origin/)
+})
+
+test('uses the configured base URL for tokens and API requests', async () => {
+  const originalFetch = globalThis.fetch
+  const urls = []
+  globalThis.fetch = async (input) => {
+    urls.push(String(input))
+    if (String(input).endsWith('/api/external/oauth/token')) {
+      return new Response(JSON.stringify({ access_token: 'token', expires_in: 3600 }), {
+        status: 200,
+        headers: { 'content-type': 'application/json' },
+      })
+    }
+    return new Response(JSON.stringify({ items: [] }), {
+      status: 200,
+      headers: { 'content-type': 'application/json' },
+    })
+  }
+
+  try {
+    const client = new ToDoddleApiClient({
+      baseUrl: 'http://localhost:3000',
+      clientId: 'client-id',
+      clientSecret: 'client-secret',
+      uploadRoots: [],
+      maxUploadBytes: 1024,
+    })
+    await client.get('/api/external/projects', { page: 2 })
+    assert.deepEqual(urls, [
+      'http://localhost:3000/api/external/oauth/token',
+      'http://localhost:3000/api/external/projects?page=2',
+    ])
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('serializes project, plan, section, Note, and supporting tools', async () => {
+  const calls = []
+  const managementApi = {
+    ...api,
+    get: async (path, query) => { calls.push({ method: 'GET', path, query }); return { items: [] } },
+    post: async (path, body, idempotencyKey) => { calls.push({ method: 'POST', path, body, idempotencyKey }); return { entity: {} } },
+    put: async (path, body) => { calls.push({ method: 'PUT', path, body }); return { entity: {} } },
+    delete: async (path, body) => { calls.push({ method: 'DELETE', path, body }); return { entity: {} } },
+  }
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer(managementApi)
+  const client = new Client({ name: 'management-test', version: '1.0.0' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+
+  try {
+    const expectedUpdatedAt = '2026-07-29T12:00:00.000Z'
+    await client.callTool({ name: 'create_plan', arguments: { projectId: 'project-1', name: 'Delivery', idempotencyKey: 'plan-key-1' } })
+    await client.callTool({ name: 'create_section', arguments: { projectId: 'project-1', planId: 'plan-1', name: 'Review', entryActions: [{ type: 'SET_STATUS', status: 'REVIEW' }], idempotencyKey: 'section-key-1' } })
+    await client.callTool({ name: 'move_section', arguments: { projectId: 'project-1', planId: 'plan-1', sectionId: 'section-1', position: 0, expectedUpdatedAt } })
+    await client.callTool({ name: 'list_project_members', arguments: { projectId: 'project-1', page: 1, limit: 20 } })
+    await client.callTool({ name: 'archive_note', arguments: { noteId: 'note-1', expectedUpdatedAt } })
+    await client.callTool({ name: 'list_artifact_revisions', arguments: { projectId: 'project-1', artifactId: 'artifact-1' } })
+
+    assert.deepEqual(calls, [
+      { method: 'POST', path: '/api/external/projects/project-1/plans', body: { name: 'Delivery' }, idempotencyKey: 'plan-key-1' },
+      { method: 'POST', path: '/api/external/projects/project-1/plans/plan-1/sections', body: { name: 'Review', entryActions: [{ type: 'SET_STATUS', status: 'REVIEW' }] }, idempotencyKey: 'section-key-1' },
+      { method: 'PUT', path: '/api/external/projects/project-1/plans/plan-1/sections/section-1', body: { position: 0, expectedUpdatedAt } },
+      { method: 'GET', path: '/api/external/projects/project-1/members', query: { page: 1, limit: 20 } },
+      { method: 'DELETE', path: '/api/external/notes/note-1', body: { expectedUpdatedAt } },
+      { method: 'GET', path: '/api/external/projects/project-1/artifacts/artifact-1/revisions', query: undefined },
+    ])
+  } finally {
+    await client.close()
+    await server.close()
+  }
 })
 
 test('serializes Focus tools to the bounded external API', async () => {
