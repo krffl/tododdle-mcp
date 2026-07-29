@@ -6,7 +6,7 @@ The package contains no ToDoddle application or database code. It is a small std
 
 ## Requirements
 
-- Node.js 18 or newer
+- Node.js 20 or newer
 - A ToDoddle Agent Connection client ID and client secret
 - Scopes and project grants configured for that Agent Connection in ToDoddle
 
@@ -22,7 +22,7 @@ Add the server from a terminal:
 codex mcp add tododdle \
   --env TODODDLE_CLIENT_ID=your_client_id \
   --env TODODDLE_CLIENT_SECRET=your_client_secret \
-  -- npx -y tododdle-mcp@2.2.0
+  -- npx -y tododdle-mcp@2.3.0
 
 codex mcp list
 ```
@@ -39,7 +39,7 @@ Install the server for your user account so it is available across projects:
 claude mcp add tododdle --scope user \
   --env TODODDLE_CLIENT_ID=your_client_id \
   --env TODODDLE_CLIENT_SECRET=your_client_secret \
-  -- npx -y tododdle-mcp@2.2.0
+  -- npx -y tododdle-mcp@2.3.0
 
 claude mcp get tododdle
 ```
@@ -55,7 +55,7 @@ Add this configuration to `~/.cursor/mcp.json` for all projects, or to `.cursor/
   "mcpServers": {
     "tododdle": {
       "command": "npx",
-      "args": ["-y", "tododdle-mcp@2.2.0"],
+      "args": ["-y", "tododdle-mcp@2.3.0"],
       "env": {
         "TODODDLE_CLIENT_ID": "your_client_id",
         "TODODDLE_CLIENT_SECRET": "your_client_secret"
