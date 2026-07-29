@@ -157,7 +157,7 @@ export function createToDoddleMcpServer(
     uploadRoots: serverOptions.uploadRoots ?? [],
     maxUploadBytes: serverOptions.maxUploadBytes ?? 1024 * 1024 * 1024,
   };
-  const server = new McpServer({ name: 'tododdle', version: '2.2.0' });
+  const server = new McpServer({ name: 'tododdle', version: '2.3.0' });
 
   server.registerTool(
     'list_projects',
@@ -419,22 +419,46 @@ export function createToDoddleMcpServer(
   server.registerTool(
     'move_task',
     {
-      description: 'Move a task to an active section and position in the same project.',
+      description:
+        'Move a task to an active section, optionally in another plan in the same project. Preview first because section actions may archive the task.',
       inputSchema: z.object({
         taskId: z.string().min(1),
+        planId: z.string().min(1).optional(),
         sectionId: z.string().min(1),
         position: z.number().int().min(0),
         expectedUpdatedAt: expectedUpdatedAtSchema,
       }),
       annotations: {
         readOnlyHint: false,
-        destructiveHint: false,
+        destructiveHint: true,
         idempotentHint: true,
         openWorldHint: false,
       },
     },
     async ({ taskId, ...body }) =>
       toolResult(await api.put(`/api/external/tasks/${taskId}/move`, body))
+  );
+
+  server.registerTool(
+    'preview_task_move',
+    {
+      description:
+        'Preview destination section actions, warnings, destructive effects, and hierarchy blockers before moving a task.',
+      inputSchema: z.object({
+        taskId: z.string().min(1),
+        planId: z.string().min(1).optional(),
+        sectionId: z.string().min(1),
+        expectedUpdatedAt: expectedUpdatedAtSchema.optional(),
+      }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ taskId, ...body }) =>
+      toolResult(await api.post(`/api/external/tasks/${taskId}/move/preview`, body))
   );
 
   server.registerTool(

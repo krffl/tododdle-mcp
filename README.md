@@ -109,13 +109,14 @@ When ToDoddle should be mandatory for one repository, merge the relevant rules f
 - `create_task`
 - `update_task`
 - `transition_task`
+- `preview_task_move`
 - `move_task`
 - `set_task_blocker`
 - `add_task_comment`
 - `acknowledge_agent_reply`
 - `archive_task`
 
-`archive_task` is destructive and requires client approval. Task deletion is intentionally unavailable.
+`preview_task_move` reports section automation and hierarchy blockers before a same-project plan move. `move_task` and `archive_task` are marked destructive because a destination section may archive the task. Task deletion is intentionally unavailable.
 
 ### Track Time
 

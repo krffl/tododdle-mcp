@@ -21,6 +21,7 @@ Keep list requests bounded and paginate rather than requesting an entire organiz
 - Transition the relevant task to the active status when substantive work begins.
 - Keep task kind, parent, section, assignee, due date, priority, and blocker relationships accurate when the work changes them.
 - Add comments only for durable information: decisions, meaningful progress, validation results, blockers, or handoff context.
+- Use `preview_task_move` before moving a task between plans. Clear parent or active-child links reported by the preview, and call out any destination automation that changes or archives the task.
 - When blocked, set the blocker relationship when a concrete blocking task exists and explain the impact in one concise comment.
 - Read Agent Connection replies with `get_agent_inbox` when continuing prior agent work; acknowledge a reply only after handling it.
 
