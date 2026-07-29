@@ -1,6 +1,6 @@
 {
   "name": "tododdle-mcp",
-  "version": "2.3.0",
+  "version": "2.3.1",
   "description": "Agent-first task, project context, and time tracking for ToDoddle",
   "type": "module",
   "main": "dist/index.js",
@@ -17,6 +17,7 @@
   ],
   "scripts": {
     "build": "tsc",
+    "postbuild": "chmod +x dist/index.js",
     "start": "node dist/index.js",
     "dev": "tsx src/index.ts",
     "format": "prettier --write \"src/**/*.ts\"",

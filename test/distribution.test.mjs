@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { readFile } from 'node:fs/promises';
+import { readFile, stat } from 'node:fs/promises';
 import test from 'node:test';
 
 const readJson = async (path) => JSON.parse(await readFile(new URL(path, import.meta.url), 'utf8'));
@@ -10,6 +10,12 @@ test('npm package includes the Codex workflow distribution', async () => {
   assert.ok(packageJson.files.includes('.codex-plugin'));
   assert.ok(packageJson.files.includes('skills'));
   assert.ok(packageJson.files.includes('examples'));
+});
+
+test('npm package entrypoint is executable by npx', async () => {
+  const entrypoint = await stat(new URL('../dist/index.js', import.meta.url));
+
+  assert.notEqual(entrypoint.mode & 0o111, 0);
 });
 
 test('Codex plugin and marketplace target the published package', async () => {
