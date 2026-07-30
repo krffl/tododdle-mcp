@@ -17,6 +17,11 @@ function normalizeBaseUrl(value: string | undefined): string {
   }
 
   const isLoopback = ['localhost', '127.0.0.1', '::1'].includes(url.hostname);
+  if (['trackingti.me', 'www.trackingti.me'].includes(url.hostname)) {
+    throw new Error(
+      'TODODDLE_BASE_URL has moved; use https://www.tododdle.com instead of trackingti.me'
+    );
+  }
   if (url.protocol !== 'https:' && !(isLoopback && url.protocol === 'http:')) {
     throw new Error('TODODDLE_BASE_URL must use HTTPS except for loopback development');
   }

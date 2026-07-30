@@ -53,7 +53,9 @@ export class ToDoddleApiClient implements ToDoddleApi {
       method: 'POST',
       headers: { 'content-type': 'application/x-www-form-urlencoded' },
       body: form,
+      redirect: 'manual',
     });
+    this.assertNoRedirect(response);
     const payload = await this.readPayload(response);
     if (!response.ok) throw this.toError(response.status, payload);
 
@@ -87,7 +89,9 @@ export class ToDoddleApiClient implements ToDoddleApi {
         ...(idempotencyKey ? { 'idempotency-key': idempotencyKey } : {}),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
+      redirect: 'manual',
     });
+    this.assertNoRedirect(response);
 
     if (response.status === 401 && retry) {
       this.accessToken = null;
@@ -101,10 +105,26 @@ export class ToDoddleApiClient implements ToDoddleApi {
   }
 
   private async readPayload(response: Response): Promise<Record<string, unknown>> {
-    const payload: unknown = await response.json();
+    const text = await response.text();
+    let payload: unknown;
+    try {
+      payload = JSON.parse(text);
+    } catch {
+      payload = text;
+    }
     return payload && typeof payload === 'object'
       ? (payload as Record<string, unknown>)
       : { value: payload };
+  }
+
+  private assertNoRedirect(response: Response): void {
+    if (response.status < 300 || response.status >= 400) return;
+    const destination = response.headers.get('location');
+    throw new ToDoddleApiError(
+      response.status,
+      'configuration_error',
+      `TODODDLE_BASE_URL redirected${destination ? ` to ${destination}` : ''}; configure the final API origin instead`
+    );
   }
 
   private toError(status: number, payload: Record<string, unknown>) {

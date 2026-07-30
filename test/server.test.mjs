@@ -106,6 +106,11 @@ test('requires only Agent Connection credentials', () => {
     TODODDLE_CLIENT_ID: 'client-id',
     TODODDLE_CLIENT_SECRET: 'client-secret',
   }), /must be an origin/)
+  assert.throws(() => loadMcpConfig({
+    TODODDLE_BASE_URL: 'https://trackingti.me',
+    TODODDLE_CLIENT_ID: 'client-id',
+    TODODDLE_CLIENT_SECRET: 'client-secret',
+  }), /has moved.*www\.tododdle\.com/)
 })
 
 test('uses the configured base URL for tokens and API requests', async () => {
@@ -138,6 +143,30 @@ test('uses the configured base URL for tokens and API requests', async () => {
       'http://localhost:3000/api/external/oauth/token',
       'http://localhost:3000/api/external/projects?page=2',
     ])
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('reports base URL redirects as configuration errors before credentials are dropped', async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => new Response(null, {
+    status: 307,
+    headers: { location: 'https://www.tododdle.com/api/external/oauth/token' },
+  })
+
+  try {
+    const client = new ToDoddleApiClient({
+      baseUrl: 'https://legacy.example',
+      clientId: 'client-id',
+      clientSecret: 'client-secret',
+      uploadRoots: [],
+      maxUploadBytes: 1024,
+    })
+    await assert.rejects(
+      () => client.get('/api/external/projects'),
+      error => error?.code === 'configuration_error' && /configure the final API origin/.test(error.message),
+    )
   } finally {
     globalThis.fetch = originalFetch
   }

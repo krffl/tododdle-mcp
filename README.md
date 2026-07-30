@@ -207,6 +207,8 @@ Uploading a project document requires `projects:read` and `documents:write`. Att
 
 On macOS and Linux, separate upload roots with `:`; on Windows, use `;`. The server resolves symlinks and rejects files outside these roots. Add only directories whose contents you are comfortable allowing an approved MCP tool call to upload. HTTPS sources reject embedded credentials, private-network destinations, unsafe redirects, oversized responses, and empty files.
 
+Use the final API origin directly. Legacy `trackingti.me` URLs redirect to ToDoddle and are rejected because cross-origin redirects must not forward bearer credentials.
+
 Tokens are held in memory only and refreshed automatically. The client secret is sent only to ToDoddle's hosted token endpoint. Server diagnostics go to stderr so stdout remains reserved for MCP JSON-RPC.
 
 ## Development
