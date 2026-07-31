@@ -189,7 +189,8 @@ test('serializes project, plan, section, Note, and supporting tools', async () =
   try {
     const expectedUpdatedAt = '2026-07-29T12:00:00.000Z'
     await client.callTool({ name: 'create_plan', arguments: { projectId: 'project-1', name: 'Delivery', idempotencyKey: 'plan-key-1' } })
-    await client.callTool({ name: 'create_section', arguments: { projectId: 'project-1', planId: 'plan-1', name: 'Review', entryActions: [{ type: 'SET_STATUS', status: 'REVIEW' }], idempotencyKey: 'section-key-1' } })
+    await client.callTool({ name: 'create_section', arguments: { projectId: 'project-1', planId: 'plan-1', name: 'Review', entryActions: [{ type: 'SET_STATUS', status: 'REVIEW' }, { type: 'SET_KIND', kind: 'FEATURE' }], idempotencyKey: 'section-key-1' } })
+    await client.callTool({ name: 'create_task', arguments: { projectId: 'project-1', planId: 'plan-1', sectionId: 'section-1', title: 'Feature work', kind: 'FEATURE', idempotencyKey: 'task-key-1' } })
     await client.callTool({ name: 'move_section', arguments: { projectId: 'project-1', planId: 'plan-1', sectionId: 'section-1', position: 0, expectedUpdatedAt } })
     await client.callTool({ name: 'list_project_members', arguments: { projectId: 'project-1', page: 1, limit: 20 } })
     await client.callTool({ name: 'archive_note', arguments: { noteId: 'note-1', expectedUpdatedAt } })
@@ -197,7 +198,8 @@ test('serializes project, plan, section, Note, and supporting tools', async () =
 
     assert.deepEqual(calls, [
       { method: 'POST', path: '/api/external/projects/project-1/plans', body: { name: 'Delivery' }, idempotencyKey: 'plan-key-1' },
-      { method: 'POST', path: '/api/external/projects/project-1/plans/plan-1/sections', body: { name: 'Review', entryActions: [{ type: 'SET_STATUS', status: 'REVIEW' }] }, idempotencyKey: 'section-key-1' },
+      { method: 'POST', path: '/api/external/projects/project-1/plans/plan-1/sections', body: { name: 'Review', entryActions: [{ type: 'SET_STATUS', status: 'REVIEW' }, { type: 'SET_KIND', kind: 'FEATURE' }] }, idempotencyKey: 'section-key-1' },
+      { method: 'POST', path: '/api/external/tasks', body: { projectId: 'project-1', planId: 'plan-1', sectionId: 'section-1', title: 'Feature work', kind: 'FEATURE' }, idempotencyKey: 'task-key-1' },
       { method: 'PUT', path: '/api/external/projects/project-1/plans/plan-1/sections/section-1', body: { position: 0, expectedUpdatedAt } },
       { method: 'GET', path: '/api/external/projects/project-1/members', query: { page: 1, limit: 20 } },
       { method: 'DELETE', path: '/api/external/notes/note-1', body: { expectedUpdatedAt } },

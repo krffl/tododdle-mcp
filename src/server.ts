@@ -19,7 +19,7 @@ const statusSchema = z.enum([
   'CANNOT_REPLICATE',
 ]);
 const prioritySchema = z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']);
-const taskKindSchema = z.enum(['TASK', 'EPIC', 'BUG', 'RESEARCH', 'ACTION_ITEM']);
+const taskKindSchema = z.enum(['TASK', 'FEATURE', 'EPIC', 'BUG', 'RESEARCH', 'ACTION_ITEM']);
 const artifactTypeSchema = z.enum([
   'BRIEF',
   'SPEC',
@@ -43,6 +43,7 @@ const projectStatusSchema = z.enum(['ACTIVE', 'ARCHIVED', 'COMPLETED']);
 const sectionEntryActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('SET_STATUS'), status: statusSchema }),
   z.object({ type: z.literal('SET_PRIORITY'), priority: prioritySchema }),
+  z.object({ type: z.literal('SET_KIND'), kind: taskKindSchema }),
   z.object({ type: z.literal('SET_ASSIGNEE'), assigneeId: z.string().min(1).nullable() }),
   z.object({ type: z.literal('ARCHIVE_TASK') }),
 ]);
@@ -488,7 +489,7 @@ export function createToDoddleMcpServer(
           .string()
           .regex(/^#[0-9A-Fa-f]{6}$/)
           .optional(),
-        entryActions: z.array(sectionEntryActionSchema).max(4).optional(),
+        entryActions: z.array(sectionEntryActionSchema).max(5).optional(),
         idempotencyKey: z.string().min(8).optional(),
       }),
       annotations: {
@@ -523,7 +524,7 @@ export function createToDoddleMcpServer(
           .string()
           .regex(/^#[0-9A-Fa-f]{6}$/)
           .optional(),
-        entryActions: z.array(sectionEntryActionSchema).max(4).optional(),
+        entryActions: z.array(sectionEntryActionSchema).max(5).optional(),
       }),
       annotations: {
         readOnlyHint: false,

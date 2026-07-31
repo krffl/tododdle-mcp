@@ -127,6 +127,8 @@ When ToDoddle should be mandatory for one repository, merge the relevant rules f
 
 `preview_task_move` reports section automation and hierarchy blockers before a same-project plan move. `move_task` and `archive_task` are marked destructive because a destination section may archive the task. Task deletion is intentionally unavailable.
 
+Task create/update accepts `TASK`, `FEATURE`, `EPIC`, `BUG`, `RESEARCH`, and `ACTION_ITEM`. Section create/update supports `SET_KIND` alongside status, priority, assignee, and archive entry actions.
+
 ### Manage Project Structure
 
 - `create_project`, `update_project`, `archive_project`, `restore_project`
