@@ -5,14 +5,21 @@ description: Use ToDoddle as the work ledger for project planning, implementatio
 
 # ToDoddle Workflow
 
-Use the `tododdle` MCP tools for live project state. Never infer IDs, statuses, scopes, or relationships from memory.
+Use the `tododdle` MCP tools for live project state. Make the fewest calls needed for the request.
 
-## Start With Context
+## Choose the Minimum Workflow
 
-1. Use `list_projects` when the project is not already unambiguous.
-2. Read `get_project_brief` and `get_project_context` before planning substantial work.
-3. Use `get_work_queue`, `get_task`, and artifact tools to find existing work and supporting decisions.
-4. Reuse an existing task when it covers the request. Create a task only when the work is genuinely untracked.
+Reuse project, plan, section, task, and artifact IDs previously returned by ToDoddle tools in the active conversation or its compaction summary. These are verified working context, not guesses. Do not rediscover stable IDs merely to confirm them. Never invent IDs, statuses, scopes, or relationships from general model memory.
+
+Branch by request type:
+
+- **Unknown or ambiguous project:** Use `list_projects` once. Skip it when the project is already unambiguous.
+- **Simple lookup:** Use the narrowest read tool. Prefer `list_tasks` with known project, plan, or section filters for task lists; use `get_task` for one task and `get_work_queue` for operational, overdue, or unassigned work. Do not load the brief or full project context.
+- **Substantial planning or implementation:** Read `get_project_brief` and `get_project_context` once per continuous workstream, then find the existing task and supporting artifacts. Reuse that context until the project changes or relevant decisions may have changed.
+- **Known-item mutation:** Refresh only the affected resource when current state or `updatedAt` is required, then perform the requested mutation. Do not reload unrelated hierarchy or project context.
+- **Continuation:** Reuse verified IDs and stable context retained in the conversation or compaction summary. Refresh volatile fields such as status, comments, blockers, and `updatedAt` only when their current value matters.
+
+Reuse an existing task when it covers the request. Create a task only when the work is genuinely untracked. Do not fan out across every status or endpoint unless the user explicitly requests terminal-state accounting or a complete audit.
 
 Keep list requests bounded and paginate rather than requesting an entire organization history.
 

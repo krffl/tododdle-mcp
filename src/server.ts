@@ -900,6 +900,33 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
+    'list_tasks',
+    {
+      description:
+        'List bounded tasks with optional project, plan, section, assignee, status, priority, search, and archive filters.',
+      inputSchema: z.object({
+        projectId: z.string().min(1).optional(),
+        planId: z.string().min(1).optional(),
+        sectionId: z.string().min(1).optional(),
+        assigneeId: z.string().min(1).optional(),
+        status: statusSchema.optional(),
+        priority: prioritySchema.optional(),
+        search: z.string().optional(),
+        includeArchived: z.boolean().default(false),
+        page: z.number().int().min(1).default(1),
+        limit: z.number().int().min(1).max(100).default(50),
+      }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (input) => toolResult(await api.get('/api/external/tasks', input))
+  );
+
+  server.registerTool(
     'get_task',
     {
       description: 'Get complete task context including comments and blocker information.',

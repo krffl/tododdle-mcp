@@ -27,15 +27,17 @@ test('discovers the bounded production tool surface', async () => {
   const result = await client.listTools()
   const resources = await client.listResourceTemplates()
   const names = result.tools.map(tool => tool.name)
+  const listTasksTool = result.tools.find(tool => tool.name === 'list_tasks')
   const packageJson = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
 
   assert.equal(client.getServerVersion()?.version, packageJson.version)
-  assert.equal(result.tools.length, 64)
+  assert.equal(result.tools.length, 65)
   assert.equal(names.includes('delete_task'), false)
   assert.equal(names.includes('archive_task'), true)
   assert.equal(names.includes('get_project_brief'), true)
   assert.equal(names.includes('get_active_time_entries'), true)
   assert.equal(names.includes('get_focus_list'), true)
+  assert.equal(names.includes('list_tasks'), true)
   assert.equal(names.includes('add_task_to_focus'), true)
   assert.equal(names.includes('move_focus_task'), true)
   assert.equal(names.includes('remove_task_from_focus'), true)
@@ -52,6 +54,19 @@ test('discovers the bounded production tool surface', async () => {
   assert.equal(result.tools.find(tool => tool.name === 'restore_project')?.annotations?.destructiveHint, false)
   assert.equal(result.tools.find(tool => tool.name === 'create_section')?.annotations?.idempotentHint, false)
   assert.equal(result.tools.find(tool => tool.name === 'remove_task_from_focus')?.annotations?.destructiveHint, true)
+  assert.deepEqual(
+    listTasksTool?.annotations,
+    {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    }
+  )
+  assert.equal(listTasksTool?.inputSchema.properties?.includeArchived?.default, false)
+  assert.equal(listTasksTool?.inputSchema.properties?.page?.default, 1)
+  assert.equal(listTasksTool?.inputSchema.properties?.limit?.default, 50)
+  assert.equal(listTasksTool?.inputSchema.properties?.limit?.maximum, 100)
   assert.match(result.tools.find(tool => tool.name === 'start_task_timer')?.description || '', /one active timer/)
   assert.deepEqual(
     result.tools.find(tool => tool.name === 'archive_time_entry')?.annotations,
@@ -204,6 +219,64 @@ test('serializes project, plan, section, Note, and supporting tools', async () =
       { method: 'GET', path: '/api/external/projects/project-1/members', query: { page: 1, limit: 20 } },
       { method: 'DELETE', path: '/api/external/notes/note-1', body: { expectedUpdatedAt } },
       { method: 'GET', path: '/api/external/projects/project-1/artifacts/artifact-1/revisions', query: undefined },
+    ])
+  } finally {
+    await client.close()
+    await server.close()
+  }
+})
+
+test('lists tasks with bounded hierarchy and task filters', async () => {
+  const calls = []
+  const taskApi = {
+    ...api,
+    get: async (path, query) => { calls.push({ method: 'GET', path, query }); return { tasks: [], pagination: {} } },
+  }
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer(taskApi)
+  const client = new Client({ name: 'task-list-test', version: '1.0.0' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+
+  try {
+    await client.callTool({
+      name: 'list_tasks',
+      arguments: {
+        projectId: 'project-1',
+        planId: 'plan-1',
+        sectionId: 'section-1',
+        assigneeId: 'user-1',
+        status: 'COMPLETE',
+        priority: 'HIGH',
+        search: 'release',
+        includeArchived: true,
+        page: 2,
+        limit: 25,
+      },
+    })
+    await client.callTool({ name: 'list_tasks', arguments: {} })
+
+    assert.deepEqual(calls, [
+      {
+        method: 'GET',
+        path: '/api/external/tasks',
+        query: {
+          projectId: 'project-1',
+          planId: 'plan-1',
+          sectionId: 'section-1',
+          assigneeId: 'user-1',
+          status: 'COMPLETE',
+          priority: 'HIGH',
+          search: 'release',
+          includeArchived: true,
+          page: 2,
+          limit: 25,
+        },
+      },
+      {
+        method: 'GET',
+        path: '/api/external/tasks',
+        query: { includeArchived: false, page: 1, limit: 50 },
+      },
     ])
   } finally {
     await client.close()

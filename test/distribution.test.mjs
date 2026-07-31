@@ -41,6 +41,11 @@ test('workflow skill declares the MCP dependency and core safety rules', async (
   );
 
   assert.match(skill, /get_project_brief/);
+  assert.match(skill, /Simple lookup/);
+  assert.match(skill, /Substantial planning or implementation/);
+  assert.match(skill, /Refresh volatile fields/);
+  assert.match(skill, /Do not fan out across every status or endpoint/);
+  assert.match(skill, /Prefer `list_tasks`/);
   assert.match(skill, /list_project_members/);
   assert.match(skill, /Archive projects, plans, sections, or Notes only with explicit approval/);
   assert.match(skill, /COMPLETE/);
