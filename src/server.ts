@@ -942,6 +942,48 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
+    'claim_task',
+    {
+      description:
+        'Claim or refresh a task for the current Agent Connection without changing its human assignee. Reuse a stable runId and refresh before the lease expires.',
+      inputSchema: z.object({
+        taskId: z.string().min(1),
+        runId: z.string().min(1).max(200),
+        state: z.enum(['ACTIVE', 'WAITING']).default('ACTIVE'),
+        leaseSeconds: z.number().int().min(60).max(3600).default(900),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ taskId, ...body }) =>
+      toolResult(await api.put(`/api/external/tasks/${taskId}/claim`, body))
+  );
+
+  server.registerTool(
+    'release_task',
+    {
+      description:
+        'Release the current Agent Connection work claim without changing task status or human assignment.',
+      inputSchema: z.object({
+        taskId: z.string().min(1),
+        runId: z.string().min(1).max(200),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ taskId, ...body }) =>
+      toolResult(await api.delete(`/api/external/tasks/${taskId}/claim`, body))
+  );
+
+  server.registerTool(
     'create_task',
     {
       description: 'Create a task in an active project plan section.',

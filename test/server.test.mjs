@@ -31,13 +31,15 @@ test('discovers the bounded production tool surface', async () => {
   const packageJson = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
 
   assert.equal(client.getServerVersion()?.version, packageJson.version)
-  assert.equal(result.tools.length, 65)
+  assert.equal(result.tools.length, 67)
   assert.equal(names.includes('delete_task'), false)
   assert.equal(names.includes('archive_task'), true)
   assert.equal(names.includes('get_project_brief'), true)
   assert.equal(names.includes('get_active_time_entries'), true)
   assert.equal(names.includes('get_focus_list'), true)
   assert.equal(names.includes('list_tasks'), true)
+  assert.equal(names.includes('claim_task'), true)
+  assert.equal(names.includes('release_task'), true)
   assert.equal(names.includes('add_task_to_focus'), true)
   assert.equal(names.includes('move_focus_task'), true)
   assert.equal(names.includes('remove_task_from_focus'), true)
@@ -276,6 +278,55 @@ test('lists tasks with bounded hierarchy and task filters', async () => {
         method: 'GET',
         path: '/api/external/tasks',
         query: { includeArchived: false, page: 1, limit: 50 },
+      },
+    ])
+  } finally {
+    await client.close()
+    await server.close()
+  }
+})
+
+test('serializes Agent Connection task claims and releases', async () => {
+  const calls = []
+  const claimApi = {
+    ...api,
+    put: async (path, body) => { calls.push({ method: 'PUT', path, body }); return { entity: {} } },
+    delete: async (path, body) => { calls.push({ method: 'DELETE', path, body }); return { entity: {} } },
+  }
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer(claimApi)
+  const client = new Client({ name: 'task-claim-test', version: '1.0.0' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+
+  try {
+    await client.callTool({
+      name: 'claim_task',
+      arguments: { taskId: 'task-1', runId: 'run-1' },
+    })
+    await client.callTool({
+      name: 'claim_task',
+      arguments: { taskId: 'task-1', runId: 'run-1', state: 'WAITING', leaseSeconds: 300 },
+    })
+    await client.callTool({
+      name: 'release_task',
+      arguments: { taskId: 'task-1', runId: 'run-1' },
+    })
+
+    assert.deepEqual(calls, [
+      {
+        method: 'PUT',
+        path: '/api/external/tasks/task-1/claim',
+        body: { runId: 'run-1', state: 'ACTIVE', leaseSeconds: 900 },
+      },
+      {
+        method: 'PUT',
+        path: '/api/external/tasks/task-1/claim',
+        body: { runId: 'run-1', state: 'WAITING', leaseSeconds: 300 },
+      },
+      {
+        method: 'DELETE',
+        path: '/api/external/tasks/task-1/claim',
+        body: { runId: 'run-1' },
       },
     ])
   } finally {

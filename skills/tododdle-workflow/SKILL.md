@@ -35,6 +35,8 @@ Keep list requests bounded and paginate rather than requesting an entire organiz
 ## Manage Execution
 
 - Transition the relevant task to the active status when substantive work begins.
+- When beginning substantive execution, use `claim_task` with a stable opaque run ID for the current agent run. Refresh the same claim before its lease expires, use `WAITING` while paused for a short dependency or reply, and call `release_task` when execution stops, completes, or hands off. Claims identify the authenticated Agent Connection by its configured label and never replace the human assignee. Do not claim tasks for simple reads or planning-only discussion.
+- Treat a conflicting active claim as useful coordination state. Do not take it over until it expires or the owning Agent Connection releases it; report the connection label without assuming which agent vendor or model is behind it.
 - Keep task kind, parent, section, assignee, due date, priority, and blocker relationships accurate when the work changes them.
 - Add comments only for durable information: decisions, meaningful progress, validation results, blockers, or handoff context.
 - Use `preview_task_move` before moving a task between plans. Clear parent or active-child links reported by the preview, and call out any destination automation that changes or archives the task.
@@ -48,7 +50,8 @@ Do not create bookkeeping churn for tiny exploratory actions. Prefer one useful 
 1. Run the verification appropriate to the work.
 2. Add a concise final comment containing the outcome, notable decisions, and verification performed.
 3. Transition the task to `COMPLETE` only when the requested outcome is actually achieved.
-4. Leave incomplete work active and state what remains.
+4. Release the active agent work claim after the final durable update.
+5. Leave incomplete work active and state what remains.
 
 Use `archive_task` only when the user requests archival and approves the destructive action. Do not substitute archival for completion.
 

@@ -4,6 +4,8 @@ The official Model Context Protocol stdio server for [ToDoddle](https://tododdle
 
 The package contains no ToDoddle application or database code. It is a small stdio client that authenticates as an Agent Connection and calls the hosted API.
 
+Agent work claims let any connected agent indicate that it is actively handling a task without becoming the human assignee. Claims use the configured Agent Connection label, an opaque run ID, and an expiring lease.
+
 ## Requirements
 
 - Node.js 20 or newer
@@ -116,6 +118,8 @@ When ToDoddle should be mandatory for one repository, merge the relevant rules f
 
 ### Manage Tasks
 
+- `claim_task`
+- `release_task`
 - `create_task`
 - `update_task`
 - `transition_task`
@@ -126,7 +130,7 @@ When ToDoddle should be mandatory for one repository, merge the relevant rules f
 - `acknowledge_agent_reply`
 - `archive_task`
 
-`preview_task_move` reports section automation and hierarchy blockers before a same-project plan move. `move_task` and `archive_task` are marked destructive because a destination section may archive the task. Task deletion is intentionally unavailable.
+`claim_task` creates or refreshes a connection-labelled work lease and can mark the agent run as `ACTIVE` or `WAITING`; `release_task` ends that lease without changing task status or human assignment. A conflicting live claim identifies the Agent Connection already handling the task. `preview_task_move` reports section automation and hierarchy blockers before a same-project plan move. `move_task` and `archive_task` are marked destructive because a destination section may archive the task. Task deletion is intentionally unavailable.
 
 Task create/update accepts `TASK`, `FEATURE`, `EPIC`, `BUG`, `RESEARCH`, and `ACTION_ITEM`. Section create/update supports `SET_KIND` alongside status, priority, assignee, and archive entry actions.
 
