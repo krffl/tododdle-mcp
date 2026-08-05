@@ -649,6 +649,31 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
+    'get_document_download_url',
+    {
+      description:
+        'Create a five-minute tokenized access URL for one ready project document. Videos return a protected stream URL.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        documentId: z.string().min(1),
+      }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, documentId }) =>
+      toolResult(
+        await api.post(
+          `/api/external/projects/${projectId}/documents/${documentId}/download-url`,
+          {}
+        )
+      )
+  );
+
+  server.registerTool(
     'list_notes',
     {
       description: 'List bounded organization Notes. Project-only connections cannot access Notes.',

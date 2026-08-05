@@ -28,10 +28,11 @@ test('discovers the bounded production tool surface', async () => {
   const resources = await client.listResourceTemplates()
   const names = result.tools.map(tool => tool.name)
   const listTasksTool = result.tools.find(tool => tool.name === 'list_tasks')
+  const documentDownloadTool = result.tools.find(tool => tool.name === 'get_document_download_url')
   const packageJson = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
 
   assert.equal(client.getServerVersion()?.version, packageJson.version)
-  assert.equal(result.tools.length, 67)
+  assert.equal(result.tools.length, 68)
   assert.equal(names.includes('delete_task'), false)
   assert.equal(names.includes('archive_task'), true)
   assert.equal(names.includes('get_project_brief'), true)
@@ -48,7 +49,7 @@ test('discovers the bounded production tool surface', async () => {
     'get_project', 'create_project', 'update_project', 'archive_project', 'restore_project',
     'list_plans', 'get_plan', 'create_plan', 'update_plan', 'move_plan', 'archive_plan', 'restore_plan',
     'list_sections', 'get_section', 'create_section', 'update_section', 'move_section', 'archive_section', 'restore_section',
-    'list_project_members', 'list_project_documents', 'list_notes', 'get_note', 'create_note', 'update_note',
+    'list_project_members', 'list_project_documents', 'get_document_download_url', 'list_notes', 'get_note', 'create_note', 'update_note',
     'archive_note', 'list_artifact_revisions', 'link_project_artifacts',
   ]) assert.equal(names.includes(name), true, `${name} should be discoverable`)
   assert.equal(result.tools.find(tool => tool.name === 'move_task')?.annotations?.destructiveHint, true)
@@ -65,6 +66,19 @@ test('discovers the bounded production tool surface', async () => {
       openWorldHint: false,
     }
   )
+  assert.deepEqual(
+    documentDownloadTool?.annotations,
+    {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    }
+  )
+  assert.deepEqual(Object.keys(documentDownloadTool?.inputSchema.properties || {}), [
+    'projectId',
+    'documentId',
+  ])
   assert.equal(listTasksTool?.inputSchema.properties?.includeArchived?.default, false)
   assert.equal(listTasksTool?.inputSchema.properties?.page?.default, 1)
   assert.equal(listTasksTool?.inputSchema.properties?.limit?.default, 50)
@@ -280,6 +294,43 @@ test('lists tasks with bounded hierarchy and task filters', async () => {
         query: { includeArchived: false, page: 1, limit: 50 },
       },
     ])
+  } finally {
+    await client.close()
+    await server.close()
+  }
+})
+
+test('requests a tokenized document URL with parent-to-child identifiers', async () => {
+  const calls = []
+  const documentApi = {
+    ...api,
+    post: async (path, body) => {
+      calls.push({ method: 'POST', path, body })
+      return {
+        document: { id: 'document-1', fileName: 'evidence.pdf' },
+        accessType: 'download',
+        url: 'https://private.example/evidence.pdf?token=signed',
+        expiresIn: 300,
+      }
+    },
+  }
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer(documentApi)
+  const client = new Client({ name: 'document-download-test', version: '1.0.0' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+
+  try {
+    const result = await client.callTool({
+      name: 'get_document_download_url',
+      arguments: { projectId: 'project-1', documentId: 'document-1' },
+    })
+
+    assert.equal(result.isError, undefined)
+    assert.deepEqual(calls, [{
+      method: 'POST',
+      path: '/api/external/projects/project-1/documents/document-1/download-url',
+      body: {},
+    }])
   } finally {
     await client.close()
     await server.close()

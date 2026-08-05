@@ -102,6 +102,7 @@ When ToDoddle should be mandatory for one repository, merge the relevant rules f
 - `get_section`
 - `list_project_members`
 - `list_project_documents`
+- `get_document_download_url`
 - `list_notes`
 - `get_note`
 - `list_tasks`
@@ -179,6 +180,8 @@ Notes are organization-scoped and unavailable to project-only connections.
 - `attach_file_to_task`
 
 Each tool accepts either an approved local `filePath` or an HTTPS `sourceUrl`. Local paths are disabled until `TODODDLE_UPLOAD_ROOTS` is configured. Files stream directly from this local MCP process to ToDoddle's short-lived Bunny upload URL; file bodies are never placed in MCP JSON messages.
+
+Use `get_document_download_url` with a `projectId` and `documentId` returned by `list_project_documents` to obtain a five-minute tokenized URL. The URL grants access only to that ready document and should not be stored in comments or other durable project context. Video documents return a protected stream URL when the workspace subscription permits playback.
 
 The server also provides task, project, and project-artifact resource templates plus `triage_work` and `daily_status` prompts.
 
