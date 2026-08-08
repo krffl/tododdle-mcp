@@ -225,10 +225,17 @@ Tokens are held in memory only and refreshed automatically. The client secret is
 
 ```bash
 npm install
+npm run format:check
 npm run type-check
-npm test
+npm run test:coverage
+npm run check:api-parity -- /path/to/tododdle/src/config/api-route-inventory.json
+npm audit --audit-level=low
 npm pack --dry-run
 ```
+
+`config/external-api-parity.json` is the checked contract between the model-callable tool registry and ToDoddle's External API inventory. Every discovered tool must appear in the manifest, every tool is invoked with schema-valid input in tests, and every resulting API method/path must match its declared mapping. External methods that are transport-only, compatibility-only, aggregated by another tool, or superseded have an explicit reviewed exception instead of disappearing from the audit.
+
+When the application External API changes, compare its generated `src/config/api-route-inventory.json` with this manifest before releasing either side. The current reviewed surface accounts for every External API method with no missing or extra entries; tool totals are derived from the registry and manifest rather than a historical hard-coded count.
 
 Run the MCP package from source:
 
@@ -239,11 +246,11 @@ TODODDLE_UPLOAD_ROOTS="$PWD:/Users/you/Desktop" \
 npm run dev
 ```
 
-The npm `prepack` lifecycle builds `dist/` automatically. `prepublishOnly` runs the complete package test before publication.
+The npm `prepack` lifecycle builds `dist/` automatically. `prepublishOnly` runs the complete package test and coverage thresholds before publication.
 
 ## Release Safety
 
-- Review `npm pack --dry-run` and verify that only `dist/`, `README.md`, `LICENSE`, and package metadata are present.
+- Review `npm pack --dry-run` and verify that only the declared runtime, plugin, skill, examples, parity manifest, documentation, license, and package metadata are present.
 - Publish from a tagged release with npm trusted publishing/provenance where available.
 - Treat tool removal, renaming, or incompatible input changes as major releases.
 - Keep generated ToDoddle connection snippets pinned to a tested package version.

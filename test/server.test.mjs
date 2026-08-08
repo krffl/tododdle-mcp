@@ -9,6 +9,10 @@ import { loadMcpConfig } from '../dist/config.js'
 import { ToDoddleApiClient } from '../dist/api-client.js'
 import { createToDoddleMcpServer } from '../dist/server.js'
 
+const parity = JSON.parse(
+  await readFile(new URL('../config/external-api-parity.json', import.meta.url), 'utf8')
+)
+
 const api = {
   get: async () => ({ items: [] }),
   post: async () => ({ entity: {} }),
@@ -29,10 +33,12 @@ test('discovers the bounded production tool surface', async () => {
   const names = result.tools.map(tool => tool.name)
   const listTasksTool = result.tools.find(tool => tool.name === 'list_tasks')
   const documentDownloadTool = result.tools.find(tool => tool.name === 'get_document_download_url')
+  const uploadDocumentTool = result.tools.find(tool => tool.name === 'upload_project_document')
+  const attachFileTool = result.tools.find(tool => tool.name === 'attach_file_to_task')
   const packageJson = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
 
   assert.equal(client.getServerVersion()?.version, packageJson.version)
-  assert.equal(result.tools.length, 68)
+  assert.equal(result.tools.length, Object.keys(parity.tools).length)
   assert.equal(names.includes('delete_task'), false)
   assert.equal(names.includes('archive_task'), true)
   assert.equal(names.includes('get_project_brief'), true)
@@ -83,6 +89,14 @@ test('discovers the bounded production tool surface', async () => {
   assert.equal(listTasksTool?.inputSchema.properties?.page?.default, 1)
   assert.equal(listTasksTool?.inputSchema.properties?.limit?.default, 50)
   assert.equal(listTasksTool?.inputSchema.properties?.limit?.maximum, 100)
+  assert.deepEqual(Object.keys(uploadDocumentTool?.inputSchema.properties || {}), [
+    'projectId', 'filePath', 'sourceUrl', 'fileName', 'contentType', 'description', 'folderId',
+    'idempotencyKey',
+  ])
+  assert.deepEqual(Object.keys(attachFileTool?.inputSchema.properties || {}), [
+    'projectId', 'filePath', 'sourceUrl', 'fileName', 'contentType', 'description', 'folderId',
+    'idempotencyKey', 'taskId',
+  ])
   assert.match(result.tools.find(tool => tool.name === 'start_task_timer')?.description || '', /one active timer/)
   assert.deepEqual(
     result.tools.find(tool => tool.name === 'archive_time_entry')?.annotations,

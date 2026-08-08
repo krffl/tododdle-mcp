@@ -36,7 +36,7 @@ jobs:
         run: |
           npm run format:check
           npm run type-check
-          npm test
+          npm run test:coverage
 
       - name: Publish package
         run: npm publish

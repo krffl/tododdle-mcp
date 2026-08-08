@@ -104,17 +104,10 @@ const uploadInputBaseSchema = z.object({
   folderId: z.string().min(1).optional(),
   idempotencyKey: z.string().min(8).optional(),
 });
-const uploadInputSchema = uploadInputBaseSchema.refine(
-  (value) => Boolean(value.filePath) !== Boolean(value.sourceUrl),
-  {
-    message: 'Provide exactly one of filePath or sourceUrl',
-  }
-);
-const taskUploadInputSchema = uploadInputBaseSchema
-  .extend({ taskId: z.string().min(1) })
-  .refine((value) => Boolean(value.filePath) !== Boolean(value.sourceUrl), {
-    message: 'Provide exactly one of filePath or sourceUrl',
-  });
+// Keep the registered MCP schemas as plain objects so clients receive their
+// fields. prepareUploadSource performs the cross-field exactly-one validation.
+const uploadInputSchema = uploadInputBaseSchema;
+const taskUploadInputSchema = uploadInputBaseSchema.extend({ taskId: z.string().min(1) });
 
 async function uploadDocument(
   api: ToDoddleApi,

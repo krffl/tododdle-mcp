@@ -11,6 +11,7 @@
     "dist",
     "README.md",
     "LICENSE",
+    "config",
     ".codex-plugin",
     "skills",
     "examples"
@@ -23,9 +24,11 @@
     "format": "prettier --write \"src/**/*.ts\"",
     "format:check": "prettier --check \"src/**/*.ts\"",
     "type-check": "tsc --noEmit",
+    "check:api-parity": "node scripts/check-external-api-parity.mjs",
     "test": "npm run build && node --test test/*.test.mjs",
+    "test:coverage": "npm run build && node --test --experimental-test-coverage --test-coverage-include='dist/**/*.js' --test-coverage-exclude='dist/index.js' --test-coverage-lines=90 --test-coverage-branches=75 --test-coverage-functions=85 test/*.test.mjs",
     "prepack": "npm run build",
-    "prepublishOnly": "npm test"
+    "prepublishOnly": "npm run test:coverage"
   },
   "keywords": [
     "mcp",
