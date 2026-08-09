@@ -840,6 +840,53 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
+    'list_available_work',
+    {
+      description:
+        'List bounded, unblocked, currently unclaimed tasks eligible for an Agent Connection in one project, ordered by priority, due date, and project position.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        status: z.enum(['TODO', 'IN_PROGRESS']).default('TODO'),
+        priority: prioritySchema.optional(),
+        search: z.string().optional(),
+        page: z.number().int().min(1).default(1),
+        limit: z.number().int().min(1).max(100).default(50),
+      }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (input) => toolResult(await api.get('/api/external/work-queue/available', input))
+  );
+
+  server.registerTool(
+    'claim_next_task',
+    {
+      description:
+        'Atomically claim the highest-ranked eligible task in one project. Reuse a unique stable runId to replay the same live claim safely.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        runId: z.string().min(1).max(200),
+        status: z.enum(['TODO', 'IN_PROGRESS']).default('TODO'),
+        priority: prioritySchema.optional(),
+        search: z.string().optional(),
+        state: z.enum(['ACTIVE', 'WAITING']).default('ACTIVE'),
+        leaseSeconds: z.number().int().min(60).max(3600).default(900),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (body) => toolResult(await api.post('/api/external/work-queue/available', body))
+  );
+
+  server.registerTool(
     'get_focus_list',
     {
       description: 'List the current user’s deliberately curated Focus tasks.',
@@ -964,6 +1011,28 @@ export function createToDoddleMcpServer(
     {
       description:
         'Claim or refresh a task for the current Agent Connection without changing its human assignee. Reuse a stable runId and refresh before the lease expires.',
+      inputSchema: z.object({
+        taskId: z.string().min(1),
+        runId: z.string().min(1).max(200),
+        state: z.enum(['ACTIVE', 'WAITING']).default('ACTIVE'),
+        leaseSeconds: z.number().int().min(60).max(3600).default(900),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ taskId, ...body }) =>
+      toolResult(await api.put(`/api/external/tasks/${taskId}/claim`, body))
+  );
+
+  server.registerTool(
+    'renew_task_claim',
+    {
+      description:
+        'Renew the current Agent Connection lease for a specific task and stable runId before it expires.',
       inputSchema: z.object({
         taskId: z.string().min(1),
         runId: z.string().min(1).max(200),

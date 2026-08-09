@@ -46,6 +46,9 @@ test('discovers the bounded production tool surface', async () => {
   assert.equal(names.includes('get_focus_list'), true)
   assert.equal(names.includes('list_tasks'), true)
   assert.equal(names.includes('claim_task'), true)
+  assert.equal(names.includes('claim_next_task'), true)
+  assert.equal(names.includes('renew_task_claim'), true)
+  assert.equal(names.includes('list_available_work'), true)
   assert.equal(names.includes('release_task'), true)
   assert.equal(names.includes('add_task_to_focus'), true)
   assert.equal(names.includes('move_focus_task'), true)
@@ -385,6 +388,8 @@ test('serializes Agent Connection task claims and releases', async () => {
   const calls = []
   const claimApi = {
     ...api,
+    get: async (path, query) => { calls.push({ method: 'GET', path, query }); return { tasks: [] } },
+    post: async (path, body) => { calls.push({ method: 'POST', path, body }); return { task: {}, claim: {} } },
     put: async (path, body) => { calls.push({ method: 'PUT', path, body }); return { entity: {} } },
     delete: async (path, body) => { calls.push({ method: 'DELETE', path, body }); return { entity: {} } },
   }
@@ -395,8 +400,20 @@ test('serializes Agent Connection task claims and releases', async () => {
 
   try {
     await client.callTool({
+      name: 'list_available_work',
+      arguments: { projectId: 'project-1', priority: 'HIGH', limit: 10 },
+    })
+    await client.callTool({
       name: 'claim_task',
       arguments: { taskId: 'task-1', runId: 'run-1' },
+    })
+    await client.callTool({
+      name: 'renew_task_claim',
+      arguments: { taskId: 'task-1', runId: 'run-1', leaseSeconds: 600 },
+    })
+    await client.callTool({
+      name: 'claim_next_task',
+      arguments: { projectId: 'project-1', runId: 'run-next' },
     })
     await client.callTool({
       name: 'claim_task',
@@ -409,9 +426,27 @@ test('serializes Agent Connection task claims and releases', async () => {
 
     assert.deepEqual(calls, [
       {
+        method: 'GET',
+        path: '/api/external/work-queue/available',
+        query: { projectId: 'project-1', status: 'TODO', priority: 'HIGH', page: 1, limit: 10 },
+      },
+      {
         method: 'PUT',
         path: '/api/external/tasks/task-1/claim',
         body: { runId: 'run-1', state: 'ACTIVE', leaseSeconds: 900 },
+      },
+      {
+        method: 'PUT',
+        path: '/api/external/tasks/task-1/claim',
+        body: { runId: 'run-1', state: 'ACTIVE', leaseSeconds: 600 },
+      },
+      {
+        method: 'POST',
+        path: '/api/external/work-queue/available',
+        body: {
+          projectId: 'project-1', runId: 'run-next', status: 'TODO',
+          state: 'ACTIVE', leaseSeconds: 900,
+        },
       },
       {
         method: 'PUT',

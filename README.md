@@ -120,6 +120,7 @@ When ToDoddle should be mandatory for one repository, merge the relevant rules f
 - `get_note`
 - `list_tasks`
 - `get_work_queue`
+- `list_available_work`
 - `get_focus_list`
 - `add_task_to_focus`
 - `move_focus_task`
@@ -133,6 +134,8 @@ When ToDoddle should be mandatory for one repository, merge the relevant rules f
 ### Manage Tasks
 
 - `claim_task`
+- `claim_next_task`
+- `renew_task_claim`
 - `release_task`
 - `create_task`
 - `update_task`
@@ -144,7 +147,7 @@ When ToDoddle should be mandatory for one repository, merge the relevant rules f
 - `acknowledge_agent_reply`
 - `archive_task`
 
-`claim_task` creates or refreshes a connection-labelled work lease and can mark the agent run as `ACTIVE` or `WAITING`; `release_task` ends that lease without changing task status or human assignment. A conflicting live claim identifies the Agent Connection already handling the task. `preview_task_move` reports section automation and hierarchy blockers before a same-project plan move. `move_task` and `archive_task` are marked destructive because a destination section may archive the task. Task deletion is intentionally unavailable.
+`list_available_work` reads only unblocked, currently unclaimed work in one project. `claim_next_task` atomically selects the highest-ranked eligible task and safely replays a still-live claim when its unique stable run ID is retried. `claim_task` claims a known task, `renew_task_claim` refreshes its lease, and `release_task` ends that lease without changing task status or human assignment. A conflicting live claim identifies the Agent Connection already handling the task. Human assignment remains independent throughout. `preview_task_move` reports section automation and hierarchy blockers before a same-project plan move. `move_task` and `archive_task` are marked destructive because a destination section may archive the task. Task deletion is intentionally unavailable.
 
 Durable agent-to-human handoffs use typed `HANDOFF` comments with a concise outcome, verification and immutable evidence, and any remaining risk or next action. External mutations return a stable ToDoddle `uiUrl`; expiring asset token URLs must not be copied into comments. A continuing run reads and handles its Agent Connection inbox reply before acknowledgement, then reloads the linked record.
 

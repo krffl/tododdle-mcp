@@ -1,5 +1,5 @@
 {
-  "source": "ToDoddle External API inventory, reviewed 2026-08-08",
+  "source": "ToDoddle External API inventory, reviewed 2026-08-09",
   "tools": {
     "list_projects": ["GET /api/external/projects"],
     "get_project": ["GET /api/external/projects/[projectId]"],
@@ -39,6 +39,8 @@
     "archive_note": ["DELETE /api/external/notes/[noteId]"],
     "get_project_context": ["GET /api/external/projects/[projectId]/context"],
     "get_work_queue": ["GET /api/external/work-queue"],
+    "list_available_work": ["GET /api/external/work-queue/available"],
+    "claim_next_task": ["POST /api/external/work-queue/available"],
     "get_focus_list": ["GET /api/external/focus"],
     "add_task_to_focus": ["POST /api/external/focus"],
     "move_focus_task": ["PATCH /api/external/focus/[taskId]"],
@@ -46,6 +48,7 @@
     "list_tasks": ["GET /api/external/tasks"],
     "get_task": ["GET /api/external/tasks/[taskId]"],
     "claim_task": ["PUT /api/external/tasks/[taskId]/claim"],
+    "renew_task_claim": ["PUT /api/external/tasks/[taskId]/claim"],
     "release_task": ["DELETE /api/external/tasks/[taskId]/claim"],
     "create_task": ["POST /api/external/tasks"],
     "update_task": ["PUT /api/external/tasks/[taskId]"],
