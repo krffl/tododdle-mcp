@@ -85,6 +85,19 @@ Restart Codex, open the Plugins Directory, select **ToDoddle**, and install the 
 
 Installing the plugin does not create or expand ToDoddle credentials, scopes, or project grants. The skill declares the separately configured `tododdle` MCP server as a dependency.
 
+### Bounded Project Context
+
+For substantial planning or implementation, load project context in a small, predictable sequence:
+
+1. Call `get_project_brief` once for the durable purpose, constraints, and success criteria.
+2. Call `get_project_context` once for bounded project-plan and section structure.
+3. Use `list_project_artifacts`, `list_tasks`, or `get_task` only for the artifacts and work relevant to the request. Keep list calls bounded and follow their pagination metadata.
+4. Reuse returned project, plan, section, task, and artifact IDs in the active conversation and its compaction summary. Refresh only volatile task state before a mutation.
+
+Simple lookups should skip the brief and full context entirely: call the narrowest read tool, such as `get_task` for a known task or hierarchy-filtered `list_tasks` for one plan or section. `get_work_queue` remains the cross-project operational view. This keeps context current without repeatedly rediscovering stable hierarchy or fanning out by status.
+
+The server returns authoritative website URLs with records so an agent can hand work back to a human without reconstructing routes. Access remains the intersection of the Agent Connection's scopes, explicit project grants, and authorizing user's current ACL on every call.
+
 ### Repository Policy
 
 When ToDoddle should be mandatory for one repository, merge the relevant rules from [`examples/AGENTS.tododdle.md`](examples/AGENTS.tododdle.md) into that repository's `AGENTS.md`. The policy makes tracking updates durable repository guidance; the skill remains the reusable workflow.

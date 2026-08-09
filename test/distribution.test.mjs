@@ -57,3 +57,15 @@ test('workflow skill declares the MCP dependency and core safety rules', async (
   assert.match(metadata, /value: "tododdle"/);
   assert.match(metadata, /allow_implicit_invocation: true/);
 });
+
+test('README documents bounded and compaction-safe context loading', async () => {
+  const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
+
+  assert.match(readme, /Bounded Project Context/);
+  assert.match(readme, /get_project_brief` once/);
+  assert.match(readme, /get_project_context` once/);
+  assert.match(readme, /follow their pagination metadata/);
+  assert.match(readme, /compaction summary/);
+  assert.match(readme, /Refresh only volatile task state/);
+  assert.match(readme, /Simple lookups should skip the brief and full context entirely/);
+});
