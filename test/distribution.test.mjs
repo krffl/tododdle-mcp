@@ -54,6 +54,12 @@ test('workflow skill declares the MCP dependency and core safety rules', async (
   assert.match(skill, /Archive projects, plans, sections, or Notes only with explicit approval/);
   assert.match(skill, /COMPLETE/);
   assert.match(skill, /Do not invent elapsed time/);
+  assert.match(skill, /typed `HANDOFF` comment/);
+  assert.match(skill, /## Outcome/);
+  assert.match(skill, /## Verification/);
+  assert.match(skill, /## Remaining/);
+  assert.match(skill, /Never persist expiring download or upload token URLs/);
+  assert.match(skill, /handle the reply before acknowledging it/);
   assert.match(metadata, /value: "tododdle"/);
   assert.match(metadata, /allow_implicit_invocation: true/);
 });

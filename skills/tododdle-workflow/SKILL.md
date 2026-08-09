@@ -48,10 +48,12 @@ Do not create bookkeeping churn for tiny exploratory actions. Prefer one useful 
 ## Finish Work
 
 1. Run the verification appropriate to the work.
-2. Add a concise final comment containing the outcome, notable decisions, and verification performed.
+2. Add a typed `HANDOFF` comment with `## Outcome`, `## Verification`, and `## Remaining` when applicable. Include immutable evidence such as commit, release, document, or artifact IDs and use the returned stable `uiUrl` for the human destination. Never persist expiring download or upload token URLs. Add `## Decisions` only when a durable choice is not already captured in linked Context.
 3. Transition the task to `COMPLETE` only when the requested outcome is actually achieved.
 4. Release the active agent work claim after the final durable update.
 5. Leave incomplete work active and state what remains.
+
+When resuming prior work, read `get_agent_inbox`, handle the reply before acknowledging it, then reload the linked task or artifact so current status, comments, blockers, ACLs, and concurrency revision drive the next action. Use a new opaque run ID for a new execution attempt and reference the prior handoff rather than rewriting it.
 
 Use `archive_task` only when the user requests archival and approves the destructive action. Do not substitute archival for completion.
 

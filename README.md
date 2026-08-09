@@ -146,6 +146,8 @@ When ToDoddle should be mandatory for one repository, merge the relevant rules f
 
 `claim_task` creates or refreshes a connection-labelled work lease and can mark the agent run as `ACTIVE` or `WAITING`; `release_task` ends that lease without changing task status or human assignment. A conflicting live claim identifies the Agent Connection already handling the task. `preview_task_move` reports section automation and hierarchy blockers before a same-project plan move. `move_task` and `archive_task` are marked destructive because a destination section may archive the task. Task deletion is intentionally unavailable.
 
+Durable agent-to-human handoffs use typed `HANDOFF` comments with a concise outcome, verification and immutable evidence, and any remaining risk or next action. External mutations return a stable ToDoddle `uiUrl`; expiring asset token URLs must not be copied into comments. A continuing run reads and handles its Agent Connection inbox reply before acknowledgement, then reloads the linked record.
+
 Task create/update accepts `TASK`, `FEATURE`, `EPIC`, `BUG`, `RESEARCH`, and `ACTION_ITEM`. Section create/update supports `SET_KIND` alongside status, priority, assignee, and archive entry actions.
 
 ### Manage Project Structure
