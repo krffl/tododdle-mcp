@@ -1344,7 +1344,7 @@ export function createToDoddleMcpServer(
       toolResult(
         await api.post(
           `/api/external/projects/${projectId}/tasks/${taskId}/time-entries/${timeEntryId}/stop`,
-          { endedAt: endedAt ?? new Date().toISOString(), expectedUpdatedAt }
+          { ...(endedAt ? { endedAt } : {}), expectedUpdatedAt }
         )
       )
   );

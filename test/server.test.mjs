@@ -314,6 +314,36 @@ test('lists tasks with bounded hierarchy and task filters', async () => {
   }
 })
 
+test('lets the server choose a safe end time for an immediate timer stop', async () => {
+  const calls = []
+  const timerApi = {
+    ...api,
+    post: async (path, body) => { calls.push({ path, body }); return { entity: {} } },
+  }
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer(timerApi)
+  const client = new Client({ name: 'timer-stop-test', version: '1.0.0' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+
+  try {
+    await client.callTool({
+      name: 'stop_task_timer',
+      arguments: {
+        projectId: 'project-1', taskId: 'task-1', timeEntryId: 'time-1',
+        expectedUpdatedAt: '2026-08-09T12:00:00.000Z',
+      },
+    })
+
+    assert.deepEqual(calls, [{
+      path: '/api/external/projects/project-1/tasks/task-1/time-entries/time-1/stop',
+      body: { expectedUpdatedAt: '2026-08-09T12:00:00.000Z' },
+    }])
+  } finally {
+    await client.close()
+    await server.close()
+  }
+})
+
 test('requests a tokenized document URL with parent-to-child identifiers', async () => {
   const calls = []
   const documentApi = {
