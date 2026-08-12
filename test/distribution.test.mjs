@@ -59,6 +59,8 @@ test('workflow skill declares the MCP dependency and core safety rules', async (
   assert.match(skill, /## Verification/);
   assert.match(skill, /## Remaining/);
   assert.match(skill, /Never persist expiring download or upload token URLs/);
+  assert.match(skill, /After the upload tool confirms success, delete only the temporary staging file/);
+  assert.match(skill, /Never delete the user's original source file/);
   assert.match(skill, /handle the reply before acknowledging it/);
   assert.match(metadata, /value: "tododdle"/);
   assert.match(metadata, /allow_implicit_invocation: true/);
