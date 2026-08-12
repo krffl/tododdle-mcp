@@ -31,43 +31,45 @@ test('discovers the bounded production tool surface', async () => {
   const result = await client.listTools()
   const resources = await client.listResourceTemplates()
   const names = result.tools.map(tool => tool.name)
-  const listTasksTool = result.tools.find(tool => tool.name === 'list_tasks')
+  const listTicketsTool = result.tools.find(tool => tool.name === 'list_tickets')
   const documentDownloadTool = result.tools.find(tool => tool.name === 'get_document_download_url')
   const uploadDocumentTool = result.tools.find(tool => tool.name === 'upload_project_document')
-  const attachFileTool = result.tools.find(tool => tool.name === 'attach_file_to_task')
+  const attachFileTool = result.tools.find(tool => tool.name === 'attach_file_to_ticket')
   const packageJson = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
 
   assert.equal(client.getServerVersion()?.version, packageJson.version)
   assert.equal(result.tools.length, Object.keys(parity.tools).length)
   assert.equal(names.includes('delete_task'), false)
-  assert.equal(names.includes('archive_task'), true)
+  assert.equal(names.includes('archive_task'), false)
+  assert.equal(names.includes('list_tasks'), false)
+  assert.equal(names.includes('archive_ticket'), true)
   assert.equal(names.includes('get_project_brief'), true)
   assert.equal(names.includes('get_active_time_entries'), true)
   assert.equal(names.includes('get_focus_list'), true)
-  assert.equal(names.includes('list_tasks'), true)
-  assert.equal(names.includes('claim_task'), true)
-  assert.equal(names.includes('claim_next_task'), true)
-  assert.equal(names.includes('renew_task_claim'), true)
+  assert.equal(names.includes('list_tickets'), true)
+  assert.equal(names.includes('claim_ticket'), true)
+  assert.equal(names.includes('claim_next_ticket'), true)
+  assert.equal(names.includes('renew_ticket_claim'), true)
   assert.equal(names.includes('list_available_work'), true)
-  assert.equal(names.includes('release_task'), true)
-  assert.equal(names.includes('add_task_to_focus'), true)
-  assert.equal(names.includes('move_focus_task'), true)
-  assert.equal(names.includes('remove_task_from_focus'), true)
-  assert.equal(names.includes('preview_task_move'), true)
+  assert.equal(names.includes('release_ticket'), true)
+  assert.equal(names.includes('add_ticket_to_focus'), true)
+  assert.equal(names.includes('move_focus_ticket'), true)
+  assert.equal(names.includes('remove_ticket_from_focus'), true)
+  assert.equal(names.includes('preview_ticket_move'), true)
   for (const name of [
     'get_project', 'create_project', 'update_project', 'archive_project', 'restore_project',
-    'list_plans', 'get_plan', 'create_plan', 'update_plan', 'move_plan', 'archive_plan', 'restore_plan',
-    'list_sections', 'get_section', 'create_section', 'update_section', 'move_section', 'archive_section', 'restore_section',
+    'list_boards', 'get_board', 'create_board', 'update_board', 'move_board', 'archive_board', 'restore_board',
+    'list_lanes', 'get_lane', 'create_lane', 'update_lane', 'move_lane', 'archive_lane', 'restore_lane',
     'list_project_members', 'list_project_documents', 'get_document_download_url', 'list_notes', 'get_note', 'create_note', 'update_note',
     'archive_note', 'list_artifact_revisions', 'link_project_artifacts',
   ]) assert.equal(names.includes(name), true, `${name} should be discoverable`)
-  assert.equal(result.tools.find(tool => tool.name === 'move_task')?.annotations?.destructiveHint, true)
+  assert.equal(result.tools.find(tool => tool.name === 'move_ticket')?.annotations?.destructiveHint, true)
   assert.equal(result.tools.find(tool => tool.name === 'archive_project')?.annotations?.destructiveHint, true)
   assert.equal(result.tools.find(tool => tool.name === 'restore_project')?.annotations?.destructiveHint, false)
-  assert.equal(result.tools.find(tool => tool.name === 'create_section')?.annotations?.idempotentHint, false)
-  assert.equal(result.tools.find(tool => tool.name === 'remove_task_from_focus')?.annotations?.destructiveHint, true)
+  assert.equal(result.tools.find(tool => tool.name === 'create_lane')?.annotations?.idempotentHint, false)
+  assert.equal(result.tools.find(tool => tool.name === 'remove_ticket_from_focus')?.annotations?.destructiveHint, true)
   assert.deepEqual(
-    listTasksTool?.annotations,
+    listTicketsTool?.annotations,
     {
       readOnlyHint: true,
       destructiveHint: false,
@@ -88,10 +90,10 @@ test('discovers the bounded production tool surface', async () => {
     'projectId',
     'documentId',
   ])
-  assert.equal(listTasksTool?.inputSchema.properties?.includeArchived?.default, false)
-  assert.equal(listTasksTool?.inputSchema.properties?.page?.default, 1)
-  assert.equal(listTasksTool?.inputSchema.properties?.limit?.default, 50)
-  assert.equal(listTasksTool?.inputSchema.properties?.limit?.maximum, 100)
+  assert.equal(listTicketsTool?.inputSchema.properties?.includeArchived?.default, false)
+  assert.equal(listTicketsTool?.inputSchema.properties?.page?.default, 1)
+  assert.equal(listTicketsTool?.inputSchema.properties?.limit?.default, 50)
+  assert.equal(listTicketsTool?.inputSchema.properties?.limit?.maximum, 100)
   assert.deepEqual(Object.keys(uploadDocumentTool?.inputSchema.properties || {}), [
     'projectId', 'filePath', 'sourceUrl', 'fileName', 'contentType', 'description', 'folderId',
     'idempotencyKey',
@@ -100,7 +102,7 @@ test('discovers the bounded production tool surface', async () => {
     'projectId', 'filePath', 'sourceUrl', 'fileName', 'contentType', 'description', 'folderId',
     'idempotencyKey', 'taskId',
   ])
-  assert.match(result.tools.find(tool => tool.name === 'start_task_timer')?.description || '', /one active timer/)
+  assert.match(result.tools.find(tool => tool.name === 'start_ticket_timer')?.description || '', /one active timer/)
   assert.deepEqual(
     result.tools.find(tool => tool.name === 'archive_time_entry')?.annotations,
     {
@@ -113,7 +115,7 @@ test('discovers the bounded production tool surface', async () => {
   assert.deepEqual(
     resources.resourceTemplates.map(resource => resource.uriTemplate),
     [
-      'tododdle://tasks/{taskId}',
+      'tododdle://tickets/{ticketId}',
       'tododdle://projects/{projectId}',
       'tododdle://projects/{projectId}/artifacts/{artifactId}',
     ]
@@ -236,10 +238,10 @@ test('serializes project, plan, section, Note, and supporting tools', async () =
 
   try {
     const expectedUpdatedAt = '2026-07-29T12:00:00.000Z'
-    await client.callTool({ name: 'create_plan', arguments: { projectId: 'project-1', name: 'Delivery', idempotencyKey: 'plan-key-1' } })
-    await client.callTool({ name: 'create_section', arguments: { projectId: 'project-1', planId: 'plan-1', name: 'Review', entryActions: [{ type: 'SET_STATUS', status: 'REVIEW' }, { type: 'SET_KIND', kind: 'FEATURE' }], idempotencyKey: 'section-key-1' } })
-    await client.callTool({ name: 'create_task', arguments: { projectId: 'project-1', planId: 'plan-1', sectionId: 'section-1', title: 'Feature work', kind: 'FEATURE', idempotencyKey: 'task-key-1' } })
-    await client.callTool({ name: 'move_section', arguments: { projectId: 'project-1', planId: 'plan-1', sectionId: 'section-1', position: 0, expectedUpdatedAt } })
+    await client.callTool({ name: 'create_board', arguments: { projectId: 'project-1', name: 'Delivery', idempotencyKey: 'plan-key-1' } })
+    await client.callTool({ name: 'create_lane', arguments: { projectId: 'project-1', planId: 'plan-1', name: 'Review', entryActions: [{ type: 'SET_STATUS', status: 'REVIEW' }, { type: 'SET_KIND', kind: 'FEATURE' }], idempotencyKey: 'section-key-1' } })
+    await client.callTool({ name: 'create_ticket', arguments: { projectId: 'project-1', planId: 'plan-1', sectionId: 'section-1', title: 'Feature work', kind: 'FEATURE', idempotencyKey: 'task-key-1' } })
+    await client.callTool({ name: 'move_lane', arguments: { projectId: 'project-1', planId: 'plan-1', sectionId: 'section-1', position: 0, expectedUpdatedAt } })
     await client.callTool({ name: 'list_project_members', arguments: { projectId: 'project-1', page: 1, limit: 20 } })
     await client.callTool({ name: 'archive_note', arguments: { noteId: 'note-1', expectedUpdatedAt } })
     await client.callTool({ name: 'list_artifact_revisions', arguments: { projectId: 'project-1', artifactId: 'artifact-1' } })
@@ -272,7 +274,7 @@ test('lists tasks with bounded hierarchy and task filters', async () => {
 
   try {
     await client.callTool({
-      name: 'list_tasks',
+      name: 'list_tickets',
       arguments: {
         projectId: 'project-1',
         planId: 'plan-1',
@@ -286,7 +288,7 @@ test('lists tasks with bounded hierarchy and task filters', async () => {
         limit: 25,
       },
     })
-    await client.callTool({ name: 'list_tasks', arguments: {} })
+    await client.callTool({ name: 'list_tickets', arguments: {} })
 
     assert.deepEqual(calls, [
       {
@@ -330,7 +332,7 @@ test('lets the server choose a safe end time for an immediate timer stop', async
 
   try {
     await client.callTool({
-      name: 'stop_task_timer',
+      name: 'stop_ticket_timer',
       arguments: {
         projectId: 'project-1', taskId: 'task-1', timeEntryId: 'time-1',
         expectedUpdatedAt: '2026-08-09T12:00:00.000Z',
@@ -404,23 +406,23 @@ test('serializes Agent Connection task claims and releases', async () => {
       arguments: { projectId: 'project-1', priority: 'HIGH', limit: 10 },
     })
     await client.callTool({
-      name: 'claim_task',
+      name: 'claim_ticket',
       arguments: { taskId: 'task-1', runId: 'run-1' },
     })
     await client.callTool({
-      name: 'renew_task_claim',
+      name: 'renew_ticket_claim',
       arguments: { taskId: 'task-1', runId: 'run-1', leaseSeconds: 600 },
     })
     await client.callTool({
-      name: 'claim_next_task',
+      name: 'claim_next_ticket',
       arguments: { projectId: 'project-1', runId: 'run-next' },
     })
     await client.callTool({
-      name: 'claim_task',
+      name: 'claim_ticket',
       arguments: { taskId: 'task-1', runId: 'run-1', state: 'WAITING', leaseSeconds: 300 },
     })
     await client.callTool({
-      name: 'release_task',
+      name: 'release_ticket',
       arguments: { taskId: 'task-1', runId: 'run-1' },
     })
 
@@ -481,9 +483,9 @@ test('serializes Focus tools to the bounded external API', async () => {
 
   try {
     await client.callTool({ name: 'get_focus_list', arguments: { bucket: 'TODAY', page: 2, limit: 20 } })
-    await client.callTool({ name: 'add_task_to_focus', arguments: { taskId: 'task-1', bucket: 'NEXT', idempotencyKey: 'focus-key-1' } })
-    await client.callTool({ name: 'move_focus_task', arguments: { taskId: 'task-1', bucket: 'LATER', position: 3, expectedUpdatedAt: '2026-07-28T12:00:00.000Z' } })
-    await client.callTool({ name: 'remove_task_from_focus', arguments: { taskId: 'task-1' } })
+    await client.callTool({ name: 'add_ticket_to_focus', arguments: { taskId: 'task-1', bucket: 'NEXT', idempotencyKey: 'focus-key-1' } })
+    await client.callTool({ name: 'move_focus_ticket', arguments: { taskId: 'task-1', bucket: 'LATER', position: 3, expectedUpdatedAt: '2026-07-28T12:00:00.000Z' } })
+    await client.callTool({ name: 'remove_ticket_from_focus', arguments: { taskId: 'task-1' } })
 
     assert.deepEqual(calls, [
       { method: 'GET', path: '/api/external/focus', query: { bucket: 'TODAY', page: 2, limit: 20 } },
@@ -512,11 +514,11 @@ test('previews and executes cross-plan task moves', async () => {
   try {
     const expectedUpdatedAt = '2026-07-29T12:00:00.000Z'
     await client.callTool({
-      name: 'preview_task_move',
+      name: 'preview_ticket_move',
       arguments: { taskId: 'task-1', planId: 'plan-2', sectionId: 'section-2', expectedUpdatedAt },
     })
     await client.callTool({
-      name: 'move_task',
+      name: 'move_ticket',
       arguments: { taskId: 'task-1', planId: 'plan-2', sectionId: 'section-2', position: 0, expectedUpdatedAt },
     })
 
@@ -573,7 +575,7 @@ test('uploads a local file and attaches it to a task through the hosted API', as
 
   try {
     const result = await client.callTool({
-      name: 'attach_file_to_task',
+      name: 'attach_file_to_ticket',
       arguments: { projectId: 'project-1', taskId: 'task-1', filePath },
     })
     assert.equal(result.isError, undefined)

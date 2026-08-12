@@ -4,6 +4,12 @@ import { mkdtemp, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ToDoddleApiClient, ToDoddleApiError } from '../dist/api-client.js'
+import {
+  MCP_COMPATIBILITY_HEADER,
+  MCP_COMPATIBILITY_LEVEL,
+  MCP_PACKAGE_VERSION,
+  MCP_VERSION_HEADER,
+} from '../dist/compatibility.js'
 
 const config = {
   baseUrl: 'https://www.tododdle.com',
@@ -46,6 +52,58 @@ test('refreshes once after 401 and preserves structured API errors', async () =>
     )
     assert.equal(tokenRequests, 2)
     assert.equal(apiRequests, 2)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('sends package compatibility metadata with token and API requests', async () => {
+  const originalFetch = globalThis.fetch
+  const requests = []
+  globalThis.fetch = async (input, init) => {
+    requests.push({ input: String(input), headers: new Headers(init?.headers) })
+    if (String(input).endsWith('/api/external/oauth/token')) {
+      return new Response(JSON.stringify({ access_token: 'token', expires_in: 3600 }), {
+        status: 200,
+      })
+    }
+    return new Response(JSON.stringify({ projects: [] }), { status: 200 })
+  }
+
+  try {
+    await new ToDoddleApiClient(config).get('/api/external/projects')
+    assert.equal(requests.length, 2)
+    for (const request of requests) {
+      assert.equal(request.headers.get(MCP_VERSION_HEADER), MCP_PACKAGE_VERSION)
+      assert.equal(request.headers.get(MCP_COMPATIBILITY_HEADER), String(MCP_COMPATIBILITY_LEVEL))
+    }
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('turns update-required responses into direct agent guidance', async () => {
+  const originalFetch = globalThis.fetch
+  globalThis.fetch = async () => new Response(JSON.stringify({
+    error: 'MCP_UPDATE_REQUIRED',
+    message: 'This ToDoddle MCP is not compatible.',
+    details: {
+      installedVersion: '2.8.0',
+      minimumCompatibilityLevel: 3,
+      updateCommand: 'npx --yes --prefer-online tododdle-mcp@latest',
+      documentationUrl: 'https://www.tododdle.com/docs/agents/install-mcp',
+      restartRequired: true,
+    },
+  }), { status: 426 })
+
+  try {
+    await assert.rejects(
+      () => new ToDoddleApiClient(config).get('/api/external/projects'),
+      error => error instanceof ToDoddleApiError
+        && error.code === 'MCP_UPDATE_REQUIRED'
+        && error.message.includes('Ask the user to run')
+        && error.message.includes('restart Codex'),
+    )
   } finally {
     globalThis.fetch = originalFetch
   }

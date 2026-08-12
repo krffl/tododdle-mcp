@@ -254,7 +254,7 @@ export function createToDoddleMcpServer(
     [
       'archive_project',
       true,
-      'Archive a project without deleting its tasks. Requires explicit approval.',
+      'Archive a project without deleting its tickets. Requires explicit approval.',
       true,
     ],
     ['restore_project', false, 'Restore an archived project.', false],
@@ -282,9 +282,9 @@ export function createToDoddleMcpServer(
   }
 
   server.registerTool(
-    'list_plans',
+    'list_boards',
     {
-      description: 'List bounded active or archived plans in a project.',
+      description: 'List bounded active or archived boards in a project.',
       inputSchema: z.object({
         projectId: z.string().min(1),
         search: z.string().optional(),
@@ -304,9 +304,9 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
-    'get_plan',
+    'get_board',
     {
-      description: 'Get one plan in a project.',
+      description: 'Get one board in a project.',
       inputSchema: z.object({ projectId: z.string().min(1), planId: z.string().min(1) }),
       annotations: {
         readOnlyHint: true,
@@ -320,9 +320,9 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
-    'create_plan',
+    'create_board',
     {
-      description: 'Create a plan in a project.',
+      description: 'Create a board in a project.',
       inputSchema: z.object({
         projectId: z.string().min(1),
         name: z.string().min(1).max(500),
@@ -343,9 +343,9 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
-    'update_plan',
+    'update_board',
     {
-      description: 'Update plan details using optimistic concurrency.',
+      description: 'Update board details using optimistic concurrency.',
       inputSchema: z.object({
         projectId: z.string().min(1),
         planId: z.string().min(1),
@@ -367,9 +367,9 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
-    'move_plan',
+    'move_board',
     {
-      description: 'Reorder a plan within its project using optimistic concurrency.',
+      description: 'Reorder a board within its project using optimistic concurrency.',
       inputSchema: z.object({
         projectId: z.string().min(1),
         planId: z.string().min(1),
@@ -389,12 +389,12 @@ export function createToDoddleMcpServer(
 
   for (const [name, archived, description, destructiveHint] of [
     [
-      'archive_plan',
+      'archive_board',
       true,
-      'Archive a plan without changing its tasks. Requires explicit approval.',
+      'Archive a board without changing its tickets. Requires explicit approval.',
       true,
     ],
-    ['restore_plan', false, 'Restore an archived plan.', false],
+    ['restore_board', false, 'Restore an archived board.', false],
   ] as const) {
     server.registerTool(
       name,
@@ -423,9 +423,9 @@ export function createToDoddleMcpServer(
   }
 
   server.registerTool(
-    'list_sections',
+    'list_lanes',
     {
-      description: 'List bounded sections and entry automations in a plan.',
+      description: 'List bounded lanes and entry automations in a board.',
       inputSchema: z.object({
         projectId: z.string().min(1),
         planId: z.string().min(1),
@@ -448,9 +448,9 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
-    'get_section',
+    'get_lane',
     {
-      description: 'Get one plan section and its entry automations.',
+      description: 'Get one board lane and its entry automations.',
       inputSchema: z.object({
         projectId: z.string().min(1),
         planId: z.string().min(1),
@@ -470,9 +470,9 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
-    'create_section',
+    'create_lane',
     {
-      description: 'Create a section with optional typed entry automations.',
+      description: 'Create a lane with optional typed entry automations.',
       inputSchema: z.object({
         projectId: z.string().min(1),
         planId: z.string().min(1),
@@ -503,9 +503,9 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
-    'update_section',
+    'update_lane',
     {
-      description: 'Update a section and its entry automations using optimistic concurrency.',
+      description: 'Update a lane and its entry automations using optimistic concurrency.',
       inputSchema: z.object({
         projectId: z.string().min(1),
         planId: z.string().min(1),
@@ -536,9 +536,9 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
-    'move_section',
+    'move_lane',
     {
-      description: 'Reorder a section within its plan using optimistic concurrency.',
+      description: 'Reorder a lane within its board using optimistic concurrency.',
       inputSchema: z.object({
         projectId: z.string().min(1),
         planId: z.string().min(1),
@@ -564,12 +564,12 @@ export function createToDoddleMcpServer(
 
   for (const [name, archived, description, destructiveHint] of [
     [
-      'archive_section',
+      'archive_lane',
       true,
-      'Archive a section without changing its tasks. Requires explicit approval.',
+      'Archive a lane without changing its tickets. Requires explicit approval.',
       true,
     ],
-    ['restore_section', false, 'Restore an archived section.', false],
+    ['restore_lane', false, 'Restore an archived lane.', false],
   ] as const) {
     server.registerTool(
       name,
@@ -771,7 +771,7 @@ export function createToDoddleMcpServer(
   server.registerTool(
     'get_project_context',
     {
-      description: 'Get bounded project-plan and section context for task planning.',
+      description: 'Get bounded board and lane context for ticket planning.',
       inputSchema: z.object({ projectId: z.string().min(1) }),
       annotations: {
         readOnlyHint: true,
@@ -801,10 +801,10 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
-    'attach_file_to_task',
+    'attach_file_to_ticket',
     {
       description:
-        'Upload an approved local file or HTTPS URL and attach it to a task in the same project.',
+        'Upload an approved local file or HTTPS URL and attach it to a ticket in the same project.',
       inputSchema: taskUploadInputSchema,
       annotations: {
         readOnlyHint: false,
@@ -843,7 +843,7 @@ export function createToDoddleMcpServer(
     'list_available_work',
     {
       description:
-        'List bounded, unblocked, currently unclaimed tasks eligible for an Agent Connection in one project, ordered by priority, due date, and project position.',
+        'List bounded, unblocked, currently unclaimed tickets eligible for an Agent Connection in one project, ordered by priority, due date, and project position.',
       inputSchema: z.object({
         projectId: z.string().min(1),
         status: z.enum(['TODO', 'IN_PROGRESS']).default('TODO'),
@@ -863,10 +863,10 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
-    'claim_next_task',
+    'claim_next_ticket',
     {
       description:
-        'Atomically claim the highest-ranked eligible task in one project. Reuse a unique stable runId to replay the same live claim safely.',
+        'Atomically claim the highest-ranked eligible ticket in one project. Reuse a unique stable runId to replay the same live claim safely.',
       inputSchema: z.object({
         projectId: z.string().min(1),
         runId: z.string().min(1).max(200),
@@ -889,7 +889,7 @@ export function createToDoddleMcpServer(
   server.registerTool(
     'get_focus_list',
     {
-      description: 'List the current user’s deliberately curated Focus tasks.',
+      description: 'List the current user’s deliberately curated Focus tickets.',
       inputSchema: z.object({
         projectId: z.string().optional(),
         status: statusSchema.optional(),
@@ -909,9 +909,9 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
-    'add_task_to_focus',
+    'add_ticket_to_focus',
     {
-      description: 'Add an accessible active task to Focus. Repeated additions are idempotent.',
+      description: 'Add an accessible active ticket to Focus. Repeated additions are idempotent.',
       inputSchema: z.object({
         taskId: z.string().min(1),
         bucket: focusBucketSchema.default('NEXT'),
@@ -929,9 +929,9 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
-    'move_focus_task',
+    'move_focus_ticket',
     {
-      description: 'Move or reorder a Focus task using optimistic concurrency.',
+      description: 'Move or reorder a Focus ticket using optimistic concurrency.',
       inputSchema: z.object({
         taskId: z.string().min(1),
         bucket: focusBucketSchema,
@@ -950,9 +950,9 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
-    'remove_task_from_focus',
+    'remove_ticket_from_focus',
     {
-      description: 'Remove personal Focus metadata without changing the underlying task.',
+      description: 'Remove personal Focus metadata without changing the underlying ticket.',
       inputSchema: z.object({ taskId: z.string().min(1) }),
       annotations: {
         readOnlyHint: false,
@@ -965,10 +965,10 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
-    'list_tasks',
+    'list_tickets',
     {
       description:
-        'List bounded tasks with optional project, plan, section, assignee, status, priority, search, and archive filters.',
+        'List bounded tickets with optional project, board, lane, assignee, status, priority, search, and archive filters. The stable planId and sectionId fields identify the board and lane.',
       inputSchema: z.object({
         projectId: z.string().min(1).optional(),
         planId: z.string().min(1).optional(),
@@ -992,9 +992,9 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
-    'get_task',
+    'get_ticket',
     {
-      description: 'Get complete task context including comments and blocker information.',
+      description: 'Get complete ticket context including comments and blocker information.',
       inputSchema: z.object({ taskId: z.string().min(1) }),
       annotations: {
         readOnlyHint: true,
@@ -1007,10 +1007,10 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
-    'claim_task',
+    'claim_ticket',
     {
       description:
-        'Claim or refresh a task for the current Agent Connection without changing its human assignee. Reuse a stable runId and refresh before the lease expires.',
+        'Claim or refresh a ticket for the current Agent Connection without changing its human assignee. Reuse a stable runId and refresh before the lease expires.',
       inputSchema: z.object({
         taskId: z.string().min(1),
         runId: z.string().min(1).max(200),
@@ -1029,10 +1029,10 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
-    'renew_task_claim',
+    'renew_ticket_claim',
     {
       description:
-        'Renew the current Agent Connection lease for a specific task and stable runId before it expires.',
+        'Renew the current Agent Connection lease for a specific ticket and stable runId before it expires.',
       inputSchema: z.object({
         taskId: z.string().min(1),
         runId: z.string().min(1).max(200),
@@ -1051,10 +1051,10 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
-    'release_task',
+    'release_ticket',
     {
       description:
-        'Release the current Agent Connection work claim without changing task status or human assignment.',
+        'Release the current Agent Connection work claim without changing ticket status or human assignment.',
       inputSchema: z.object({
         taskId: z.string().min(1),
         runId: z.string().min(1).max(200),
@@ -1071,9 +1071,10 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
-    'create_task',
+    'create_ticket',
     {
-      description: 'Create a task in an active project plan section.',
+      description:
+        'Create a ticket in an active board lane. The stable planId and sectionId fields identify the board and lane.',
       inputSchema: z.object({
         projectId: z.string().min(1),
         planId: z.string().min(1),
@@ -1100,10 +1101,10 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
-    'update_task',
+    'update_ticket',
     {
       description:
-        'Update editable task fields. Requires the latest updatedAt value to prevent overwriting newer changes.',
+        'Update editable ticket fields. Requires the latest updatedAt value to prevent overwriting newer changes.',
       inputSchema: z.object({
         taskId: z.string().min(1),
         expectedUpdatedAt: expectedUpdatedAtSchema,
@@ -1126,9 +1127,9 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
-    'transition_task',
+    'transition_ticket',
     {
-      description: 'Transition a task to a canonical status.',
+      description: 'Transition a ticket to a canonical status.',
       inputSchema: z.object({
         taskId: z.string().min(1),
         status: statusSchema,
@@ -1145,10 +1146,10 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
-    'move_task',
+    'move_ticket',
     {
       description:
-        'Move a task to an active section, optionally in another plan in the same project. Preview first because section actions may archive the task.',
+        'Move a ticket to an active lane, optionally on another board in the same project. Preview first because lane actions may archive the ticket.',
       inputSchema: z.object({
         taskId: z.string().min(1),
         planId: z.string().min(1).optional(),
@@ -1168,10 +1169,10 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
-    'preview_task_move',
+    'preview_ticket_move',
     {
       description:
-        'Preview destination section actions, warnings, destructive effects, and hierarchy blockers before moving a task.',
+        'Preview destination lane actions, warnings, destructive effects, and hierarchy blockers before moving a ticket.',
       inputSchema: z.object({
         taskId: z.string().min(1),
         planId: z.string().min(1).optional(),
@@ -1190,9 +1191,9 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
-    'set_task_blocker',
+    'set_ticket_blocker',
     {
-      description: 'Set or clear the active same-project task blocking this task.',
+      description: 'Set or clear the active same-project ticket blocking this ticket.',
       inputSchema: z.object({
         taskId: z.string().min(1),
         blockedByTaskId: z.string().nullable(),
@@ -1209,10 +1210,10 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
-    'add_task_comment',
+    'add_ticket_comment',
     {
       description:
-        'Add an implementation note, finding, decision, or completion evidence to a task.',
+        'Add an implementation note, finding, decision, or completion evidence to a ticket.',
       inputSchema: z.object({
         taskId: z.string().min(1),
         content: z.string().min(1),
@@ -1273,10 +1274,10 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
-    'archive_task',
+    'archive_ticket',
     {
       description:
-        'Archive a task and clear dependent blocker relationships. Requires explicit human approval.',
+        'Archive a ticket and clear dependent blocker relationships. Requires explicit human approval.',
       inputSchema: z.object({
         taskId: z.string().min(1),
         expectedUpdatedAt: expectedUpdatedAtSchema,
@@ -1339,9 +1340,9 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
-    'list_task_time',
+    'list_ticket_time',
     {
-      description: 'List bounded time entries and totals for one task.',
+      description: 'List bounded time entries and totals for one ticket.',
       inputSchema: z.object({
         projectId: z.string().min(1),
         taskId: z.string().min(1),
@@ -1362,10 +1363,10 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
-    'start_task_timer',
+    'start_ticket_timer',
     {
       description:
-        'Start a live timer on an active task. A task allows one active timer; different tasks may run concurrently.',
+        'Start a live timer on an active ticket. A ticket allows one active timer; different tickets may run concurrently.',
       inputSchema: z.object({
         projectId: z.string().min(1),
         taskId: z.string().min(1),
@@ -1392,9 +1393,9 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
-    'stop_task_timer',
+    'stop_ticket_timer',
     {
-      description: 'Stop an active task timer using optimistic concurrency.',
+      description: 'Stop an active ticket timer using optimistic concurrency.',
       inputSchema: z.object({
         projectId: z.string().min(1),
         taskId: z.string().min(1),
@@ -1419,9 +1420,9 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
-    'log_task_time',
+    'log_ticket_time',
     {
-      description: 'Log a completed historical interval against a task.',
+      description: 'Log a completed historical interval against a ticket.',
       inputSchema: z.object({
         projectId: z.string().min(1),
         taskId: z.string().min(1),
@@ -1507,7 +1508,7 @@ export function createToDoddleMcpServer(
   server.registerTool(
     'get_project_brief',
     {
-      description: 'Read the canonical project brief before planning or changing work.',
+      description: 'Read the canonical project brief before planning or changing tickets.',
       inputSchema: z.object({ projectId: z.string().min(1) }),
       annotations: {
         readOnlyHint: true,
@@ -1547,7 +1548,7 @@ export function createToDoddleMcpServer(
     'get_project_artifact',
     {
       description:
-        'Get complete Markdown, relationships, comments, and task links for one project artifact.',
+        'Get complete Markdown, relationships, comments, and ticket links for one project artifact.',
       inputSchema: z.object({ projectId: z.string().min(1), artifactId: z.string().min(1) }),
       annotations: {
         readOnlyHint: true,
@@ -1695,7 +1696,7 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
-    'link_artifact_task',
+    'link_artifact_ticket',
     {
       description:
         'Link same-project execution work to the context it implements, informs, evidences, or came from.',
@@ -1756,11 +1757,11 @@ export function createToDoddleMcpServer(
   );
 
   server.registerResource(
-    'task',
-    new ResourceTemplate('tododdle://tasks/{taskId}', { list: undefined }),
+    'ticket',
+    new ResourceTemplate('tododdle://tickets/{ticketId}', { list: undefined }),
     {
-      title: 'ToDoddle task',
-      description: 'Complete task context by ID.',
+      title: 'ToDoddle ticket',
+      description: 'Complete ticket context by ID.',
       mimeType: 'application/json',
     },
     async (uri, variables) => ({
@@ -1769,7 +1770,7 @@ export function createToDoddleMcpServer(
           uri: uri.href,
           mimeType: 'application/json',
           text: JSON.stringify(
-            await api.get(`/api/external/tasks/${String(variables.taskId)}`),
+            await api.get(`/api/external/tasks/${String(variables.ticketId)}`),
             null,
             2
           ),
@@ -1783,7 +1784,7 @@ export function createToDoddleMcpServer(
     new ResourceTemplate('tododdle://projects/{projectId}', { list: undefined }),
     {
       title: 'ToDoddle project context',
-      description: 'Bounded project-plan and section context by project ID.',
+      description: 'Bounded project board and lane context by project ID.',
       mimeType: 'application/json',
     },
     async (uri, variables) => ({

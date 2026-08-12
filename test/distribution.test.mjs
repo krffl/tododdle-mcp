@@ -49,9 +49,9 @@ test('workflow skill declares the MCP dependency and core safety rules', async (
   assert.match(skill, /Substantial planning or implementation/);
   assert.match(skill, /Refresh volatile fields/);
   assert.match(skill, /Do not fan out across every status or endpoint/);
-  assert.match(skill, /Prefer `list_tasks`/);
+  assert.match(skill, /Prefer `list_tickets`/);
   assert.match(skill, /list_project_members/);
-  assert.match(skill, /Archive projects, plans, sections, or Notes only with explicit approval/);
+  assert.match(skill, /Archive projects, boards, lanes, or Notes only with explicit approval/);
   assert.match(skill, /COMPLETE/);
   assert.match(skill, /Do not invent elapsed time/);
   assert.match(skill, /typed `HANDOFF` comment/);
@@ -72,6 +72,6 @@ test('README documents bounded and compaction-safe context loading', async () =>
   assert.match(readme, /get_project_context` once/);
   assert.match(readme, /follow their pagination metadata/);
   assert.match(readme, /compaction summary/);
-  assert.match(readme, /Refresh only volatile task state/);
+  assert.match(readme, /Refresh only volatile ticket state/);
   assert.match(readme, /Simple lookups should skip the brief and full context entirely/);
 });

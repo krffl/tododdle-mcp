@@ -1,5 +1,6 @@
 import type { McpConfig } from './config.js';
 import { createReadStream } from 'node:fs';
+import { MCP_REQUEST_HEADERS, formatMcpUpdateRequiredMessage } from './compatibility.js';
 
 interface TokenResponse {
   access_token: string;
@@ -51,7 +52,10 @@ export class ToDoddleApiClient implements ToDoddleApi {
     });
     const response = await fetch(`${this.config.baseUrl}/api/external/oauth/token`, {
       method: 'POST',
-      headers: { 'content-type': 'application/x-www-form-urlencoded' },
+      headers: {
+        'content-type': 'application/x-www-form-urlencoded',
+        ...MCP_REQUEST_HEADERS,
+      },
       body: form,
       redirect: 'manual',
     });
@@ -85,6 +89,7 @@ export class ToDoddleApiClient implements ToDoddleApi {
       method,
       headers: {
         authorization: `Bearer ${token}`,
+        ...MCP_REQUEST_HEADERS,
         ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
         ...(idempotencyKey ? { 'idempotency-key': idempotencyKey } : {}),
       },
@@ -128,14 +133,19 @@ export class ToDoddleApiClient implements ToDoddleApi {
   }
 
   private toError(status: number, payload: Record<string, unknown>) {
-    return new ToDoddleApiError(
-      status,
-      typeof payload.error === 'string' ? payload.error : 'server_error',
+    const code = typeof payload.error === 'string' ? payload.error : 'server_error';
+    const message =
       typeof payload.message === 'string'
         ? payload.message
         : typeof payload.error_description === 'string'
           ? payload.error_description
-          : `ToDoddle request failed (${status})`,
+          : `ToDoddle request failed (${status})`;
+    return new ToDoddleApiError(
+      status,
+      code,
+      code === 'MCP_UPDATE_REQUIRED'
+        ? formatMcpUpdateRequiredMessage(message, payload.details)
+        : message,
       payload.details
     );
   }

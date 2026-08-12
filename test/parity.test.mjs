@@ -114,10 +114,10 @@ test('every discovered tool validates and serializes only to documented External
     for (const tool of tools) {
       calls.length = 0
       const argumentsValue = exampleValue(tool.inputSchema)
-      if (tool.name === 'upload_project_document' || tool.name === 'attach_file_to_task') {
+      if (tool.name === 'upload_project_document' || tool.name === 'attach_file_to_ticket') {
         argumentsValue.projectId = 'projectId-value'
         argumentsValue.filePath = filePath
-        if (tool.name === 'attach_file_to_task') argumentsValue.taskId = 'taskId-value'
+        if (tool.name === 'attach_file_to_ticket') argumentsValue.taskId = 'taskId-value'
       }
 
       const result = await client.callTool({ name: tool.name, arguments: argumentsValue })
@@ -147,18 +147,18 @@ test('bounded read schemas reject oversized pages and malformed identifiers', as
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
 
   try {
-    for (const name of ['list_projects', 'list_tasks', 'list_plans', 'list_sections', 'list_notes']) {
-      const base = name === 'list_plans'
+    for (const name of ['list_projects', 'list_tickets', 'list_boards', 'list_lanes', 'list_notes']) {
+      const base = name === 'list_boards'
         ? { projectId: 'project-1' }
-        : name === 'list_sections'
+        : name === 'list_lanes'
           ? { projectId: 'project-1', planId: 'plan-1' }
           : {}
       const result = await client.callTool({ name, arguments: { ...base, limit: 101 } })
       assert.equal(result.isError, true, `${name} must reject limit > 100`)
     }
-    assert.equal((await client.callTool({ name: 'get_task', arguments: { taskId: '' } })).isError, true)
+    assert.equal((await client.callTool({ name: 'get_ticket', arguments: { taskId: '' } })).isError, true)
     assert.equal((await client.callTool({
-      name: 'update_task',
+      name: 'update_ticket',
       arguments: { taskId: 'task-1', expectedUpdatedAt: 'not-a-date' },
     })).isError, true)
     assert.equal((await client.callTool({

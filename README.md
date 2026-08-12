@@ -1,10 +1,12 @@
 # ToDoddle MCP Server
 
-The official Model Context Protocol stdio server for [ToDoddle](https://tododdle.com). It gives MCP-compatible agents a bounded interface for project context, task management, comments, and time tracking through ToDoddle's hosted API.
+The official Model Context Protocol stdio server for [ToDoddle](https://tododdle.com). It gives MCP-compatible agents a bounded interface for project context, boards, lanes, tickets, comments, and time tracking through ToDoddle's hosted API.
 
 The package contains no ToDoddle application or database code. It is a small stdio client that authenticates as an Agent Connection and calls the hosted API.
 
-Agent work claims let any connected agent indicate that it is actively handling a task without becoming the human assignee. Claims use the configured Agent Connection label, an opaque run ID, and an expiring lease.
+Version 3 sends its package version and compatibility level with every token and API request. If ToDoddle returns `MCP_UPDATE_REQUIRED`, run `npx --yes --prefer-online tododdle-mcp@latest` and restart the MCP host. The error includes the installed version, minimum supported level, update command, and current troubleshooting guide.
+
+Agent work claims let any connected agent indicate that it is actively handling a ticket without becoming the human assignee. Claims use the configured Agent Connection label, an opaque run ID, and an expiring lease.
 
 ## Requirements
 
@@ -90,11 +92,15 @@ Installing the plugin does not create or expand ToDoddle credentials, scopes, or
 For substantial planning or implementation, load project context in a small, predictable sequence:
 
 1. Call `get_project_brief` once for the durable purpose, constraints, and success criteria.
-2. Call `get_project_context` once for bounded project-plan and section structure.
-3. Use `list_project_artifacts`, `list_tasks`, or `get_task` only for the artifacts and work relevant to the request. Keep list calls bounded and follow their pagination metadata.
-4. Reuse returned project, plan, section, task, and artifact IDs in the active conversation and its compaction summary. Refresh only volatile task state before a mutation.
+2. Call `get_project_context` once for bounded board and lane structure.
+3. Use `list_project_artifacts`, `list_tickets`, or `get_ticket` only for the artifacts and work relevant to the request. Keep list calls bounded and follow their pagination metadata.
+4. Reuse returned project, board, lane, ticket, and artifact IDs in the active conversation and its compaction summary. Refresh only volatile ticket state before a mutation.
 
-Simple lookups should skip the brief and full context entirely: call the narrowest read tool, such as `get_task` for a known task or hierarchy-filtered `list_tasks` for one plan or section. `get_work_queue` remains the cross-project operational view. This keeps context current without repeatedly rediscovering stable hierarchy or fanning out by status.
+Simple lookups should skip the brief and full context entirely. Call the narrowest read tool, such as `get_ticket` for a known ticket or hierarchy-filtered `list_tickets` for one board or lane. `get_work_queue` remains the cross-project operational view. The stable API fields `planId`, `sectionId`, and `taskId` identify boards, lanes, and tickets.
+
+### Version 3 migration
+
+Version 3 replaces Plan, Section, and Task tool names with Board, Lane, and Ticket names. The hosted API paths and stable ID fields do not change. Version 2 clients must update to `tododdle-mcp@latest` and restart their agent host. The API returns `MCP_UPDATE_REQUIRED` with the exact update command when an old client identifies itself.
 
 The server returns authoritative website URLs with records so an agent can hand work back to a human without reconstructing routes. Access remains the intersection of the Agent Connection's scopes, explicit project grants, and authorizing user's current ACL on every call.
 
@@ -109,55 +115,55 @@ When ToDoddle should be mandatory for one repository, merge the relevant rules f
 - `list_projects`
 - `get_project`
 - `get_project_context`
-- `list_plans`
-- `get_plan`
-- `list_sections`
-- `get_section`
+- `list_boards`
+- `get_board`
+- `list_lanes`
+- `get_lane`
 - `list_project_members`
 - `list_project_documents`
 - `get_document_download_url`
 - `list_notes`
 - `get_note`
-- `list_tasks`
+- `list_tickets`
 - `get_work_queue`
 - `list_available_work`
 - `get_focus_list`
-- `add_task_to_focus`
-- `move_focus_task`
-- `remove_task_from_focus`
-- `get_task`
+- `add_ticket_to_focus`
+- `move_focus_ticket`
+- `remove_ticket_from_focus`
+- `get_ticket`
 - `get_project_brief`
 - `list_project_artifacts`
 - `get_project_artifact`
 - `get_agent_inbox`
 
-### Manage Tasks
+### Manage Tickets
 
-- `claim_task`
-- `claim_next_task`
-- `renew_task_claim`
-- `release_task`
-- `create_task`
-- `update_task`
-- `transition_task`
-- `preview_task_move`
-- `move_task`
-- `set_task_blocker`
-- `add_task_comment`
+- `claim_ticket`
+- `claim_next_ticket`
+- `renew_ticket_claim`
+- `release_ticket`
+- `create_ticket`
+- `update_ticket`
+- `transition_ticket`
+- `preview_ticket_move`
+- `move_ticket`
+- `set_ticket_blocker`
+- `add_ticket_comment`
 - `acknowledge_agent_reply`
-- `archive_task`
+- `archive_ticket`
 
-`list_available_work` reads only unblocked, currently unclaimed work in one project. `claim_next_task` atomically selects the highest-ranked eligible task and safely replays a still-live claim when its unique stable run ID is retried. `claim_task` claims a known task, `renew_task_claim` refreshes its lease, and `release_task` ends that lease without changing task status or human assignment. A conflicting live claim identifies the Agent Connection already handling the task. Human assignment remains independent throughout. `preview_task_move` reports section automation and hierarchy blockers before a same-project plan move. `move_task` and `archive_task` are marked destructive because a destination section may archive the task. Task deletion is intentionally unavailable.
+`list_available_work` reads only unblocked, currently unclaimed work in one project. `claim_next_ticket` selects the highest-ranked eligible ticket. `claim_ticket`, `renew_ticket_claim`, and `release_ticket` manage its agent lease without changing human assignment. `preview_ticket_move` reports lane automation and hierarchy blockers before a board move. `move_ticket` and `archive_ticket` are destructive because a destination lane can archive the ticket. Ticket deletion is unavailable.
 
 Durable agent-to-human handoffs use typed `HANDOFF` comments with a concise outcome, verification and immutable evidence, and any remaining risk or next action. External mutations return a stable ToDoddle `uiUrl`; expiring asset token URLs must not be copied into comments. A continuing run reads and handles its Agent Connection inbox reply before acknowledgement, then reloads the linked record.
 
-Task create/update accepts `TASK`, `FEATURE`, `EPIC`, `BUG`, `RESEARCH`, and `ACTION_ITEM`. Section create/update supports `SET_KIND` alongside status, priority, assignee, and archive entry actions.
+Ticket create/update accepts the stable kind values `TASK`, `FEATURE`, `EPIC`, `BUG`, `RESEARCH`, and `ACTION_ITEM`. Lane create/update supports `SET_KIND` alongside status, priority, assignee, and archive entry actions.
 
 ### Manage Project Structure
 
 - `create_project`, `update_project`, `archive_project`, `restore_project`
-- `create_plan`, `update_plan`, `move_plan`, `archive_plan`, `restore_plan`
-- `create_section`, `update_section`, `move_section`, `archive_section`, `restore_section`
+- `create_board`, `update_board`, `move_board`, `archive_board`, `restore_board`
+- `create_lane`, `update_lane`, `move_lane`, `archive_lane`, `restore_lane`
 
 Archive operations are destructive and require client approval. Permanent deletion is intentionally unavailable.
 
@@ -173,10 +179,10 @@ Notes are organization-scoped and unavailable to project-only connections.
 
 - `get_active_time_entries`
 - `list_project_time`
-- `list_task_time`
-- `start_task_timer`
-- `stop_task_timer`
-- `log_task_time`
+- `list_ticket_time`
+- `start_ticket_timer`
+- `stop_ticket_timer`
+- `log_ticket_time`
 - `update_time_entry`
 - `archive_time_entry`
 
@@ -187,7 +193,7 @@ Notes are organization-scoped and unavailable to project-only connections.
 - `create_project_artifact`
 - `update_project_artifact`
 - `transition_project_artifact`
-- `link_artifact_task`
+- `link_artifact_ticket`
 - `add_artifact_comment`
 - `list_artifact_revisions`
 - `link_project_artifacts`
@@ -195,13 +201,13 @@ Notes are organization-scoped and unavailable to project-only connections.
 ### Upload Files
 
 - `upload_project_document`
-- `attach_file_to_task`
+- `attach_file_to_ticket`
 
 Each tool accepts either an approved local `filePath` or an HTTPS `sourceUrl`. Local paths are disabled until `TODODDLE_UPLOAD_ROOTS` is configured. Files stream directly from this local MCP process to ToDoddle's short-lived Bunny upload URL; file bodies are never placed in MCP JSON messages.
 
 Use `get_document_download_url` with a `projectId` and `documentId` returned by `list_project_documents` to obtain a five-minute tokenized URL. The URL grants access only to that ready document and should not be stored in comments or other durable project context. Video documents return a protected stream URL when the workspace subscription permits playback.
 
-The server also provides task, project, and project-artifact resource templates plus `triage_work` and `daily_status` prompts.
+The server also provides ticket, project, and project-artifact resource templates plus `triage_work` and `daily_status` prompts.
 
 ## Permissions
 
