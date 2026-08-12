@@ -64,6 +64,15 @@ test('workflow skill declares the MCP dependency and core safety rules', async (
   assert.match(metadata, /allow_implicit_invocation: true/);
 });
 
+test('suggested AGENTS rules require concise, human ticket writing', async () => {
+  const agents = await readFile(new URL('../examples/AGENTS.tododdle.md', import.meta.url), 'utf8');
+
+  assert.match(agents, /ticket titles, ticket descriptions, comments, status updates, handoffs/);
+  assert.match(agents, /ASD-STE100 Simplified Technical English/);
+  assert.match(agents, /simplicity, brevity, clarity, and humanity/);
+  assert.match(agents, /readable Markdown/);
+});
+
 test('README documents bounded and compaction-safe context loading', async () => {
   const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
 
