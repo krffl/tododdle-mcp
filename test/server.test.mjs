@@ -47,6 +47,9 @@ test('discovers the bounded production tool surface', async () => {
   assert.equal(names.includes('get_active_time_entries'), true)
   assert.equal(names.includes('get_focus_list'), true)
   assert.equal(names.includes('list_tickets'), true)
+  assert.equal(names.includes('list_ticket_attributes'), true)
+  assert.equal(names.includes('set_ticket_attribute'), true)
+  assert.equal(names.includes('delete_ticket_attribute'), true)
   assert.equal(names.includes('claim_ticket'), true)
   assert.equal(names.includes('claim_next_ticket'), true)
   assert.equal(names.includes('renew_ticket_claim'), true)
@@ -312,6 +315,35 @@ test('lists tasks with bounded hierarchy and task filters', async () => {
         path: '/api/external/tasks',
         query: { includeArchived: false, page: 1, limit: 50 },
       },
+    ])
+  } finally {
+    await client.close()
+    await server.close()
+  }
+})
+
+test('reads, sets, and deletes typed ticket attributes', async () => {
+  const calls = []
+  const attributeApi = {
+    ...api,
+    get: async (path, query) => { calls.push({ method: 'GET', path, query }); return { attributes: [] } },
+    put: async (path, body) => { calls.push({ method: 'PUT', path, body }); return { entity: {} } },
+    delete: async (path, body) => { calls.push({ method: 'DELETE', path, body }); return { entity: {} } },
+  }
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer(attributeApi)
+  const client = new Client({ name: 'task-attribute-test', version: '1.0.0' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  const expectedUpdatedAt = '2026-08-13T12:00:00.000Z'
+
+  try {
+    await client.callTool({ name: 'list_ticket_attributes', arguments: { taskId: 'task-1' } })
+    await client.callTool({ name: 'set_ticket_attribute', arguments: { taskId: 'task-1', key: 'source.branch', type: 'STRING', value: 'main', expectedUpdatedAt } })
+    await client.callTool({ name: 'delete_ticket_attribute', arguments: { taskId: 'task-1', key: 'source.branch', expectedUpdatedAt } })
+    assert.deepEqual(calls, [
+      { method: 'GET', path: '/api/external/tasks/task-1/attributes', query: undefined },
+      { method: 'PUT', path: '/api/external/tasks/task-1/attributes', body: { key: 'source.branch', type: 'STRING', value: 'main', expectedUpdatedAt } },
+      { method: 'DELETE', path: '/api/external/tasks/task-1/attributes', body: { key: 'source.branch', expectedUpdatedAt } },
     ])
   } finally {
     await client.close()

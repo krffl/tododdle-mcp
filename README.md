@@ -125,6 +125,11 @@ When ToDoddle should be mandatory for one repository, merge the relevant rules f
 - `list_notes`
 - `get_note`
 - `list_tickets`
+- `list_ticket_attributes`
+- `set_ticket_attribute`
+- `delete_ticket_attribute`
+
+Ticket attributes hold small typed integration and handoff facts. Read them before updates, use namespaced keys, and never store secrets in them.
 - `get_work_queue`
 - `list_available_work`
 - `get_focus_list`

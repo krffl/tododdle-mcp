@@ -52,6 +52,20 @@ const expectedUpdatedAtSchema = z
   .string()
   .datetime({ offset: true })
   .describe('updatedAt from the latest read of this resource');
+const ticketAttributeTypeSchema = z.enum([
+  'STRING',
+  'NUMBER',
+  'BOOLEAN',
+  'DATE',
+  'URL',
+  'STRING_LIST',
+]);
+const ticketAttributeValueSchema = z.union([
+  z.string(),
+  z.number(),
+  z.boolean(),
+  z.array(z.string()),
+]);
 
 function toolResult(value: Record<string, unknown>) {
   return {
@@ -1004,6 +1018,65 @@ export function createToDoddleMcpServer(
       },
     },
     async ({ taskId }) => toolResult(await api.get(`/api/external/tasks/${taskId}`))
+  );
+
+  server.registerTool(
+    'list_ticket_attributes',
+    {
+      description:
+        'List bounded typed key-value attributes used for ticket integrations and agent handoffs.',
+      inputSchema: z.object({ taskId: z.string().min(1) }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ taskId }) => toolResult(await api.get(`/api/external/tasks/${taskId}/attributes`))
+  );
+
+  server.registerTool(
+    'set_ticket_attribute',
+    {
+      description:
+        'Create or update one typed ticket attribute. Existing attributes require their latest updatedAt value.',
+      inputSchema: z.object({
+        taskId: z.string().min(1),
+        key: z.string().min(1).max(64),
+        type: ticketAttributeTypeSchema,
+        value: ticketAttributeValueSchema,
+        expectedUpdatedAt: expectedUpdatedAtSchema.optional(),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ taskId, ...body }) =>
+      toolResult(await api.put(`/api/external/tasks/${taskId}/attributes`, body))
+  );
+
+  server.registerTool(
+    'delete_ticket_attribute',
+    {
+      description: 'Delete one ticket attribute using its key and latest updatedAt value.',
+      inputSchema: z.object({
+        taskId: z.string().min(1),
+        key: z.string().min(1).max(64),
+        expectedUpdatedAt: expectedUpdatedAtSchema,
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ taskId, ...body }) =>
+      toolResult(await api.delete(`/api/external/tasks/${taskId}/attributes`, body))
   );
 
   server.registerTool(
