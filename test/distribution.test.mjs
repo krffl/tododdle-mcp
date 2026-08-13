@@ -62,6 +62,10 @@ test('workflow skill declares the MCP dependency and core safety rules', async (
   assert.match(skill, /## Remaining/);
   assert.match(skill, /Never persist expiring download or upload token URLs/);
   assert.match(skill, /After the upload tool confirms success, delete only the temporary staging file/);
+  assert.match(skill, /For a pasted or clipboard image/);
+  assert.match(skill, /create a private temporary directory inside it with `mktemp -d`/);
+  assert.match(skill, /preserve a suitable image extension/);
+  assert.match(skill, /Do not alter the original clipboard attachment/);
   assert.match(skill, /Never delete the user's original source file/);
   assert.match(skill, /Request a fresh tokenized URL with `get_document_download_url`/);
   assert.match(skill, /private temporary directory with `mktemp -d`/);

@@ -49,6 +49,7 @@ Do not create bookkeeping churn for tiny exploratory actions. Prefer one useful 
 ## Upload Files Safely
 
 - Use `upload_project_document` or `attach_file_to_ticket` for approved files.
+- For a pasted or clipboard image, select a configured `TODODDLE_UPLOAD_ROOTS` directory and create a private temporary directory inside it with `mktemp -d`. Save or copy the image attachment into that directory, preserve a suitable image extension, and upload the temporary file path. Do not alter the original clipboard attachment.
 - If a source file is outside `TODODDLE_UPLOAD_ROOTS`, copy it to a temporary staging file inside the dedicated ToDoddle upload directory. Do not move or alter the original.
 - After the upload tool confirms success, delete only the temporary staging file that the agent created. Remove an empty staging directory when it was also created for that upload.
 - Keep the staging file when the upload fails or the result is uncertain so it remains available for retry and diagnosis. Report the retained path without exposing private content.
