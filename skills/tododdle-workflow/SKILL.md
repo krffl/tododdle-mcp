@@ -53,6 +53,14 @@ Do not create bookkeeping churn for tiny exploratory actions. Prefer one useful 
 - Keep the staging file when the upload fails or the result is uncertain so it remains available for retry and diagnosis. Report the retained path without exposing private content.
 - Never delete the user's original source file, a pre-existing file, or any file outside the managed staging location.
 
+## Review Attachments Safely
+
+- Request a fresh tokenized URL with `get_document_download_url` for each attachment review.
+- Create a private temporary directory with `mktemp -d`, download the asset there without printing, logging, or persisting the URL, and inspect the local file with the appropriate image or document tool.
+- Use a browser only when local download or rendering is unavailable.
+- After successful inspection, delete only the temporary files and directory that the agent created. Never delete an original or pre-existing user file.
+- Never persist an expiring download URL in comments, Context, logs, handoffs, or repository files.
+
 ## Finish Work
 
 1. Run the verification appropriate to the work.

@@ -209,6 +209,8 @@ If an agent copies a source file into a dedicated ToDoddle upload directory only
 
 Use `get_document_download_url` with a `projectId` and `documentId` returned by `list_project_documents` to obtain a five-minute tokenized URL. The URL grants access only to that ready document and should not be stored in comments or other durable project context. Video documents return a protected stream URL when the workspace subscription permits playback.
 
+For attachment review, request a fresh URL, download the asset into a private `mktemp -d` directory without printing or persisting the URL, and inspect the local file with the appropriate tool. Use a browser only when local download or rendering is unavailable. Remove only the agent-created temporary files and directory after successful inspection; never remove an original or pre-existing user file.
+
 The server also provides ticket, project, and project-artifact resource templates plus `triage_work` and `daily_status` prompts.
 
 ## Permissions

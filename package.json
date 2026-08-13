@@ -1,6 +1,6 @@
 {
   "name": "tododdle-mcp",
-  "version": "3.0.0",
+  "version": "3.0.1",
   "description": "Agent-first task, project context, and time tracking for ToDoddle",
   "type": "module",
   "main": "dist/index.js",

@@ -26,8 +26,10 @@ test('Codex plugin and marketplace target the published package', async () => {
   const packageJson = await readJson('../package.json');
   const plugin = await readJson('../.codex-plugin/plugin.json');
   const marketplace = await readJson('../.agents/plugins/marketplace.json');
+  const { MCP_PACKAGE_VERSION } = await import('../dist/compatibility.js');
   const entry = marketplace.plugins[0];
 
+  assert.equal(MCP_PACKAGE_VERSION, packageJson.version);
   assert.equal(plugin.name, 'tododdle');
   assert.equal(plugin.version, packageJson.version);
   assert.equal(plugin.skills, './skills/');
@@ -61,6 +63,12 @@ test('workflow skill declares the MCP dependency and core safety rules', async (
   assert.match(skill, /Never persist expiring download or upload token URLs/);
   assert.match(skill, /After the upload tool confirms success, delete only the temporary staging file/);
   assert.match(skill, /Never delete the user's original source file/);
+  assert.match(skill, /Request a fresh tokenized URL with `get_document_download_url`/);
+  assert.match(skill, /private temporary directory with `mktemp -d`/);
+  assert.match(skill, /without printing, logging, or persisting the URL/);
+  assert.match(skill, /inspect the local file with the appropriate image or document tool/);
+  assert.match(skill, /Use a browser only when local download or rendering is unavailable/);
+  assert.match(skill, /After successful inspection, delete only the temporary files and directory/);
   assert.match(skill, /handle the reply before acknowledging it/);
   assert.match(metadata, /value: "tododdle"/);
   assert.match(metadata, /allow_implicit_invocation: true/);
