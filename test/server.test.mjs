@@ -32,6 +32,7 @@ test('discovers the bounded production tool surface', async () => {
   const resources = await client.listResourceTemplates()
   const names = result.tools.map(tool => tool.name)
   const listTicketsTool = result.tools.find(tool => tool.name === 'list_tickets')
+  const createLaneTool = result.tools.find(tool => tool.name === 'create_lane')
   const documentDownloadTool = result.tools.find(tool => tool.name === 'get_document_download_url')
   const uploadDocumentTool = result.tools.find(tool => tool.name === 'upload_project_document')
   const attachFileTool = result.tools.find(tool => tool.name === 'attach_file_to_ticket')
@@ -97,6 +98,8 @@ test('discovers the bounded production tool surface', async () => {
   assert.equal(listTicketsTool?.inputSchema.properties?.page?.default, 1)
   assert.equal(listTicketsTool?.inputSchema.properties?.limit?.default, 50)
   assert.equal(listTicketsTool?.inputSchema.properties?.limit?.maximum, 100)
+  assert.equal(createLaneTool?.inputSchema.properties?.entryActions?.maxItems, 6)
+  assert.match(JSON.stringify(createLaneTool?.inputSchema.properties?.entryActions), /REQUEST_REVIEW/)
   assert.deepEqual(Object.keys(uploadDocumentTool?.inputSchema.properties || {}), [
     'projectId', 'filePath', 'sourceUrl', 'fileName', 'contentType', 'description', 'folderId',
     'idempotencyKey',
@@ -242,7 +245,8 @@ test('serializes project, plan, section, Note, and supporting tools', async () =
   try {
     const expectedUpdatedAt = '2026-07-29T12:00:00.000Z'
     await client.callTool({ name: 'create_board', arguments: { projectId: 'project-1', name: 'Delivery', idempotencyKey: 'plan-key-1' } })
-    await client.callTool({ name: 'create_lane', arguments: { projectId: 'project-1', planId: 'plan-1', name: 'Review', entryActions: [{ type: 'SET_STATUS', status: 'REVIEW' }, { type: 'SET_KIND', kind: 'FEATURE' }], idempotencyKey: 'section-key-1' } })
+    await client.callTool({ name: 'create_lane', arguments: { projectId: 'project-1', planId: 'plan-1', name: 'Review', entryActions: [{ type: 'SET_STATUS', status: 'REVIEW' }, { type: 'SET_KIND', kind: 'FEATURE' }, { type: 'REQUEST_REVIEW', reviewerIds: ['user-2', 'user-3'], instructions: 'Check the release.' }], idempotencyKey: 'section-key-1' } })
+    await client.callTool({ name: 'update_lane', arguments: { projectId: 'project-1', planId: 'plan-1', sectionId: 'section-1', expectedUpdatedAt, entryActions: [{ type: 'REQUEST_REVIEW', reviewerIds: ['user-2'] }] } })
     await client.callTool({ name: 'create_ticket', arguments: { projectId: 'project-1', planId: 'plan-1', sectionId: 'section-1', title: 'Feature work', kind: 'FEATURE', idempotencyKey: 'task-key-1' } })
     await client.callTool({ name: 'move_lane', arguments: { projectId: 'project-1', planId: 'plan-1', sectionId: 'section-1', position: 0, expectedUpdatedAt } })
     await client.callTool({ name: 'list_project_members', arguments: { projectId: 'project-1', page: 1, limit: 20 } })
@@ -251,13 +255,60 @@ test('serializes project, plan, section, Note, and supporting tools', async () =
 
     assert.deepEqual(calls, [
       { method: 'POST', path: '/api/external/projects/project-1/plans', body: { name: 'Delivery' }, idempotencyKey: 'plan-key-1' },
-      { method: 'POST', path: '/api/external/projects/project-1/plans/plan-1/sections', body: { name: 'Review', entryActions: [{ type: 'SET_STATUS', status: 'REVIEW' }, { type: 'SET_KIND', kind: 'FEATURE' }] }, idempotencyKey: 'section-key-1' },
+      { method: 'POST', path: '/api/external/projects/project-1/plans/plan-1/sections', body: { name: 'Review', entryActions: [{ type: 'SET_STATUS', status: 'REVIEW' }, { type: 'SET_KIND', kind: 'FEATURE' }, { type: 'REQUEST_REVIEW', reviewerIds: ['user-2', 'user-3'], instructions: 'Check the release.' }] }, idempotencyKey: 'section-key-1' },
+      { method: 'PUT', path: '/api/external/projects/project-1/plans/plan-1/sections/section-1', body: { expectedUpdatedAt, entryActions: [{ type: 'REQUEST_REVIEW', reviewerIds: ['user-2'] }] } },
       { method: 'POST', path: '/api/external/tasks', body: { projectId: 'project-1', planId: 'plan-1', sectionId: 'section-1', title: 'Feature work', kind: 'FEATURE' }, idempotencyKey: 'task-key-1' },
       { method: 'PUT', path: '/api/external/projects/project-1/plans/plan-1/sections/section-1', body: { position: 0, expectedUpdatedAt } },
       { method: 'GET', path: '/api/external/projects/project-1/members', query: { page: 1, limit: 20 } },
       { method: 'DELETE', path: '/api/external/notes/note-1', body: { expectedUpdatedAt } },
       { method: 'GET', path: '/api/external/projects/project-1/artifacts/artifact-1/revisions', query: undefined },
     ])
+  } finally {
+    await client.close()
+    await server.close()
+  }
+})
+
+test('rejects unsafe review-request lane actions before calling the API', async () => {
+  let apiCalled = false
+  const validationApi = {
+    ...api,
+    post: async () => {
+      apiCalled = true
+      return { entity: {} }
+    },
+  }
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer(validationApi)
+  const client = new Client({ name: 'lane-review-validation-test', version: '1.0.0' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+
+  try {
+    const duplicateReviewers = await client.callTool({
+      name: 'create_lane',
+      arguments: {
+        projectId: 'project-1',
+        planId: 'plan-1',
+        name: 'Review',
+        entryActions: [{ type: 'REQUEST_REVIEW', reviewerIds: ['user-2', 'user-2'] }],
+      },
+    })
+    const reviewAndArchive = await client.callTool({
+      name: 'create_lane',
+      arguments: {
+        projectId: 'project-1',
+        planId: 'plan-1',
+        name: 'Review',
+        entryActions: [
+          { type: 'REQUEST_REVIEW', reviewerIds: ['user-2'] },
+          { type: 'ARCHIVE_TASK' },
+        ],
+      },
+    })
+
+    assert.equal(duplicateReviewers.isError, true)
+    assert.equal(reviewAndArchive.isError, true)
+    assert.equal(apiCalled, false)
   } finally {
     await client.close()
     await server.close()

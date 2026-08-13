@@ -45,8 +45,39 @@ const sectionEntryActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('SET_PRIORITY'), priority: prioritySchema }),
   z.object({ type: z.literal('SET_KIND'), kind: taskKindSchema }),
   z.object({ type: z.literal('SET_ASSIGNEE'), assigneeId: z.string().min(1).nullable() }),
+  z.object({
+    type: z.literal('REQUEST_REVIEW'),
+    reviewerIds: z
+      .array(z.string().min(1))
+      .min(1)
+      .max(20)
+      .refine((ids) => new Set(ids).size === ids.length, 'Reviewers must be unique'),
+    instructions: z.string().trim().max(2000).optional(),
+  }),
   z.object({ type: z.literal('ARCHIVE_TASK') }),
 ]);
+const sectionEntryActionsSchema = z
+  .array(sectionEntryActionSchema)
+  .max(6)
+  .superRefine((actions, context) => {
+    const actionTypes = new Set<string>();
+    actions.forEach((action, index) => {
+      if (actionTypes.has(action.type)) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [index, 'type'],
+          message: `Only one ${action.type} action is allowed`,
+        });
+      }
+      actionTypes.add(action.type);
+    });
+    if (actionTypes.has('REQUEST_REVIEW') && actionTypes.has('ARCHIVE_TASK')) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'A lane cannot request review and archive the ticket at the same time',
+      });
+    }
+  });
 const artifactRelationTypeSchema = z.enum(['RELATED_TO', 'SUPERSEDES', 'IMPLEMENTS', 'SUPPORTS']);
 const expectedUpdatedAtSchema = z
   .string()
@@ -496,7 +527,7 @@ export function createToDoddleMcpServer(
           .string()
           .regex(/^#[0-9A-Fa-f]{6}$/)
           .optional(),
-        entryActions: z.array(sectionEntryActionSchema).max(5).optional(),
+        entryActions: sectionEntryActionsSchema.optional(),
         idempotencyKey: z.string().min(8).optional(),
       }),
       annotations: {
@@ -531,7 +562,7 @@ export function createToDoddleMcpServer(
           .string()
           .regex(/^#[0-9A-Fa-f]{6}$/)
           .optional(),
-        entryActions: z.array(sectionEntryActionSchema).max(5).optional(),
+        entryActions: sectionEntryActionsSchema.optional(),
       }),
       annotations: {
         readOnlyHint: false,

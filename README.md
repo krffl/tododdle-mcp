@@ -162,7 +162,7 @@ Ticket attributes hold small typed integration and handoff facts. Read them befo
 
 Durable agent-to-human handoffs use typed `HANDOFF` comments with a concise outcome, verification and immutable evidence, and any remaining risk or next action. External mutations return a stable ToDoddle `uiUrl`; expiring asset token URLs must not be copied into comments. A continuing run reads and handles its Agent Connection inbox reply before acknowledgement, then reloads the linked record.
 
-Ticket create/update accepts the stable kind values `TASK`, `FEATURE`, `EPIC`, `BUG`, `RESEARCH`, and `ACTION_ITEM`. Lane create/update supports `SET_KIND` alongside status, priority, assignee, and archive entry actions.
+Ticket create/update accepts the stable kind values `TASK`, `FEATURE`, `EPIC`, `BUG`, `RESEARCH`, and `ACTION_ITEM`. Lane create/update supports `SET_KIND` alongside status, priority, assignee, review-request, and archive entry actions. `REQUEST_REVIEW` accepts one to 20 unique reviewer IDs and optional instructions. It cannot share a lane with `ARCHIVE_TASK`.
 
 ### Manage Project Structure
 
