@@ -36,6 +36,7 @@ test('discovers the bounded production tool surface', async () => {
   const documentDownloadTool = result.tools.find(tool => tool.name === 'get_document_download_url')
   const uploadDocumentTool = result.tools.find(tool => tool.name === 'upload_project_document')
   const attachFileTool = result.tools.find(tool => tool.name === 'attach_file_to_ticket')
+  const getNoteTool = result.tools.find(tool => tool.name === 'get_note')
   const packageJson = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
 
   assert.equal(client.getServerVersion()?.version, packageJson.version)
@@ -93,6 +94,10 @@ test('discovers the bounded production tool surface', async () => {
   assert.deepEqual(Object.keys(documentDownloadTool?.inputSchema.properties || {}), [
     'projectId',
     'documentId',
+  ])
+  assert.deepEqual(Object.keys(getNoteTool?.inputSchema.properties || {}), [
+    'projectId',
+    'noteId',
   ])
   assert.equal(listTicketsTool?.inputSchema.properties?.includeArchived?.default, false)
   assert.equal(listTicketsTool?.inputSchema.properties?.page?.default, 1)
@@ -250,7 +255,11 @@ test('serializes project, plan, section, Note, and supporting tools', async () =
     await client.callTool({ name: 'create_ticket', arguments: { projectId: 'project-1', planId: 'plan-1', sectionId: 'section-1', title: 'Feature work', kind: 'FEATURE', idempotencyKey: 'task-key-1' } })
     await client.callTool({ name: 'move_lane', arguments: { projectId: 'project-1', planId: 'plan-1', sectionId: 'section-1', position: 0, expectedUpdatedAt } })
     await client.callTool({ name: 'list_project_members', arguments: { projectId: 'project-1', page: 1, limit: 20 } })
-    await client.callTool({ name: 'archive_note', arguments: { noteId: 'note-1', expectedUpdatedAt } })
+    await client.callTool({ name: 'list_notes', arguments: { projectId: 'project-1', parentId: 'note-parent', page: 2, limit: 10 } })
+    await client.callTool({ name: 'get_note', arguments: { projectId: 'project-1', noteId: 'note-1' } })
+    await client.callTool({ name: 'create_note', arguments: { projectId: 'project-1', title: 'Runbook', content: 'Project steps.', idempotencyKey: 'note-key-1' } })
+    await client.callTool({ name: 'update_note', arguments: { projectId: 'project-1', noteId: 'note-1', expectedUpdatedAt, title: 'Updated runbook' } })
+    await client.callTool({ name: 'archive_note', arguments: { projectId: 'project-1', noteId: 'note-1', expectedUpdatedAt } })
     await client.callTool({ name: 'list_artifact_revisions', arguments: { projectId: 'project-1', artifactId: 'artifact-1' } })
 
     assert.deepEqual(calls, [
@@ -260,7 +269,11 @@ test('serializes project, plan, section, Note, and supporting tools', async () =
       { method: 'POST', path: '/api/external/tasks', body: { projectId: 'project-1', planId: 'plan-1', sectionId: 'section-1', title: 'Feature work', kind: 'FEATURE' }, idempotencyKey: 'task-key-1' },
       { method: 'PUT', path: '/api/external/projects/project-1/plans/plan-1/sections/section-1', body: { position: 0, expectedUpdatedAt } },
       { method: 'GET', path: '/api/external/projects/project-1/members', query: { page: 1, limit: 20 } },
-      { method: 'DELETE', path: '/api/external/notes/note-1', body: { expectedUpdatedAt } },
+      { method: 'GET', path: '/api/external/notes', query: { projectId: 'project-1', page: 2, limit: 10, parentId: 'note-parent' } },
+      { method: 'GET', path: '/api/external/notes/note-1', query: { projectId: 'project-1' } },
+      { method: 'POST', path: '/api/external/notes', body: { projectId: 'project-1', title: 'Runbook', content: 'Project steps.' }, idempotencyKey: 'note-key-1' },
+      { method: 'PUT', path: '/api/external/notes/note-1', body: { projectId: 'project-1', expectedUpdatedAt, title: 'Updated runbook' } },
+      { method: 'DELETE', path: '/api/external/notes/note-1', body: { projectId: 'project-1', expectedUpdatedAt } },
       { method: 'GET', path: '/api/external/projects/project-1/artifacts/artifact-1/revisions', query: undefined },
     ])
   } finally {

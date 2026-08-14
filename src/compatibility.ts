@@ -1,4 +1,4 @@
-export const MCP_PACKAGE_VERSION = '3.1.1';
+export const MCP_PACKAGE_VERSION = '3.1.2';
 export const MCP_COMPATIBILITY_LEVEL = 3;
 export const MCP_VERSION_HEADER = 'x-tododdle-mcp-version';
 export const MCP_COMPATIBILITY_HEADER = 'x-tododdle-mcp-compatibility';

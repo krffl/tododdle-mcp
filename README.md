@@ -186,7 +186,7 @@ Archive operations are destructive and require client approval. Permanent deleti
 - `update_note`
 - `archive_note`
 
-Notes are organization-scoped and unavailable to project-only connections.
+Omit `projectId` to work with workspace Notes. Supply `projectId` to work with Notes for that project. Project Notes require both an Agent Connection project grant and the current user access to the project. Parent Notes must use the same workspace or project scope.
 
 ### Track Time
 

@@ -714,8 +714,9 @@ export function createToDoddleMcpServer(
   server.registerTool(
     'list_notes',
     {
-      description: 'List bounded organization Notes. Project-only connections cannot access Notes.',
+      description: 'List bounded workspace or project Notes. Omit projectId for workspace Notes.',
       inputSchema: z.object({
+        projectId: z.string().min(1).optional(),
         search: z.string().optional(),
         parentId: z.string().nullable().optional(),
         page: z.number().int().min(1).default(1),
@@ -728,9 +729,10 @@ export function createToDoddleMcpServer(
         openWorldHint: false,
       },
     },
-    async ({ parentId, ...query }) =>
+    async ({ projectId, parentId, ...query }) =>
       toolResult(
         await api.get('/api/external/notes', {
+          projectId,
           ...query,
           parentId: parentId ?? undefined,
         })
@@ -740,8 +742,11 @@ export function createToDoddleMcpServer(
   server.registerTool(
     'get_note',
     {
-      description: 'Get one organization Note.',
-      inputSchema: z.object({ noteId: z.string().min(1) }),
+      description: 'Get one workspace or project Note. Supply projectId for a project Note.',
+      inputSchema: z.object({
+        projectId: z.string().min(1).optional(),
+        noteId: z.string().min(1),
+      }),
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -749,14 +754,16 @@ export function createToDoddleMcpServer(
         openWorldHint: false,
       },
     },
-    async ({ noteId }) => toolResult(await api.get(`/api/external/notes/${noteId}`))
+    async ({ projectId, noteId }) =>
+      toolResult(await api.get(`/api/external/notes/${noteId}`, { projectId }))
   );
 
   server.registerTool(
     'create_note',
     {
-      description: 'Create an organization Note.',
+      description: 'Create a workspace or project Note. Supply projectId for a project Note.',
       inputSchema: z.object({
+        projectId: z.string().min(1).optional(),
         title: z.string().min(1).max(500),
         content: z.string().max(200_000).default(''),
         parentId: z.string().nullable().optional(),
@@ -776,8 +783,9 @@ export function createToDoddleMcpServer(
   server.registerTool(
     'update_note',
     {
-      description: 'Update an organization Note using optimistic concurrency.',
+      description: 'Update a workspace or project Note using optimistic concurrency.',
       inputSchema: z.object({
+        projectId: z.string().min(1).optional(),
         noteId: z.string().min(1),
         expectedUpdatedAt: expectedUpdatedAtSchema,
         title: z.string().min(1).max(500).optional(),
@@ -797,8 +805,9 @@ export function createToDoddleMcpServer(
   server.registerTool(
     'archive_note',
     {
-      description: 'Archive an organization Note. Requires explicit approval.',
+      description: 'Archive a workspace or project Note. Requires explicit approval.',
       inputSchema: z.object({
+        projectId: z.string().min(1).optional(),
         noteId: z.string().min(1),
         expectedUpdatedAt: expectedUpdatedAtSchema,
       }),
@@ -809,8 +818,10 @@ export function createToDoddleMcpServer(
         openWorldHint: false,
       },
     },
-    async ({ noteId, expectedUpdatedAt }) =>
-      toolResult(await api.delete(`/api/external/notes/${noteId}`, { expectedUpdatedAt }))
+    async ({ projectId, noteId, expectedUpdatedAt }) =>
+      toolResult(
+        await api.delete(`/api/external/notes/${noteId}`, { projectId, expectedUpdatedAt })
+      )
   );
 
   server.registerTool(
