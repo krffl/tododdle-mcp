@@ -1,6 +1,6 @@
 ---
 name: tododdle-workflow
-description: Use ToDoddle as the work ledger for project boards, lanes, tickets, implementation, status updates, blockers, comments, and time tracking. Trigger when the user asks to inspect, plan, start, update, complete, or report on work managed in ToDoddle, or when repository instructions require ToDoddle updates. Do not trigger for casual discussion that does not change or review tracked work.
+description: Use ToDoddle as the work ledger for project boards, lanes, tickets, implementation, status updates, blockers, comments, time tracking, and safe recurring checks. Trigger when the user asks to inspect, plan, start, update, complete, report on, or schedule work managed in ToDoddle, or when repository instructions require ToDoddle updates. Do not trigger for casual discussion that does not change or review tracked work.
 ---
 
 # ToDoddle Workflow
@@ -45,6 +45,16 @@ Keep list requests bounded and paginate rather than requesting an entire organiz
 - Read Agent Connection replies with `get_agent_inbox` when continuing prior agent work; acknowledge a reply only after handling it.
 
 Do not create bookkeeping churn for tiny exploratory actions. Prefer one useful checkpoint over a stream of narration.
+
+## Schedule Recurring Checks
+
+When a user asks to schedule ToDoddle work, read [scheduled-workflows.md](references/scheduled-workflows.md). Use its ready-to-create recipes and safety rules.
+
+- Create a schedule only after the user chooses a recipe, cadence, timezone, project scope, and allowed mutation level. Installing the plugin must never create or enable a schedule.
+- Test the complete prompt in a normal chat before scheduling it. Review the first runs and narrow the prompt if it reads or changes too much.
+- Default to read and report. Permit comments, ticket creation, or status changes only when the user explicitly selects that mutation level.
+- Keep destructive actions, access changes, billing changes, secrets, and completion without verification outside scheduled work.
+- Do not use a user-side scheduled task for required server operations such as notification delivery, billing reconciliation, webhook retries, or backups. Use the application's durable queue or cron system for those jobs.
 
 ## Upload Files Safely
 

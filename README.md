@@ -87,6 +87,14 @@ Restart Codex, open the Plugins Directory, select **ToDoddle**, and install the 
 
 Installing the plugin does not create or expand ToDoddle credentials, scopes, or project grants. The skill declares the separately configured `tododdle` MCP server as a dependency.
 
+### Scheduled ToDoddle Workflows
+
+The distributed skill includes opt-in recipes for a morning control tower, ticket review sweep, weekly backlog hygiene, roadmap summary, Agent Connection inbox follow-up, and local release verification. Each recipe defines a suggested cadence, required scopes, mutation level, prompt, duplicate controls, and approval boundaries.
+
+Installing the plugin never creates a schedule. Ask Codex to create a named recipe, then confirm the timezone, project, cadence, and allowed mutation level. Test the prompt in a normal chat and review the first runs. Scheduled tasks can use the ToDoddle plugin and its connected MCP tools. Desktop tasks that need local files also require the project to remain available and the app to be running. See the [scheduled tasks documentation](https://learn.chatgpt.com/docs/automations).
+
+Use scheduled ToDoddle workflows for user-level checks and reports. Keep required service operations, such as notification delivery, billing reconciliation, webhook retries, and backups, in ToDoddle's server-owned queue or cron system.
+
 ### Bounded Project Context
 
 For substantial planning or implementation, load project context in a small, predictable sequence:
