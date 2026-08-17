@@ -14,7 +14,8 @@ Reuse project, board, lane, ticket, and artifact IDs previously returned by ToDo
 Branch by request type:
 
 - **Unknown or ambiguous project:** Use `list_projects` once. Skip it when the project is already unambiguous.
-- **Simple lookup:** Use the narrowest read tool. Prefer `list_tickets` with known project, board, or lane filters for ticket lists; use `get_ticket` for one ticket and `get_work_queue` for operational, overdue, or unassigned work. Do not load the brief or full project context.
+- **Simple lookup:** Use the narrowest read tool. Prefer `list_tickets` with known project, board, or lane filters for ticket lists; use `get_ticket` for one ticket, `get_tickets` for 1–20 known ticket IDs, and `get_work_queue` for operational, overdue, or unassigned work. Do not load the brief or full project context.
+- **Batch ticket reads:** Use `get_tickets` after a bounded list when you need details for several selected tickets. Keep `commentMode` as `none` unless the task needs updates. Use `latest_update` for the latest handoff or status update. Use `all` only when full comment history is necessary. Do not hydrate every ticket from a broad list without a clear need.
 - **Substantial planning or implementation:** Read `get_project_brief` and `get_project_context` once per continuous workstream, then find the existing ticket and supporting artifacts. Reuse that context until the project changes or relevant decisions may have changed.
 - **Known-item mutation:** Refresh only the affected resource when current state or `updatedAt` is required, then perform the requested mutation. Do not reload unrelated hierarchy or project context.
 - **Continuation:** Reuse verified IDs and stable context retained in the conversation or compaction summary. Refresh volatile fields such as status, comments, blockers, and `updatedAt` only when their current value matters.

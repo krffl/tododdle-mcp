@@ -31,7 +31,12 @@ function exampleValue(schema, key) {
   }
   if (schema.type === 'integer' || schema.type === 'number') return schema.minimum ?? 0
   if (schema.type === 'boolean') return false
-  if (schema.type === 'array') return []
+  if (schema.type === 'array') {
+    return Array.from(
+      { length: schema.minItems ?? 0 },
+      () => exampleValue(schema.items, key),
+    )
+  }
   if (schema.type === 'object' || schema.properties) {
     return Object.fromEntries(
       (schema.required || []).map(property => [

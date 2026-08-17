@@ -32,6 +32,7 @@ test('discovers the bounded production tool surface', async () => {
   const resources = await client.listResourceTemplates()
   const names = result.tools.map(tool => tool.name)
   const listTicketsTool = result.tools.find(tool => tool.name === 'list_tickets')
+  const getTicketsTool = result.tools.find(tool => tool.name === 'get_tickets')
   const createLaneTool = result.tools.find(tool => tool.name === 'create_lane')
   const documentDownloadTool = result.tools.find(tool => tool.name === 'get_document_download_url')
   const uploadDocumentTool = result.tools.find(tool => tool.name === 'upload_project_document')
@@ -49,6 +50,7 @@ test('discovers the bounded production tool surface', async () => {
   assert.equal(names.includes('get_active_time_entries'), true)
   assert.equal(names.includes('get_focus_list'), true)
   assert.equal(names.includes('list_tickets'), true)
+  assert.equal(names.includes('get_tickets'), true)
   assert.equal(names.includes('list_ticket_attributes'), true)
   assert.equal(names.includes('set_ticket_attribute'), true)
   assert.equal(names.includes('delete_ticket_attribute'), true)
@@ -82,6 +84,12 @@ test('discovers the bounded production tool surface', async () => {
       openWorldHint: false,
     }
   )
+  assert.deepEqual(getTicketsTool?.annotations, {
+    readOnlyHint: true,
+    destructiveHint: false,
+    idempotentHint: true,
+    openWorldHint: false,
+  })
   assert.deepEqual(
     documentDownloadTool?.annotations,
     {
@@ -380,6 +388,42 @@ test('lists tasks with bounded hierarchy and task filters', async () => {
         query: { includeArchived: false, page: 1, limit: 50 },
       },
     ])
+  } finally {
+    await client.close()
+    await server.close()
+  }
+})
+
+test('batch reads known tickets with bounded comment detail', async () => {
+  const calls = []
+  const taskApi = {
+    ...api,
+    post: async (path, body) => {
+      calls.push({ path, body })
+      return { tasks: body.taskIds.map(id => ({ id })) }
+    },
+  }
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer(taskApi)
+  const client = new Client({ name: 'task-batch-test', version: '1.0.0' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+
+  try {
+    await client.callTool({
+      name: 'get_tickets',
+      arguments: { taskIds: ['task-2', 'task-1', 'task-2'], commentMode: 'latest_update' },
+    })
+    assert.deepEqual(calls, [{
+      path: '/api/external/tasks/batch',
+      body: { taskIds: ['task-2', 'task-1', 'task-2'], commentMode: 'latest_update' },
+    }])
+
+    const oversized = await client.callTool({
+      name: 'get_tickets',
+      arguments: { taskIds: Array.from({ length: 21 }, (_, index) => `task-${index}`) },
+    })
+    assert.equal(oversized.isError, true)
+    assert.equal(calls.length, 1)
   } finally {
     await client.close()
     await server.close()

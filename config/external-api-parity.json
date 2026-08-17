@@ -47,6 +47,7 @@
     "remove_ticket_from_focus": ["DELETE /api/external/focus/[taskId]"],
     "list_tickets": ["GET /api/external/tasks"],
     "get_ticket": ["GET /api/external/tasks/[taskId]"],
+    "get_tickets": ["POST /api/external/tasks/batch"],
     "list_ticket_attributes": ["GET /api/external/tasks/[taskId]/attributes"],
     "set_ticket_attribute": ["PUT /api/external/tasks/[taskId]/attributes"],
     "delete_ticket_attribute": ["DELETE /api/external/tasks/[taskId]/attributes"],

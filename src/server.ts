@@ -1063,6 +1063,25 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
+    'get_tickets',
+    {
+      description:
+        'Get 1 to 20 known tickets in one ordered read. Comment detail is excluded by default and must be requested explicitly.',
+      inputSchema: z.object({
+        taskIds: z.array(z.string().min(1)).min(1).max(20),
+        commentMode: z.enum(['none', 'latest_update', 'all']).default('none'),
+      }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async (body) => toolResult(await api.post('/api/external/tasks/batch', body))
+  );
+
+  server.registerTool(
     'list_ticket_attributes',
     {
       description:
