@@ -153,6 +153,24 @@ const uploadInputBaseSchema = z.object({
 // fields. prepareUploadSource performs the cross-field exactly-one validation.
 const uploadInputSchema = uploadInputBaseSchema;
 const taskUploadInputSchema = uploadInputBaseSchema.extend({ taskId: z.string().min(1) });
+const beginUploadInputSchema = z.object({
+  projectId: z.string().min(1),
+  fileName: z.string().min(1).max(255),
+  fileSize: z.number().int().positive(),
+  contentType: z.string().min(1).max(255),
+  description: z.string().max(5000).optional(),
+  folderId: z.string().min(1).optional(),
+  taskId: z.string().min(1).optional(),
+  idempotencyKey: z.string().min(8),
+});
+const completeUploadInputSchema = z.object({
+  projectId: z.string().min(1),
+  documentId: z.string().min(1),
+  taskId: z.string().min(1).optional(),
+  success: z.boolean().default(true),
+  error: z.string().max(1000).optional(),
+  idempotencyKey: z.string().min(8),
+});
 
 async function uploadDocument(
   api: ToDoddleApi,
@@ -838,6 +856,59 @@ export function createToDoddleMcpServer(
     },
     async ({ projectId }) =>
       toolResult(await api.get(`/api/external/projects/${projectId}/context`))
+  );
+
+  server.registerTool(
+    'begin_upload',
+    {
+      description:
+        'Create a short-lived direct-to-storage upload session. The caller uploads the file bytes to the returned URL without sending them through MCP or ToDoddle.',
+      inputSchema: beginUploadInputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    async ({ idempotencyKey, taskId, ...input }) =>
+      toolResult(
+        await api.post(
+          `/api/external/projects/${input.projectId}/documents/upload-sessions`,
+          {
+            fileName: input.fileName,
+            fileSize: input.fileSize,
+            contentType: input.contentType,
+            description: input.description,
+            folderId: input.folderId,
+            creationSource: taskId ? 'TASK_ATTACHMENT' : 'UPLOAD',
+          },
+          idempotencyKey
+        )
+      )
+  );
+
+  server.registerTool(
+    'complete_upload',
+    {
+      description:
+        'Verify and complete a direct-to-storage upload, or cancel a failed session. Supply taskId to attach the ready document to a ticket.',
+      inputSchema: completeUploadInputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, documentId, idempotencyKey, ...body }) =>
+      toolResult(
+        await api.post(
+          `/api/external/projects/${projectId}/documents/${documentId}/finalize`,
+          body,
+          idempotencyKey
+        )
+      )
   );
 
   server.registerTool(

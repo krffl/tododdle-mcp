@@ -60,6 +60,9 @@ When a user asks to schedule ToDoddle work, read [scheduled-workflows.md](refere
 ## Upload Files Safely
 
 - Use `upload_project_document` or `attach_file_to_ticket` for approved files.
+- For a remote hosted connection, use `begin_upload`, upload the bytes from the user's device directly to the returned signed URL with the returned headers, and then use `complete_upload`. Use a new idempotency key for each MCP call.
+- Never print, log, or persist the signed upload URL. The hosted gateway must not receive or stage the file bytes.
+- If the client cannot send the direct HTTPS upload, report that remote attachment upload is unavailable. Do not encode the file into MCP arguments.
 - For a pasted or clipboard image, select a configured `TODODDLE_UPLOAD_ROOTS` directory and create a private temporary directory inside it with `mktemp -d`. Save or copy the image attachment into that directory, preserve a suitable image extension, and upload the temporary file path. Do not alter the original clipboard attachment.
 - If a source file is outside `TODODDLE_UPLOAD_ROOTS`, copy it to a temporary staging file inside the dedicated ToDoddle upload directory. Do not move or alter the original.
 - After the upload tool confirms success, delete only the temporary staging file that the agent created. Remove an empty staging directory when it was also created for that upload.

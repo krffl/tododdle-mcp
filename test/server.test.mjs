@@ -37,6 +37,8 @@ test('discovers the bounded production tool surface', async () => {
   const documentDownloadTool = result.tools.find(tool => tool.name === 'get_document_download_url')
   const uploadDocumentTool = result.tools.find(tool => tool.name === 'upload_project_document')
   const attachFileTool = result.tools.find(tool => tool.name === 'attach_file_to_ticket')
+  const beginUploadTool = result.tools.find(tool => tool.name === 'begin_upload')
+  const completeUploadTool = result.tools.find(tool => tool.name === 'complete_upload')
   const getNoteTool = result.tools.find(tool => tool.name === 'get_note')
   const packageJson = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
 
@@ -51,6 +53,8 @@ test('discovers the bounded production tool surface', async () => {
   assert.equal(names.includes('get_focus_list'), true)
   assert.equal(names.includes('list_tickets'), true)
   assert.equal(names.includes('get_tickets'), true)
+  assert.equal(names.includes('begin_upload'), true)
+  assert.equal(names.includes('complete_upload'), true)
   assert.equal(names.includes('list_ticket_attributes'), true)
   assert.equal(names.includes('set_ticket_attribute'), true)
   assert.equal(names.includes('delete_ticket_attribute'), true)
@@ -75,6 +79,24 @@ test('discovers the bounded production tool surface', async () => {
   assert.equal(result.tools.find(tool => tool.name === 'restore_project')?.annotations?.destructiveHint, false)
   assert.equal(result.tools.find(tool => tool.name === 'create_lane')?.annotations?.idempotentHint, false)
   assert.equal(result.tools.find(tool => tool.name === 'remove_ticket_from_focus')?.annotations?.destructiveHint, true)
+  assert.deepEqual(
+    beginUploadTool?.annotations,
+    {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    }
+  )
+  assert.deepEqual(
+    completeUploadTool?.annotations,
+    {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    }
+  )
   assert.deepEqual(
     listTicketsTool?.annotations,
     {
@@ -728,5 +750,69 @@ test('uploads a local file and attaches it to a task through the hosted API', as
     await client.close()
     await server.close()
     await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('creates and completes a direct upload without handling file bytes', async () => {
+  const calls = []
+  const directUploadApi = {
+    ...api,
+    post: async (path, body, idempotencyKey) => {
+      calls.push({ path, body, idempotencyKey })
+      return path.endsWith('/upload-sessions')
+        ? { session: { documentId: 'document-1', uploadUrl: 'https://storage.example/signed' } }
+        : { entity: { document: { id: 'document-1' } } }
+    },
+  }
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer(directUploadApi)
+  const client = new Client({ name: 'direct-upload-test', version: '1.0.0' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+
+  try {
+    await client.callTool({
+      name: 'begin_upload',
+      arguments: {
+        projectId: 'project-1',
+        taskId: 'task-1',
+        fileName: 'evidence.txt',
+        fileSize: 17,
+        contentType: 'text/plain',
+        idempotencyKey: 'begin-upload-1',
+      },
+    })
+    await client.callTool({
+      name: 'complete_upload',
+      arguments: {
+        projectId: 'project-1',
+        documentId: 'document-1',
+        taskId: 'task-1',
+        success: true,
+        idempotencyKey: 'complete-upload-1',
+      },
+    })
+
+    assert.deepEqual(calls, [
+      {
+        path: '/api/external/projects/project-1/documents/upload-sessions',
+        body: {
+          fileName: 'evidence.txt',
+          fileSize: 17,
+          contentType: 'text/plain',
+          description: undefined,
+          folderId: undefined,
+          creationSource: 'TASK_ATTACHMENT',
+        },
+        idempotencyKey: 'begin-upload-1',
+      },
+      {
+        path: '/api/external/projects/project-1/documents/document-1/finalize',
+        body: { taskId: 'task-1', success: true },
+        idempotencyKey: 'complete-upload-1',
+      },
+    ])
+  } finally {
+    await client.close()
+    await server.close()
   }
 })

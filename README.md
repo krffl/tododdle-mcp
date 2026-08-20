@@ -216,12 +216,16 @@ Omit `projectId` to work with workspace Notes. Supply `projectId` to work with N
 
 - `upload_project_document`
 - `attach_file_to_ticket`
+- `begin_upload`
+- `complete_upload`
 
 Each tool accepts either an approved local `filePath` or an HTTPS `sourceUrl`. Local paths are disabled until `TODODDLE_UPLOAD_ROOTS` is configured. Files stream directly from this local MCP process to ToDoddle's short-lived Bunny upload URL; file bodies are never placed in MCP JSON messages.
 
 If an agent copies a source file into a dedicated ToDoddle upload directory only to satisfy the local path restriction, it should remove that temporary copy after the tool confirms success. It should retain the copy after a failed or uncertain upload so the upload can be retried. It must never remove the original source or a pre-existing file. Temporary files that the MCP creates for HTTPS sources are removed automatically.
 
 For a pasted or clipboard image, select one configured upload root and create a private temporary directory inside it with `mktemp -d`. Save or copy the image attachment there with a suitable image extension, upload that temporary file, and remove the agent-created file and directory only after confirmed success. Never alter the original clipboard attachment.
+
+Remote clients use `begin_upload` and `complete_upload`. Call `begin_upload` with file metadata and an idempotency key. Upload the file bytes from the user's device directly to the returned short-lived URL with the returned headers. Then call `complete_upload` with the document ID and a new idempotency key. Do not print, log, or store the signed URL. A client that cannot send the direct HTTPS upload cannot use remote attachments. The hosted gateway and Vercel never receive or stage the file bytes.
 
 Use `get_document_download_url` with a `projectId` and `documentId` returned by `list_project_documents` to obtain a five-minute tokenized URL. The URL grants access only to that ready document and should not be stored in comments or other durable project context. Video documents return a protected stream URL when the workspace subscription permits playback.
 

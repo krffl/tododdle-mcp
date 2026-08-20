@@ -24,6 +24,8 @@
     "list_project_members": ["GET /api/external/projects/[projectId]/members"],
     "list_project_documents": ["GET /api/external/projects/[projectId]/documents"],
     "get_document_download_url": ["POST /api/external/projects/[projectId]/documents/[documentId]/download-url"],
+    "begin_upload": ["POST /api/external/projects/[projectId]/documents/upload-sessions"],
+    "complete_upload": ["POST /api/external/projects/[projectId]/documents/[documentId]/finalize"],
     "upload_project_document": [
       "POST /api/external/projects/[projectId]/documents/upload-sessions",
       "POST /api/external/projects/[projectId]/documents/[documentId]/finalize"

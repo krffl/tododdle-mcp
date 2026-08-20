@@ -74,6 +74,10 @@ test('workflow skill declares the MCP dependency and core safety rules', async (
   assert.match(skill, /preserve a suitable image extension/);
   assert.match(skill, /Do not alter the original clipboard attachment/);
   assert.match(skill, /Never delete the user's original source file/);
+  assert.match(skill, /For a remote hosted connection, use `begin_upload`/);
+  assert.match(skill, /upload the bytes from the user's device directly/);
+  assert.match(skill, /The hosted gateway must not receive or stage the file bytes/);
+  assert.match(skill, /Do not encode the file into MCP arguments/);
   assert.match(skill, /Request a fresh tokenized URL with `get_document_download_url`/);
   assert.match(skill, /private temporary directory with `mktemp -d`/);
   assert.match(skill, /without printing, logging, or persisting the URL/);

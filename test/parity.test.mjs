@@ -124,6 +124,19 @@ test('every discovered tool validates and serializes only to documented External
         argumentsValue.filePath = filePath
         if (tool.name === 'attach_file_to_ticket') argumentsValue.taskId = 'taskId-value'
       }
+      if (tool.name === 'begin_upload') {
+        argumentsValue.projectId = 'projectId-value'
+        argumentsValue.fileName = 'evidence.txt'
+        argumentsValue.fileSize = 15
+        argumentsValue.contentType = 'text/plain'
+        argumentsValue.idempotencyKey = 'begin-upload-value'
+      }
+      if (tool.name === 'complete_upload') {
+        argumentsValue.projectId = 'projectId-value'
+        argumentsValue.documentId = 'documentId-value'
+        argumentsValue.success = true
+        argumentsValue.idempotencyKey = 'complete-upload-value'
+      }
 
       const result = await client.callTool({ name: tool.name, arguments: argumentsValue })
       assert.equal(result.isError, undefined, `${tool.name} rejected generated valid input`)
