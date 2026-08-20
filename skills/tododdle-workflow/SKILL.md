@@ -43,7 +43,7 @@ Keep list requests bounded and paginate rather than requesting an entire organiz
 - Add comments only for durable information: decisions, meaningful progress, validation results, blockers, or handoff context.
 - Use `preview_ticket_move` before moving a ticket between boards. Clear parent or active-child links reported by the preview, and call out any destination automation that changes or archives the ticket.
 - When blocked, set the blocker relationship when a concrete blocking ticket exists and explain the impact in one concise comment.
-- Read Agent Connection replies with `get_agent_inbox` when continuing prior agent work; acknowledge a reply only after handling it.
+- Before selecting new work or answering an operational "what's next" request, read `get_agent_inbox`. Handle unread replies, mentions, assignments, and handoffs before unrelated queue work. Acknowledge an inbox item only after handling it.
 
 Do not create bookkeeping churn for tiny exploratory actions. Prefer one useful checkpoint over a stream of narration.
 
