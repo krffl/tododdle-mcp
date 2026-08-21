@@ -100,7 +100,9 @@ const ticketAttributeValueSchema = z.union([
 
 function toolResult(value: Record<string, unknown>) {
   return {
-    content: [{ type: 'text' as const, text: JSON.stringify(value, null, 2) }],
+    // Keep text content for clients that do not consume structuredContent, but
+    // avoid pretty-print whitespace because both forms count toward payload size.
+    content: [{ type: 'text' as const, text: JSON.stringify(value) }],
     structuredContent: value,
   };
 }
@@ -947,7 +949,7 @@ export function createToDoddleMcpServer(
     'get_work_queue',
     {
       description:
-        'Get active, overdue, or unassigned work with optional project, status, and search filters.',
+        'Get active, overdue, or unassigned work with optional filters. Summary detail is compact; use full only when the complete list payload is required.',
       inputSchema: z.object({
         view: z.enum(['tasks', 'overdue', 'unassigned']).default('tasks'),
         projectId: z.string().optional(),
@@ -955,6 +957,7 @@ export function createToDoddleMcpServer(
         search: z.string().optional(),
         limit: z.number().int().min(1).max(100).default(50),
         cursor: z.string().datetime({ offset: true }).optional(),
+        detail: z.enum(['summary', 'full']).default('summary'),
       }),
       annotations: {
         readOnlyHint: true,
@@ -1095,7 +1098,7 @@ export function createToDoddleMcpServer(
     'list_tickets',
     {
       description:
-        'List bounded tickets with optional project, board, lane, assignee, status, priority, search, and archive filters. The stable planId and sectionId fields identify the board and lane.',
+        'List bounded ticket summaries with optional project, board, lane, assignee, status, priority, search, and archive filters. Use get_tickets for selected full records, or set detail to full only when the complete list payload is required.',
       inputSchema: z.object({
         projectId: z.string().min(1).optional(),
         planId: z.string().min(1).optional(),
@@ -1107,6 +1110,7 @@ export function createToDoddleMcpServer(
         includeArchived: z.boolean().default(false),
         page: z.number().int().min(1).default(1),
         limit: z.number().int().min(1).max(100).default(50),
+        detail: z.enum(['summary', 'full']).default('summary'),
       }),
       annotations: {
         readOnlyHint: true,

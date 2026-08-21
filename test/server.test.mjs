@@ -52,6 +52,7 @@ test('discovers the bounded production tool surface', async () => {
   assert.equal(names.includes('get_active_time_entries'), true)
   assert.equal(names.includes('get_focus_list'), true)
   assert.equal(names.includes('list_tickets'), true)
+  assert.deepEqual(listTicketsTool?.inputSchema.properties?.detail?.default, 'summary')
   assert.equal(names.includes('get_tickets'), true)
   assert.equal(names.includes('begin_upload'), true)
   assert.equal(names.includes('complete_upload'), true)
@@ -402,14 +403,34 @@ test('lists tasks with bounded hierarchy and task filters', async () => {
           includeArchived: true,
           page: 2,
           limit: 25,
+          detail: 'summary',
         },
       },
       {
         method: 'GET',
         path: '/api/external/tasks',
-        query: { includeArchived: false, page: 1, limit: 50 },
+        query: { includeArchived: false, page: 1, limit: 50, detail: 'summary' },
       },
     ])
+  } finally {
+    await client.close()
+    await server.close()
+  }
+})
+
+test('keeps compact text fallback alongside structured tool output', async () => {
+  const value = { tasks: [{ id: 'task-1', title: 'Compact' }], pagination: { total: 1 } }
+  const compactApi = { ...api, get: async () => value }
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer(compactApi)
+  const client = new Client({ name: 'compact-output-test', version: '1.0.0' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+
+  try {
+    const result = await client.callTool({ name: 'list_tickets', arguments: {} })
+    assert.deepEqual(result.structuredContent, value)
+    assert.equal(result.content[0].text, JSON.stringify(value))
+    assert.equal(result.content[0].text.includes('\n'), false)
   } finally {
     await client.close()
     await server.close()
