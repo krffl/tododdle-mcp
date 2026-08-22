@@ -75,7 +75,7 @@ For every client, `npx` downloads the package to npm's cache. Cloning ToDoddle o
 
 ## Codex Workflow Guidance
 
-The MCP server provides capabilities; the optional `tododdle-workflow` skill provides a disciplined operating process for choosing and using them. It tells Codex to reuse verified project context, make the minimum targeted reads, load full context only for substantial work, keep status and blockers accurate, leave durable comments, verify before completion, and avoid inventing time.
+The MCP server provides capabilities; the optional `tododdle-workflow` skill provides a disciplined operating process for choosing and using them. Its small entry file contains the common routing and safety rules. Direct reference links load file handling, project execution, time tracking, and scheduled workflow details only when needed. This keeps the normal prompt smaller without hiding required rules.
 
 The npm package includes a Codex plugin containing this skill. Configure the MCP server first using the Codex instructions above, then add the ToDoddle plugin marketplace:
 

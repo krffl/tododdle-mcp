@@ -5,106 +5,58 @@ description: Use ToDoddle as the work ledger for project boards, lanes, tickets,
 
 # ToDoddle Workflow
 
-Use the `tododdle` MCP tools for live project state. Make the fewest calls needed for the request.
+Use the `tododdle` MCP tools for live project state. Make the fewest calls needed.
 
-## Choose the Minimum Workflow
+## Route the Request
 
-Reuse project, board, lane, ticket, and artifact IDs previously returned by ToDoddle tools in the active conversation or its compaction summary. These are verified working context, not guesses. The API keeps the stable `planId`, `sectionId`, and `taskId` field names for board, lane, and ticket IDs. Do not rediscover stable IDs merely to confirm them. Never invent IDs, statuses, scopes, or relationships from general model memory.
+Reuse verified IDs from the current conversation or its compaction summary. The API keeps `planId`, `sectionId`, and `taskId` for board, lane, and ticket IDs. Never invent or rediscover a stable ID.
 
-Branch by request type:
+- **Unknown project:** Call `list_projects` once. Skip it when the project is clear.
+- **Simple lookup:** Use the narrowest read tool. Prefer compact, bounded lists. Use `get_ticket` for one ticket and `get_tickets` for 1–20 known tickets. Do not request full list detail unless it is necessary.
+- **Batch read:** Select tickets from a bounded list, then call `get_tickets`. Keep `commentMode: none` unless comments matter. Use `latest_update` for a handoff. Use `all` only for full history.
+- **Substantial work:** Read `get_project_brief` and `get_project_context` once for the workstream. Find the existing ticket and relevant artifacts. Reuse this context until it can be stale.
+- **Known mutation:** Refresh only the affected item when current state or `updatedAt` matters. Do not reload unrelated hierarchy.
+- **Continuation:** Reuse stable context. Refresh only volatile status, comments, blockers, claims, and concurrency fields.
 
-- **Unknown or ambiguous project:** Use `list_projects` once. Skip it when the project is already unambiguous.
-- **Simple lookup:** Use the narrowest read tool. Prefer `list_tickets` with its default compact response and known project, board, or lane filters; use `get_ticket` for one ticket, `get_tickets` for 1–20 known ticket IDs, and the default compact `get_work_queue` response for operational, overdue, or unassigned work. Do not request `detail: full` for a list unless the complete list payload is necessary. Do not load the brief or full project context.
-- **Batch ticket reads:** Use `get_tickets` after a bounded list when you need details for several selected tickets. Keep `commentMode` as `none` unless the task needs updates. Use `latest_update` for the latest handoff or status update. Use `all` only when full comment history is necessary. Do not hydrate every ticket from a broad list without a clear need.
-- **Substantial planning or implementation:** Read `get_project_brief` and `get_project_context` once per continuous workstream, then find the existing ticket and supporting artifacts. Reuse that context until the project changes or relevant decisions may have changed.
-- **Known-item mutation:** Refresh only the affected resource when current state or `updatedAt` is required, then perform the requested mutation. Do not reload unrelated hierarchy or project context.
-- **Continuation:** Reuse verified IDs and stable context retained in the conversation or compaction summary. Refresh volatile fields such as status, comments, blockers, and `updatedAt` only when their current value matters.
+Reuse an existing ticket when it covers the request. Create one only for untracked work. Keep list calls bounded and paginate only as far as needed. Do not fan out across all statuses or endpoints unless the user asks for a complete audit.
 
-Reuse an existing ticket when it covers the request. Create a ticket only when the work is genuinely untracked. Do not fan out across every status or endpoint unless the user explicitly requests terminal-state accounting or a complete audit.
+Before choosing new work or answering an operational “what’s next,” call `get_agent_inbox`. Handle replies, mentions, assignments, and handoffs before unrelated work. Acknowledge an item only after handling it.
 
-Keep list requests bounded and paginate rather than requesting an entire organization history.
+## Execute Work
 
-## Build Project Structure
+- Read before creating project structure. Do not duplicate boards or lanes. Use `list_project_members` for assignees; never guess a user ID.
+- Transition the ticket to the active status when substantial work begins.
+- For a known ticket, call `claim_ticket` with a unique run ID. Renew before expiry. Use `WAITING` only for a short pause. Release the claim when work stops, completes, or hands off. Do not claim for simple reads or planning.
+- Respect another active claim. Report its Agent Connection label and wait for release or expiry.
+- Keep ticket kind, parent, lane, assignee, due date, priority, and blockers accurate.
+- Read typed attributes before changes. Use them for durable integration facts, never secrets.
+- Use `preview_ticket_move` before moving between boards. Resolve reported parent, child, and automation effects.
+- Add comments only for decisions, useful progress, verification, blockers, or handoff evidence.
+- Use optimistic concurrency for project, board, lane, Note, and other supported updates. Reload after a conflict.
+- Archive only with explicit approval. Do not use archive as a substitute for completion.
 
-- Use project, board, and lane read tools before creating structure so names and workflow stages are not duplicated.
-- Create boards for distinct workstreams and lanes for workflow stages. Configure lane entry actions only when the requested workflow is explicit.
-- Use `list_project_members` to select assignees and artifact owners; never guess a user ID.
-- Use `list_project_documents`, Note tools, revisions, and artifact relationships when the work depends on existing supporting context.
-- Use optimistic concurrency for project, board, lane, and Note updates or ordering. Reload after a conflict.
-- Archive projects, boards, lanes, or Notes only with explicit approval. Permanent deletion is unavailable.
-
-## Manage Execution
-
-- Transition the relevant ticket to the active status when substantive work begins.
-- When choosing from a shared project queue, use `list_available_work` for a human-readable preview or `claim_next_ticket` for atomic selection. When beginning substantive execution on a known ticket, use `claim_ticket` with a stable opaque run ID for the current agent run. Use a unique run ID per claim-next operation, call `renew_ticket_claim` before its lease expires, use `WAITING` while paused for a short dependency or reply, and call `release_ticket` when execution stops, completes, or hands off. Claims identify the authenticated Agent Connection by its configured label and never replace the human assignee. Do not claim tickets for simple reads or planning-only discussion.
-- Treat a conflicting active claim as useful coordination state. Do not take it over until it expires or the owning Agent Connection releases it; report the connection label without assuming which agent vendor or model is behind it.
-- Keep ticket kind, parent, lane, assignee, due date, priority, and blocker relationships accurate when the work changes them.
-- Use typed ticket attributes for durable integration and handoff facts such as `source.repository`, `source.branch`, or `delivery.environment`. Read existing attributes before updates. Do not store credentials, tokens, or other secrets in attributes.
-- Add comments only for durable information: decisions, meaningful progress, validation results, blockers, or handoff context.
-- Use `preview_ticket_move` before moving a ticket between boards. Clear parent or active-child links reported by the preview, and call out any destination automation that changes or archives the ticket.
-- When blocked, set the blocker relationship when a concrete blocking ticket exists and explain the impact in one concise comment.
-- Before selecting new work or answering an operational "what's next" request, read `get_agent_inbox`. Handle unread replies, mentions, assignments, and handoffs before unrelated queue work. Acknowledge an inbox item only after handling it.
-
-Do not create bookkeeping churn for tiny exploratory actions. Prefer one useful checkpoint over a stream of narration.
-
-## Schedule Recurring Checks
-
-When a user asks to schedule ToDoddle work, read [scheduled-workflows.md](references/scheduled-workflows.md). Use its ready-to-create recipes and safety rules.
-
-- Create a schedule only after the user chooses a recipe, cadence, timezone, project scope, and allowed mutation level. Installing the plugin must never create or enable a schedule.
-- Test the complete prompt in a normal chat before scheduling it. Review the first runs and narrow the prompt if it reads or changes too much.
-- Default to read and report. Permit comments, ticket creation, or status changes only when the user explicitly selects that mutation level.
-- Keep destructive actions, access changes, billing changes, secrets, and completion without verification outside scheduled work.
-- Do not use a user-side scheduled task for required server operations such as notification delivery, billing reconciliation, webhook retries, or backups. Use the application's durable queue or cron system for those jobs.
-
-## Upload Files Safely
-
-- Use `upload_project_document` or `attach_file_to_ticket` for approved files.
-- For a remote hosted connection, use `begin_upload`, upload the bytes from the user's device directly to the returned signed URL with the returned headers, and then use `complete_upload`. Use a new idempotency key for each MCP call.
-- Never print, log, or persist the signed upload URL. The hosted gateway must not receive or stage the file bytes.
-- If the client cannot send the direct HTTPS upload, report that remote attachment upload is unavailable. Do not encode the file into MCP arguments.
-- For a pasted or clipboard image, select a configured `TODODDLE_UPLOAD_ROOTS` directory and create a private temporary directory inside it with `mktemp -d`. Save or copy the image attachment into that directory, preserve a suitable image extension, and upload the temporary file path. Do not alter the original clipboard attachment.
-- If a source file is outside `TODODDLE_UPLOAD_ROOTS`, copy it to a temporary staging file inside the dedicated ToDoddle upload directory. Do not move or alter the original.
-- After the upload tool confirms success, delete only the temporary staging file that the agent created. Remove an empty staging directory when it was also created for that upload.
-- Keep the staging file when the upload fails or the result is uncertain so it remains available for retry and diagnosis. Report the retained path without exposing private content.
-- Never delete the user's original source file, a pre-existing file, or any file outside the managed staging location.
-
-## Review Attachments Safely
-
-- Request a fresh tokenized URL with `get_document_download_url` for each attachment review.
-- Create a private temporary directory with `mktemp -d`, download the asset there without printing, logging, or persisting the URL, and inspect the local file with the appropriate image or document tool.
-- Use a browser only when local download or rendering is unavailable.
-- After successful inspection, delete only the temporary files and directory that the agent created. Never delete an original or pre-existing user file.
-- Never persist an expiring download URL in comments, Context, logs, handoffs, or repository files.
+For detailed project structure and execution rules, read [project-work.md](references/project-work.md).
 
 ## Finish Work
 
-1. Run the verification appropriate to the work.
-2. Add a typed `HANDOFF` comment with `## Outcome`, `## Verification`, and `## Remaining` when applicable. Include immutable evidence such as commit, release, document, or artifact IDs and use the returned stable `uiUrl` for the human destination. Never persist expiring download or upload token URLs. Add `## Decisions` only when a durable choice is not already captured in linked Context.
-3. Transition the ticket to `COMPLETE` only when the requested outcome is actually achieved.
-4. Release the active agent work claim after the final durable update.
-5. Leave incomplete work active and state what remains.
+1. Run appropriate verification.
+2. Add one typed `HANDOFF` comment with `## Outcome`, `## Verification`, and `## Remaining` when useful. Include stable links and immutable commit, release, document, or artifact IDs. Never store expiring URLs.
+3. Set the ticket to `COMPLETE` only when the requested result is achieved.
+4. Release the active claim after the durable update.
+5. Keep incomplete work active and state what remains.
 
-When resuming prior work, read `get_agent_inbox`, handle the reply before acknowledging it, then reload the linked ticket or artifact so current status, comments, blockers, ACLs, and concurrency revision drive the next action. Use a new opaque run ID for a new execution attempt and reference the prior handoff rather than rewriting it.
+When resuming, read the agent inbox, handle the reply, then reload the linked item. Use a new run ID and refer to the prior handoff.
 
-Use `archive_ticket` only when the user requests archival and approves the destructive action. Do not substitute archival for completion.
+## Load Detailed Rules Only When Needed
 
-## Track Time
+- **Uploads or attachment review:** Read [files.md](references/files.md).
+- **Time tracking:** Read [time-tracking.md](references/time-tracking.md).
+- **Scheduled checks:** Read [scheduled-workflows.md](references/scheduled-workflows.md).
 
-Use time tools when the user asks to track time or repository guidance makes time tracking expected:
+## Missing Access
 
-- Check `get_active_time_entries` before starting a timer when duplicate timing would be confusing.
-- Use `start_ticket_timer` and `stop_ticket_timer` for live work.
-- Use `log_ticket_time` for known historical intervals.
-- Correct entries with optimistic concurrency.
-- Archive a time entry only with explicit approval.
+If the MCP server, scope, or project grant blocks an operation:
 
-Do not invent elapsed time or silently estimate it as recorded time.
-
-## Handle Missing Access
-
-If the MCP server is unavailable or a scope/project grant blocks an operation:
-
-1. Report the missing server, scope, or grant precisely.
-2. Do not fabricate a successful tracking update.
-3. Continue non-destructive local work when reasonable, and clearly list the tracking updates still pending.
+1. State the exact missing server, scope, or grant.
+2. Do not claim that the update succeeded.
+3. Continue safe local work when reasonable and list the pending ToDoddle updates.

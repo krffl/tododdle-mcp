@@ -48,6 +48,24 @@ test('workflow skill declares the MCP dependency and core safety rules', async (
     ),
     'utf8',
   );
+  const files = await readFile(
+    new URL('../skills/tododdle-workflow/references/files.md', import.meta.url),
+    'utf8',
+  );
+  const projectWork = await readFile(
+    new URL(
+      '../skills/tododdle-workflow/references/project-work.md',
+      import.meta.url,
+    ),
+    'utf8',
+  );
+  const timeTracking = await readFile(
+    new URL(
+      '../skills/tododdle-workflow/references/time-tracking.md',
+      import.meta.url,
+    ),
+    'utf8',
+  );
   const metadata = await readFile(
     new URL('../skills/tododdle-workflow/agents/openai.yaml', import.meta.url),
     'utf8',
@@ -55,41 +73,42 @@ test('workflow skill declares the MCP dependency and core safety rules', async (
 
   assert.match(skill, /get_project_brief/);
   assert.match(skill, /Simple lookup/);
-  assert.match(skill, /Substantial planning or implementation/);
-  assert.match(skill, /Refresh volatile fields/);
-  assert.match(skill, /Do not fan out across every status or endpoint/);
-  assert.match(skill, /Prefer `list_tickets`/);
-  assert.match(skill, /default compact response/);
-  assert.match(skill, /Do not request `detail: full`/);
+  assert.match(skill, /Substantial work/);
+  assert.match(skill, /Refresh only volatile status/);
+  assert.match(skill, /Do not fan out across all statuses or endpoints/);
+  assert.match(skill, /Prefer compact, bounded lists/);
+  assert.match(skill, /Do not request full list detail/);
   assert.match(skill, /list_project_members/);
-  assert.match(skill, /Archive projects, boards, lanes, or Notes only with explicit approval/);
+  assert.match(projectWork, /Archive a project, board, lane, or Note only with explicit approval/);
   assert.match(skill, /COMPLETE/);
-  assert.match(skill, /Do not invent elapsed time/);
+  assert.match(timeTracking, /Never invent elapsed time/);
   assert.match(skill, /typed `HANDOFF` comment/);
   assert.match(skill, /## Outcome/);
   assert.match(skill, /## Verification/);
   assert.match(skill, /## Remaining/);
-  assert.match(skill, /Never persist expiring download or upload token URLs/);
-  assert.match(skill, /After the upload tool confirms success, delete only the temporary staging file/);
-  assert.match(skill, /For a pasted or clipboard image/);
-  assert.match(skill, /create a private temporary directory inside it with `mktemp -d`/);
-  assert.match(skill, /preserve a suitable image extension/);
-  assert.match(skill, /Do not alter the original clipboard attachment/);
-  assert.match(skill, /Never delete the user's original source file/);
-  assert.match(skill, /For a remote hosted connection, use `begin_upload`/);
-  assert.match(skill, /upload the bytes from the user's device directly/);
-  assert.match(skill, /The hosted gateway must not receive or stage the file bytes/);
-  assert.match(skill, /Do not encode the file into MCP arguments/);
-  assert.match(skill, /Request a fresh tokenized URL with `get_document_download_url`/);
-  assert.match(skill, /private temporary directory with `mktemp -d`/);
-  assert.match(skill, /without printing, logging, or persisting the URL/);
-  assert.match(skill, /inspect the local file with the appropriate image or document tool/);
-  assert.match(skill, /Use a browser only when local download or rendering is unavailable/);
-  assert.match(skill, /After successful inspection, delete only the temporary files and directory/);
-  assert.match(skill, /handle the reply before acknowledging it/);
-  assert.match(skill, /Installing the plugin must never create or enable a schedule/);
-  assert.match(skill, /Default to read and report/);
-  assert.match(skill, /application's durable queue or cron system/);
+  assert.match(skill, /\[files\.md\]\(references\/files\.md\)/);
+  assert.match(skill, /\[project-work\.md\]\(references\/project-work\.md\)/);
+  assert.match(skill, /\[time-tracking\.md\]\(references\/time-tracking\.md\)/);
+  assert.match(skill, /\[scheduled-workflows\.md\]\(references\/scheduled-workflows\.md\)/);
+  assert.match(files, /After confirmed success, delete only the staging file/);
+  assert.match(files, /For a clipboard image/);
+  assert.match(files, /private directory with `mktemp -d`/);
+  assert.match(files, /keep a suitable extension/);
+  assert.match(files, /Do not alter the original/);
+  assert.match(files, /Never delete the user’s original/);
+  assert.match(files, /Call `begin_upload`/);
+  assert.match(files, /Upload bytes from the user’s device directly/);
+  assert.match(files, /hosted gateway must not receive or stage file bytes/);
+  assert.match(files, /Do not put base64 file data in MCP arguments/);
+  assert.match(files, /Request a fresh URL with `get_document_download_url`/);
+  assert.match(files, /Download without printing, logging, or storing the URL/);
+  assert.match(files, /Inspect the local file with the appropriate image or document tool/);
+  assert.match(files, /Use the browser only when local download or rendering is unavailable/);
+  assert.match(files, /After successful inspection, delete only the temporary files and directory/);
+  assert.match(skill, /Acknowledge an item only after handling it/);
+  assert.match(scheduledWorkflows, /Do not activate a schedule during plugin installation/);
+  assert.match(scheduledWorkflows, /Default to \*\*read and report\*\*/);
+  assert.match(scheduledWorkflows, /server-owned queue or cron system/);
   assert.match(scheduledWorkflows, /Recipe: Morning Control Tower/);
   assert.match(scheduledWorkflows, /Recipe: Ticket Review Sweep/);
   assert.match(scheduledWorkflows, /Recipe: Weekly Backlog Hygiene/);
