@@ -38,7 +38,7 @@ Use $tododdle-workflow for project <project ID>. Reuse the verified project ID. 
 **Required scopes:** `projects:read`, `tasks:read`  
 **Mutation level:** Read and report
 
-This recipe covers tickets with the `REVIEW` status. Formal review-request queues require future MCP review tools.
+This recipe covers tickets with the `REVIEW` status. Use `list_review_requests` separately when formal review requests need attention.
 
 ```text
 Use $tododdle-workflow for project <project ID>. List active tickets with status REVIEW. Treat a ticket as stale after <number> days without an update. Read full ticket context only for stale or ambiguous results. Report the reviewer or owner action needed and include stable ToDoddle links. Do not approve, complete, reject, or comment on a ticket.

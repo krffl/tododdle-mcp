@@ -25,3 +25,14 @@ Read this file only when creating project structure or when execution needs thes
 - Do not store credentials or tokens in attributes.
 - Set a blocker relationship when a tracked ticket prevents progress. Add one concise comment that explains the effect.
 - Prefer one useful checkpoint over a stream of narration.
+
+## Review Requests
+
+- Use `list_review_requests` with one project and narrow filters. Read one request with `get_review_request` before changing it.
+- A review is optional. It does not change a ticket status or block work.
+- Use `list_project_members` before selecting reviewers. Do not guess user IDs.
+- Create a review only for an accessible ticket, document, board, or Context artifact. Supply an idempotency key for every create, review comment, and checklist addition. Reuse the same key only when retrying that same operation.
+- Only a named reviewer can use `respond_to_review_request`. Use that reviewer’s current `updatedAt` value as `expectedUpdatedAt`.
+- Use `expectedRevision` for edits, completion, and cancellation. Reload after a conflict.
+- Use checklist changes for shared review steps. Named reviewers can mark an item complete. Only the requester or a project administrator can change the item text.
+- Keep comments concise. Use `list_review_comments` only when the discussion is relevant.

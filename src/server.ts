@@ -31,6 +31,9 @@ const artifactTypeSchema = z.enum([
   'RETROSPECTIVE',
 ]);
 const artifactStatusSchema = z.enum(['DRAFT', 'IN_REVIEW', 'APPROVED', 'SUPERSEDED', 'ARCHIVED']);
+const reviewTargetTypeSchema = z.enum(['TASK', 'DOCUMENT', 'PLAN', 'ARTIFACT']);
+const reviewRequestStateSchema = z.enum(['OPEN', 'COMPLETED', 'CANCELLED']);
+const reviewOutcomeSchema = z.enum(['APPROVED', 'CHANGES_REQUESTED', 'ACKNOWLEDGED']);
 const commentKindSchema = z.enum([
   'DISCUSSION',
   'STATUS_UPDATE',
@@ -683,6 +686,292 @@ export function createToDoddleMcpServer(
     async ({ projectId, ...query }) =>
       toolResult(await api.get(`/api/external/projects/${projectId}/members`, query))
   );
+
+  server.registerTool(
+    'list_review_requests',
+    {
+      description:
+        'List bounded review request summaries in one project. Filter by target, state, reviewer, or due status.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        targetType: reviewTargetTypeSchema.optional(),
+        targetId: z.string().min(1).optional(),
+        state: reviewRequestStateSchema.optional(),
+        reviewerId: z.string().min(1).optional(),
+        due: z.enum(['overdue', 'upcoming', 'none']).optional(),
+        page: z.number().int().min(1).default(1),
+        limit: z.number().int().min(1).max(50).default(20),
+      }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, ...query }) =>
+      toolResult(await api.get(`/api/external/projects/${projectId}/review-requests`, query))
+  );
+
+  server.registerTool(
+    'get_review_request',
+    {
+      description:
+        'Get one review request, including named reviewers and their individual outcomes.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        reviewRequestId: z.string().min(1),
+      }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, reviewRequestId }) =>
+      toolResult(
+        await api.get(`/api/external/projects/${projectId}/review-requests/${reviewRequestId}`)
+      )
+  );
+
+  server.registerTool(
+    'create_review_request',
+    {
+      description:
+        'Request an optional review of one ticket, document, board, or Context artifact. Reviews do not change ticket status or block work.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        targetType: reviewTargetTypeSchema,
+        targetId: z.string().min(1),
+        reviewerIds: z
+          .array(z.string().min(1))
+          .min(1)
+          .max(25)
+          .refine((ids) => new Set(ids).size === ids.length, 'Reviewers must be unique'),
+        instructions: z.string().trim().max(4000).optional(),
+        dueDate: z.string().datetime({ offset: true }).optional(),
+        checklist: z.array(z.string().trim().min(1).max(300)).max(50).optional(),
+        idempotencyKey: z.string().min(8).max(200),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, idempotencyKey, ...body }) =>
+      toolResult(
+        await api.post(`/api/external/projects/${projectId}/review-requests`, body, idempotencyKey)
+      )
+  );
+
+  server.registerTool(
+    'update_review_request',
+    {
+      description:
+        'Update an open review request. Use expectedRevision from get_review_request to prevent overwriting another change.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        reviewRequestId: z.string().min(1),
+        expectedRevision: z.number().int().positive(),
+        instructions: z.string().trim().max(4000).nullable().optional(),
+        dueDate: z.string().datetime({ offset: true }).nullable().optional(),
+        reviewerIds: z
+          .array(z.string().min(1))
+          .min(1)
+          .max(25)
+          .refine((ids) => new Set(ids).size === ids.length, 'Reviewers must be unique')
+          .optional(),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, reviewRequestId, ...body }) =>
+      toolResult(
+        await api.patch(
+          `/api/external/projects/${projectId}/review-requests/${reviewRequestId}`,
+          body
+        )
+      )
+  );
+
+  server.registerTool(
+    'respond_to_review_request',
+    {
+      description:
+        'Record your own response to a review request. Only a named reviewer can respond. A completed review stays separate from the target status.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        reviewRequestId: z.string().min(1),
+        outcome: reviewOutcomeSchema,
+        note: z.string().trim().max(4000).optional(),
+        expectedUpdatedAt: expectedUpdatedAtSchema,
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, reviewRequestId, ...body }) =>
+      toolResult(
+        await api.post(
+          `/api/external/projects/${projectId}/review-requests/${reviewRequestId}/responses`,
+          body
+        )
+      )
+  );
+
+  server.registerTool(
+    'list_review_comments',
+    {
+      description: 'List the bounded discussion comments for one review request.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        reviewRequestId: z.string().min(1),
+      }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, reviewRequestId }) =>
+      toolResult(
+        await api.get(
+          `/api/external/projects/${projectId}/review-requests/${reviewRequestId}/comments`
+        )
+      )
+  );
+
+  server.registerTool(
+    'add_review_comment',
+    {
+      description: 'Add a concise discussion comment to one review request.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        reviewRequestId: z.string().min(1),
+        content: z.string().trim().min(1).max(10000),
+        idempotencyKey: z.string().min(8).max(200),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, reviewRequestId, idempotencyKey, ...body }) =>
+      toolResult(
+        await api.post(
+          `/api/external/projects/${projectId}/review-requests/${reviewRequestId}/comments`,
+          body,
+          idempotencyKey
+        )
+      )
+  );
+
+  server.registerTool(
+    'add_review_checklist_item',
+    {
+      description: 'Add one shared checklist item to an open review request.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        reviewRequestId: z.string().min(1),
+        title: z.string().trim().min(1).max(300),
+        idempotencyKey: z.string().min(8).max(200),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, reviewRequestId, idempotencyKey, ...body }) =>
+      toolResult(
+        await api.post(
+          `/api/external/projects/${projectId}/review-requests/${reviewRequestId}/checklist`,
+          body,
+          idempotencyKey
+        )
+      )
+  );
+
+  server.registerTool(
+    'update_review_checklist_item',
+    {
+      description:
+        'Update one review checklist item with optimistic concurrency. Named reviewers can mark completion; request managers can also change text.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        reviewRequestId: z.string().min(1),
+        itemId: z.string().min(1),
+        expectedUpdatedAt: expectedUpdatedAtSchema,
+        title: z.string().trim().min(1).max(300).optional(),
+        completed: z.boolean().optional(),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, reviewRequestId, itemId, ...body }) =>
+      toolResult(
+        await api.patch(
+          `/api/external/projects/${projectId}/review-requests/${reviewRequestId}/checklist/${itemId}`,
+          body
+        )
+      )
+  );
+
+  for (const [name, state, description] of [
+    [
+      'complete_review_request',
+      'COMPLETED',
+      'Close a review request early. This does not change the target status.',
+    ],
+    [
+      'cancel_review_request',
+      'CANCELLED',
+      'Cancel a review request. This does not change the target status.',
+    ],
+  ] as const) {
+    server.registerTool(
+      name,
+      {
+        description,
+        inputSchema: z.object({
+          projectId: z.string().min(1),
+          reviewRequestId: z.string().min(1),
+          expectedRevision: z.number().int().positive(),
+        }),
+        annotations: {
+          readOnlyHint: false,
+          destructiveHint: false,
+          idempotentHint: true,
+          openWorldHint: false,
+        },
+      },
+      async ({ projectId, reviewRequestId, expectedRevision }) =>
+        toolResult(
+          await api.patch(
+            `/api/external/projects/${projectId}/review-requests/${reviewRequestId}`,
+            { state, expectedRevision }
+          )
+        )
+    );
+  }
 
   server.registerTool(
     'list_project_documents',

@@ -32,6 +32,7 @@ Before choosing new work or answering an operational “what’s next,” call `
 - Read typed attributes before changes. Use them for durable integration facts, never secrets.
 - Read Context summaries before full Markdown. Fetch only the brief or artifacts needed for the current work. When you create or change artifact content, provide a current summary of no more than 500 characters in the same request. If an older client returns a missing-summary warning, update the summary before handoff.
 - Use `preview_ticket_move` before moving between boards. Resolve reported parent, child, and automation effects.
+- Keep optional review requests separate from ticket status. Use the bounded review tools only when a review is relevant. Read [project-work.md](references/project-work.md) for reviewer, checklist, and concurrency rules.
 - Add comments only for decisions, useful progress, verification, blockers, or handoff evidence.
 - Use optimistic concurrency for project, board, lane, Note, and other supported updates. Reload after a conflict.
 - Archive only with explicit approval. Do not use archive as a substitute for completion.

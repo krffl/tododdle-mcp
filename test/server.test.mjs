@@ -44,6 +44,8 @@ test('discovers the bounded production tool surface', async () => {
   const beginUploadTool = result.tools.find(tool => tool.name === 'begin_upload')
   const completeUploadTool = result.tools.find(tool => tool.name === 'complete_upload')
   const getNoteTool = result.tools.find(tool => tool.name === 'get_note')
+  const listReviewsTool = result.tools.find(tool => tool.name === 'list_review_requests')
+  const createReviewTool = result.tools.find(tool => tool.name === 'create_review_request')
   const packageJson = JSON.parse(await readFile(new URL('../package.json', import.meta.url), 'utf8'))
 
   assert.equal(client.getServerVersion()?.version, packageJson.version)
@@ -80,7 +82,8 @@ test('discovers the bounded production tool surface', async () => {
     'get_project', 'create_project', 'update_project', 'archive_project', 'restore_project',
     'list_boards', 'get_board', 'create_board', 'update_board', 'move_board', 'archive_board', 'restore_board',
     'list_lanes', 'get_lane', 'create_lane', 'update_lane', 'move_lane', 'archive_lane', 'restore_lane',
-    'list_project_members', 'list_project_documents', 'get_document_download_url', 'list_notes', 'get_note', 'create_note', 'update_note',
+    'list_project_members', 'list_review_requests', 'get_review_request', 'create_review_request', 'update_review_request', 'respond_to_review_request', 'list_review_comments', 'add_review_comment', 'add_review_checklist_item', 'update_review_checklist_item', 'complete_review_request', 'cancel_review_request',
+    'list_project_documents', 'get_document_download_url', 'list_notes', 'get_note', 'create_note', 'update_note',
     'archive_note', 'list_artifact_revisions', 'link_project_artifacts',
   ]) assert.equal(names.includes(name), true, `${name} should be discoverable`)
   assert.equal(result.tools.find(tool => tool.name === 'move_ticket')?.annotations?.destructiveHint, true)
@@ -144,6 +147,8 @@ test('discovers the bounded production tool surface', async () => {
   assert.equal(listTicketsTool?.inputSchema.properties?.limit?.maximum, 100)
   assert.equal(createLaneTool?.inputSchema.properties?.entryActions?.maxItems, 6)
   assert.match(JSON.stringify(createLaneTool?.inputSchema.properties?.entryActions), /REQUEST_REVIEW/)
+  assert.equal(listReviewsTool?.inputSchema.properties?.limit?.maximum, 50)
+  assert.match(createReviewTool?.description || '', /do not change ticket status/)
   assert.deepEqual(Object.keys(uploadDocumentTool?.inputSchema.properties || {}), [
     'projectId', 'filePath', 'sourceUrl', 'fileName', 'contentType', 'description', 'folderId',
     'idempotencyKey',
@@ -503,6 +508,136 @@ test('reads, sets, and deletes typed ticket attributes', async () => {
       { method: 'GET', path: '/api/external/tasks/task-1/attributes', query: undefined },
       { method: 'PUT', path: '/api/external/tasks/task-1/attributes', body: { key: 'source.branch', type: 'STRING', value: 'main', expectedUpdatedAt } },
       { method: 'DELETE', path: '/api/external/tasks/task-1/attributes', body: { key: 'source.branch', expectedUpdatedAt } },
+    ])
+  } finally {
+    await client.close()
+    await server.close()
+  }
+})
+
+test('uses parent-to-child review routes with bounded inputs and concurrency fields', async () => {
+  const calls = []
+  const reviewApi = {
+    ...api,
+    get: async (path, query) => { calls.push({ method: 'GET', path, query }); return { reviews: [] } },
+    post: async (path, body, idempotencyKey) => { calls.push({ method: 'POST', path, body, idempotencyKey }); return { review: {} } },
+    patch: async (path, body) => { calls.push({ method: 'PATCH', path, body }); return { review: {} } },
+  }
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer(reviewApi)
+  const client = new Client({ name: 'review-request-test', version: '1.0.0' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  const expectedUpdatedAt = '2026-08-23T12:00:00.000Z'
+
+  try {
+    await client.callTool({
+      name: 'list_review_requests',
+      arguments: { projectId: 'project-1', targetType: 'TASK', state: 'OPEN', page: 1, limit: 20 },
+    })
+    await client.callTool({
+      name: 'get_review_request',
+      arguments: { projectId: 'project-1', reviewRequestId: 'review-1' },
+    })
+    await client.callTool({
+      name: 'create_review_request',
+      arguments: {
+        projectId: 'project-1', targetType: 'TASK', targetId: 'task-1', reviewerIds: ['user-2'],
+        instructions: 'Please check the API.', idempotencyKey: 'review-create-key',
+      },
+    })
+    await client.callTool({
+      name: 'update_review_request',
+      arguments: { projectId: 'project-1', reviewRequestId: 'review-1', expectedRevision: 4, instructions: 'Updated request.' },
+    })
+    await client.callTool({
+      name: 'respond_to_review_request',
+      arguments: { projectId: 'project-1', reviewRequestId: 'review-1', outcome: 'APPROVED', expectedUpdatedAt },
+    })
+    await client.callTool({
+      name: 'list_review_comments',
+      arguments: { projectId: 'project-1', reviewRequestId: 'review-1' },
+    })
+    await client.callTool({
+      name: 'add_review_comment',
+      arguments: { projectId: 'project-1', reviewRequestId: 'review-1', content: 'Looks good.', idempotencyKey: 'review-comment-key' },
+    })
+    await client.callTool({
+      name: 'add_review_checklist_item',
+      arguments: { projectId: 'project-1', reviewRequestId: 'review-1', title: 'Confirm the route.', idempotencyKey: 'review-checklist-key' },
+    })
+    await client.callTool({
+      name: 'update_review_checklist_item',
+      arguments: { projectId: 'project-1', reviewRequestId: 'review-1', itemId: 'item-1', completed: true, expectedUpdatedAt },
+    })
+    await client.callTool({
+      name: 'complete_review_request',
+      arguments: { projectId: 'project-1', reviewRequestId: 'review-1', expectedRevision: 5 },
+    })
+    await client.callTool({
+      name: 'cancel_review_request',
+      arguments: { projectId: 'project-1', reviewRequestId: 'review-1', expectedRevision: 6 },
+    })
+
+    assert.deepEqual(calls, [
+      {
+        method: 'GET',
+        path: '/api/external/projects/project-1/review-requests',
+        query: { targetType: 'TASK', state: 'OPEN', page: 1, limit: 20 },
+      },
+      {
+        method: 'GET',
+        path: '/api/external/projects/project-1/review-requests/review-1',
+        query: undefined,
+      },
+      {
+        method: 'POST',
+        path: '/api/external/projects/project-1/review-requests',
+        body: { targetType: 'TASK', targetId: 'task-1', reviewerIds: ['user-2'], instructions: 'Please check the API.' },
+        idempotencyKey: 'review-create-key',
+      },
+      {
+        method: 'PATCH',
+        path: '/api/external/projects/project-1/review-requests/review-1',
+        body: { expectedRevision: 4, instructions: 'Updated request.' },
+      },
+      {
+        method: 'POST',
+        path: '/api/external/projects/project-1/review-requests/review-1/responses',
+        body: { outcome: 'APPROVED', expectedUpdatedAt },
+        idempotencyKey: undefined,
+      },
+      {
+        method: 'GET',
+        path: '/api/external/projects/project-1/review-requests/review-1/comments',
+        query: undefined,
+      },
+      {
+        method: 'POST',
+        path: '/api/external/projects/project-1/review-requests/review-1/comments',
+        body: { content: 'Looks good.' },
+        idempotencyKey: 'review-comment-key',
+      },
+      {
+        method: 'POST',
+        path: '/api/external/projects/project-1/review-requests/review-1/checklist',
+        body: { title: 'Confirm the route.' },
+        idempotencyKey: 'review-checklist-key',
+      },
+      {
+        method: 'PATCH',
+        path: '/api/external/projects/project-1/review-requests/review-1/checklist/item-1',
+        body: { completed: true, expectedUpdatedAt },
+      },
+      {
+        method: 'PATCH',
+        path: '/api/external/projects/project-1/review-requests/review-1',
+        body: { state: 'COMPLETED', expectedRevision: 5 },
+      },
+      {
+        method: 'PATCH',
+        path: '/api/external/projects/project-1/review-requests/review-1',
+        body: { state: 'CANCELLED', expectedRevision: 6 },
+      },
     ])
   } finally {
     await client.close()

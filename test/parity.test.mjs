@@ -137,6 +137,16 @@ test('every discovered tool validates and serializes only to documented External
         argumentsValue.success = true
         argumentsValue.idempotencyKey = 'complete-upload-value'
       }
+      if (tool.name === 'update_review_request') {
+        argumentsValue.expectedRevision = 1
+        argumentsValue.instructions = 'Updated review request.'
+      }
+      if (tool.name === 'complete_review_request' || tool.name === 'cancel_review_request') {
+        argumentsValue.expectedRevision = 1
+      }
+      if (tool.name === 'update_review_checklist_item') {
+        argumentsValue.completed = true
+      }
 
       const result = await client.callTool({ name: tool.name, arguments: argumentsValue })
       assert.equal(result.isError, undefined, `${tool.name} rejected generated valid input`)
@@ -175,6 +185,15 @@ test('bounded read schemas reject oversized pages and malformed identifiers', as
       assert.equal(result.isError, true, `${name} must reject limit > 100`)
     }
     assert.equal((await client.callTool({ name: 'get_ticket', arguments: { taskId: '' } })).isError, true)
+    assert.equal((await client.callTool({
+      name: 'create_review_request',
+      arguments: {
+        projectId: 'project-1',
+        targetType: 'TASK',
+        targetId: 'task-1',
+        reviewerIds: ['user-2'],
+      },
+    })).isError, true, 'review creation requires a retry-stable idempotency key')
     assert.equal((await client.callTool({
       name: 'update_ticket',
       arguments: { taskId: 'task-1', expectedUpdatedAt: 'not-a-date' },

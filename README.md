@@ -131,6 +131,9 @@ When ToDoddle should be mandatory for one repository, merge the relevant rules f
 - `list_lanes`
 - `get_lane`
 - `list_project_members`
+- `list_review_requests`
+- `get_review_request`
+- `list_review_comments`
 - `list_project_documents`
 - `get_document_download_url`
 - `list_notes`
@@ -175,6 +178,15 @@ Ticket attributes hold small typed integration and handoff facts. Read them befo
 Durable agent-to-human handoffs use typed `HANDOFF` comments with a concise outcome, verification and immutable evidence, and any remaining risk or next action. External mutations return a stable ToDoddle `uiUrl`; expiring asset token URLs must not be copied into comments. A continuing run reads and handles its Agent Connection inbox reply before acknowledgement, then reloads the linked record.
 
 Ticket create/update accepts the stable kind values `TASK`, `FEATURE`, `EPIC`, `BUG`, `RESEARCH`, and `ACTION_ITEM`. Lane create/update supports `SET_KIND` alongside status, priority, assignee, review-request, and archive entry actions. `REQUEST_REVIEW` accepts one to 20 unique reviewer IDs and optional instructions. It cannot share a lane with `ARCHIVE_TASK`.
+
+### Manage Optional Reviews
+
+- `create_review_request`, `update_review_request`, `complete_review_request`, `cancel_review_request`
+- `respond_to_review_request`
+- `add_review_comment`
+- `add_review_checklist_item`, `update_review_checklist_item`
+
+Reviews are optional and stay separate from ticket status. A request can target one Ticket, Document, Board, or Context artifact. Use `list_project_members` before selecting reviewers. Only a named reviewer can respond. Use `expectedRevision` for request updates, completion, and cancellation. Use the reviewer or checklist item `updatedAt` value for a response or checklist change. Create requests, comments, and checklist items require an idempotency key. Reuse that key only to retry the same operation.
 
 ### Manage Project Structure
 

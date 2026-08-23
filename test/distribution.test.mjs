@@ -118,7 +118,7 @@ test('workflow skill declares the MCP dependency and core safety rules', async (
   assert.match(scheduledWorkflows, /Recipe: Weekly Roadmap Summary/);
   assert.match(scheduledWorkflows, /Recipe: Agent Inbox Follow-up/);
   assert.match(scheduledWorkflows, /Recipe: Local Release Verification/);
-  assert.match(scheduledWorkflows, /Formal review-request queues require future MCP review tools/);
+  assert.match(scheduledWorkflows, /Use `list_review_requests` separately when formal review requests need attention/);
   assert.match(scheduledWorkflows, /Do not acknowledge a reply/);
   assert.match(scheduledWorkflows, /Do not complete the ticket automatically/);
   assert.match(scheduledWorkflows, /server-owned queue or cron system/);
