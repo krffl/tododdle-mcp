@@ -93,9 +93,11 @@ test('workflow skill declares the MCP dependency and core safety rules', async (
   assert.match(skill, /\[project-work\.md\]\(references\/project-work\.md\)/);
   assert.match(skill, /\[time-tracking\.md\]\(references\/time-tracking\.md\)/);
   assert.match(skill, /\[scheduled-workflows\.md\]\(references\/scheduled-workflows\.md\)/);
-  assert.match(files, /After confirmed success, delete only the staging file/);
+  assert.match(files, /After confirmed success, the local MCP deletes the staged file/);
   assert.match(files, /For a clipboard image/);
   assert.match(files, /private directory with `mktemp -d`/);
+  assert.match(files, /`TODODDLE_UPLOAD_ROOTS` is optional/);
+  assert.match(files, /Never approve the full system temporary directory/);
   assert.match(files, /keep a suitable extension/);
   assert.match(files, /Do not alter the original/);
   assert.match(files, /Never delete the user’s original/);

@@ -1,8 +1,8 @@
 import { createWriteStream } from 'node:fs';
-import { lstat, mkdtemp, realpath, rm } from 'node:fs/promises';
+import { chmod, lstat, mkdir, mkdtemp, realpath, rm, rmdir } from 'node:fs/promises';
 import { lookup } from 'node:dns/promises';
 import { isIP } from 'node:net';
-import { basename, extname, relative, resolve, sep } from 'node:path';
+import { basename, dirname, extname, relative, resolve, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Readable, Transform } from 'node:stream';
 import { pipeline } from 'node:stream/promises';
@@ -22,7 +22,13 @@ export interface PreparedUpload {
   fileName: string;
   fileSize: number;
   contentType: string;
-  cleanup(): Promise<void>;
+  cleanup(uploadConfirmed?: boolean): Promise<void>;
+}
+
+export async function ensureManagedUploadRoot(root: string): Promise<string> {
+  await mkdir(root, { recursive: true, mode: 0o700 });
+  if (process.platform !== 'win32') await chmod(root, 0o700);
+  return realpath(root);
 }
 
 const mimeTypes: Record<string, string> = {
@@ -61,16 +67,18 @@ function sanitizeFileName(value: string): string {
 async function prepareLocalSource(
   input: UploadSourceInput,
   roots: string[],
+  managedRoot: string | undefined,
   maxBytes: number
 ): Promise<PreparedUpload> {
   if (!input.filePath) throw new Error('filePath is required');
-  if (roots.length === 0) {
-    throw new Error('Local uploads are disabled until TODODDLE_UPLOAD_ROOTS is configured');
-  }
   const resolvedFile = await realpath(resolve(input.filePath));
   const resolvedRoots = await Promise.all(roots.map((root) => realpath(resolve(root))));
-  if (!resolvedRoots.some((root) => isInsideRoot(resolvedFile, root))) {
-    throw new Error('Local file is outside TODODDLE_UPLOAD_ROOTS');
+  const resolvedManagedRoot = managedRoot ? await ensureManagedUploadRoot(managedRoot) : null;
+  const isManagedFile = Boolean(
+    resolvedManagedRoot && isInsideRoot(resolvedFile, resolvedManagedRoot)
+  );
+  if (!isManagedFile && !resolvedRoots.some((root) => isInsideRoot(resolvedFile, root))) {
+    throw new Error('Local file is outside ToDoddle managed staging and approved upload roots');
   }
   const stats = await lstat(resolvedFile);
   if (!stats.isFile()) throw new Error('Local upload source must be a regular file');
@@ -81,7 +89,14 @@ async function prepareLocalSource(
     fileName,
     fileSize: stats.size,
     contentType: input.contentType || inferContentType(fileName),
-    cleanup: async () => undefined,
+    cleanup: async (uploadConfirmed = false) => {
+      if (!uploadConfirmed || !isManagedFile || !resolvedManagedRoot) return;
+      await rm(resolvedFile, { force: true });
+      const stagingDirectory = dirname(resolvedFile);
+      if (stagingDirectory !== resolvedManagedRoot) {
+        await rmdir(stagingDirectory).catch(() => undefined);
+      }
+    },
   };
 }
 
@@ -186,12 +201,13 @@ async function prepareUrlSource(
 export async function prepareUploadSource(
   input: UploadSourceInput,
   roots: string[],
-  maxBytes: number
+  maxBytes: number,
+  managedRoot?: string
 ): Promise<PreparedUpload> {
   if (Boolean(input.filePath) === Boolean(input.sourceUrl)) {
     throw new Error('Provide exactly one of filePath or sourceUrl');
   }
   return input.filePath
-    ? prepareLocalSource(input, roots, maxBytes)
+    ? prepareLocalSource(input, roots, managedRoot, maxBytes)
     : prepareUrlSource(input, maxBytes);
 }

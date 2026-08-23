@@ -3,11 +3,14 @@ import { StdioServerTransport } from '@modelcontextprotocol/sdk/server/stdio.js'
 import { ToDoddleApiClient } from './api-client.js';
 import { loadMcpConfig } from './config.js';
 import { createToDoddleMcpServer } from './server.js';
+import { ensureManagedUploadRoot } from './upload-source.js';
 
 async function main() {
   const config = loadMcpConfig();
+  await ensureManagedUploadRoot(config.managedUploadRoot);
   const server = createToDoddleMcpServer(new ToDoddleApiClient(config), {
     uploadRoots: config.uploadRoots,
+    managedUploadRoot: config.managedUploadRoot,
     maxUploadBytes: config.maxUploadBytes,
   });
   await server.connect(new StdioServerTransport());

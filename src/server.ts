@@ -112,7 +112,14 @@ function toolResult(value: Record<string, unknown>) {
 
 export interface ToDoddleMcpServerOptions {
   uploadRoots?: string[];
+  managedUploadRoot?: string;
   maxUploadBytes?: number;
+}
+
+interface ResolvedToDoddleMcpServerOptions {
+  uploadRoots: string[];
+  managedUploadRoot?: string;
+  maxUploadBytes: number;
 }
 
 interface UploadSession {
@@ -179,12 +186,18 @@ const completeUploadInputSchema = z.object({
 
 async function uploadDocument(
   api: ToDoddleApi,
-  options: Required<ToDoddleMcpServerOptions>,
+  options: ResolvedToDoddleMcpServerOptions,
   input: z.infer<typeof uploadInputBaseSchema> & { taskId?: string }
 ) {
-  const prepared = await prepareUploadSource(input, options.uploadRoots, options.maxUploadBytes);
+  const prepared = await prepareUploadSource(
+    input,
+    options.uploadRoots,
+    options.maxUploadBytes,
+    options.managedUploadRoot
+  );
   let session: UploadSession | null = null;
   let bytesUploaded = false;
+  let uploadConfirmed = false;
   const idempotencyKey = input.idempotencyKey || randomUUID();
   try {
     session = readUploadSession(
@@ -203,11 +216,13 @@ async function uploadDocument(
     );
     await api.uploadFile(session.uploadUrl, session.headers, prepared.filePath, prepared.fileSize);
     bytesUploaded = true;
-    return await api.post(
+    const result = await api.post(
       `/api/external/projects/${input.projectId}/documents/${session.documentId}/finalize`,
       { success: true, taskId: input.taskId },
       `${idempotencyKey}-finalize`
     );
+    uploadConfirmed = true;
+    return result;
   } catch (error) {
     if (session && !bytesUploaded) {
       await api
@@ -220,7 +235,7 @@ async function uploadDocument(
     }
     throw error;
   } finally {
-    await prepared.cleanup();
+    await prepared.cleanup(uploadConfirmed);
   }
 }
 
@@ -228,8 +243,9 @@ export function createToDoddleMcpServer(
   api: ToDoddleApi,
   serverOptions: ToDoddleMcpServerOptions = {}
 ): McpServer {
-  const options: Required<ToDoddleMcpServerOptions> = {
+  const options: ResolvedToDoddleMcpServerOptions = {
     uploadRoots: serverOptions.uploadRoots ?? [],
+    managedUploadRoot: serverOptions.managedUploadRoot,
     maxUploadBytes: serverOptions.maxUploadBytes ?? 1024 * 1024 * 1024,
   };
   const server = new McpServer({ name: 'tododdle', version: packageVersion.version });
@@ -1207,7 +1223,7 @@ export function createToDoddleMcpServer(
     'upload_project_document',
     {
       description:
-        'Upload an approved local file or HTTPS URL to a project document library. Local paths must be inside TODODDLE_UPLOAD_ROOTS.',
+        'Upload an approved local file or HTTPS URL to a project document library. Local paths must be inside ToDoddle managed staging or optional approved roots.',
       inputSchema: uploadInputSchema,
       annotations: {
         readOnlyHint: false,

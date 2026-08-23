@@ -1,9 +1,28 @@
+import { tmpdir } from 'node:os';
+import { posix, win32 } from 'node:path';
+
 export interface McpConfig {
   baseUrl: string;
   clientId: string;
   clientSecret: string;
   uploadRoots: string[];
+  managedUploadRoot: string;
   maxUploadBytes: number;
+}
+
+export function parseUploadRoots(value: string | undefined, platform = process.platform): string[] {
+  return (value || '')
+    .split(platform === 'win32' ? ';' : ':')
+    .map((root) => root.trim())
+    .filter(Boolean);
+}
+
+export function getDefaultManagedUploadRoot(
+  temporaryDirectory = tmpdir(),
+  platform = process.platform
+): string {
+  const paths = platform === 'win32' ? win32 : posix;
+  return paths.resolve(temporaryDirectory, 'tododdle-mcp-uploads');
 }
 
 function normalizeBaseUrl(value: string | undefined): string {
@@ -44,10 +63,8 @@ export function loadMcpConfig(environment: NodeJS.ProcessEnv = process.env): Mcp
   const baseUrl = normalizeBaseUrl(environment.TODODDLE_BASE_URL);
   const clientId = environment.TODODDLE_CLIENT_ID;
   const clientSecret = environment.TODODDLE_CLIENT_SECRET;
-  const uploadRoots = (environment.TODODDLE_UPLOAD_ROOTS || '')
-    .split(process.platform === 'win32' ? ';' : ':')
-    .map((value) => value.trim())
-    .filter(Boolean);
+  const uploadRoots = parseUploadRoots(environment.TODODDLE_UPLOAD_ROOTS);
+  const managedUploadRoot = getDefaultManagedUploadRoot();
   const configuredMax = Number(environment.TODODDLE_MAX_UPLOAD_BYTES || 1024 * 1024 * 1024);
 
   if (!clientId || !clientSecret) {
@@ -58,5 +75,12 @@ export function loadMcpConfig(environment: NodeJS.ProcessEnv = process.env): Mcp
     throw new Error('TODODDLE_MAX_UPLOAD_BYTES must be a positive integer');
   }
 
-  return { baseUrl, clientId, clientSecret, uploadRoots, maxUploadBytes: configuredMax };
+  return {
+    baseUrl,
+    clientId,
+    clientSecret,
+    uploadRoots,
+    managedUploadRoot,
+    maxUploadBytes: configuredMax,
+  };
 }

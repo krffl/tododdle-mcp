@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
@@ -181,19 +181,16 @@ test('discovers the bounded production tool surface', async () => {
 })
 
 test('requires only Agent Connection credentials', () => {
-  assert.deepEqual(
-    loadMcpConfig({
+  const config = loadMcpConfig({
       TODODDLE_CLIENT_ID: 'client-id',
       TODODDLE_CLIENT_SECRET: 'client-secret',
-    }),
-    {
-      baseUrl: 'https://www.tododdle.com',
-      clientId: 'client-id',
-      clientSecret: 'client-secret',
-      uploadRoots: [],
-      maxUploadBytes: 1073741824,
-    }
-  )
+    })
+  assert.equal(config.baseUrl, 'https://www.tododdle.com')
+  assert.equal(config.clientId, 'client-id')
+  assert.equal(config.clientSecret, 'client-secret')
+  assert.deepEqual(config.uploadRoots, [])
+  assert.equal(config.managedUploadRoot, join(tmpdir(), 'tododdle-mcp-uploads'))
+  assert.equal(config.maxUploadBytes, 1073741824)
 
   assert.throws(() => loadMcpConfig({}), /TODODDLE_CLIENT_ID and TODODDLE_CLIENT_SECRET/)
   assert.equal(loadMcpConfig({
@@ -895,7 +892,7 @@ test('uploads a local file and attaches it to a task through the hosted API', as
   }
 
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
-  const server = createToDoddleMcpServer(uploadApi, { uploadRoots: [directory] })
+  const server = createToDoddleMcpServer(uploadApi, { managedUploadRoot: directory })
   const client = new Client({ name: 'upload-test', version: '1.0.0' })
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
 
@@ -910,6 +907,49 @@ test('uploads a local file and attaches it to a task through the hosted API', as
     assert.equal(calls[1].content, 'verified evidence')
     assert.equal(calls[2].path, '/api/external/projects/project-1/documents/document-1/finalize')
     assert.deepEqual(calls[2].body, { success: true, taskId: 'task-1' })
+    await assert.rejects(readFile(filePath, 'utf8'), { code: 'ENOENT' })
+  } finally {
+    await client.close()
+    await server.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('retains a managed local file when upload finalization is uncertain', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'tododdle-mcp-failed-upload-test-'))
+  const operationDirectory = join(directory, 'operation-1')
+  const filePath = join(operationDirectory, 'evidence.txt')
+  await mkdir(operationDirectory)
+  await writeFile(filePath, 'retry evidence')
+  const uploadApi = {
+    ...api,
+    post: async path => {
+      if (path.endsWith('/upload-sessions')) {
+        return {
+          session: {
+            documentId: 'document-1',
+            uploadUrl: 'https://storage.example/upload',
+            headers: { 'Content-Type': 'text/plain' },
+          },
+        }
+      }
+      throw new Error('finalization result is unknown')
+    },
+  }
+
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer(uploadApi, { managedUploadRoot: directory })
+  const client = new Client({ name: 'failed-upload-test', version: '1.0.0' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+
+  try {
+    const result = await client.callTool({
+      name: 'upload_project_document',
+      arguments: { projectId: 'project-1', filePath },
+    })
+    assert.equal(result.isError, true)
+    assert.match(result.content[0].text, /finalization result is unknown/)
+    assert.equal(await readFile(filePath, 'utf8'), 'retry evidence')
   } finally {
     await client.close()
     await server.close()
