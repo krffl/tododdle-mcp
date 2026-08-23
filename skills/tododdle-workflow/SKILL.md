@@ -14,7 +14,7 @@ Reuse verified IDs from the current conversation or its compaction summary. The 
 - **Unknown project:** Call `list_projects` once. Skip it when the project is clear.
 - **Simple lookup:** Use the narrowest read tool. Prefer compact, bounded lists. Use `get_ticket` for one ticket and `get_tickets` for 1–20 known tickets. Do not request full list detail unless it is necessary.
 - **Batch read:** Select tickets from a bounded list, then call `get_tickets`. Keep `commentMode: none` unless comments matter. Use `latest_update` for a handoff. Use `all` only for full history.
-- **Substantial work:** Read `get_project_brief` and `get_project_context` once for the workstream. Find the existing ticket and relevant artifacts. Reuse this context until it can be stale.
+- **Substantial work:** Read `get_project_context` once for the workstream. It returns the brief and artifact summaries. Use `get_project_brief` or `get_project_artifact` only when the full content is relevant. Find the existing ticket and reuse this context until it can be stale.
 - **Known mutation:** Refresh only the affected item when current state or `updatedAt` matters. Do not reload unrelated hierarchy.
 - **Continuation:** Reuse stable context. Refresh only volatile status, comments, blockers, claims, and concurrency fields.
 
@@ -30,6 +30,7 @@ Before choosing new work or answering an operational “what’s next,” call `
 - Respect another active claim. Report its Agent Connection label and wait for release or expiry.
 - Keep ticket kind, parent, lane, assignee, due date, priority, and blockers accurate.
 - Read typed attributes before changes. Use them for durable integration facts, never secrets.
+- Read Context summaries before full Markdown. Fetch only the brief or artifacts needed for the current work. When you create or change artifact content, provide a current summary of no more than 500 characters in the same request. If an older client returns a missing-summary warning, update the summary before handoff.
 - Use `preview_ticket_move` before moving between boards. Resolve reported parent, child, and automation effects.
 - Add comments only for decisions, useful progress, verification, blockers, or handoff evidence.
 - Use optimistic concurrency for project, board, lane, Note, and other supported updates. Reload after a conflict.

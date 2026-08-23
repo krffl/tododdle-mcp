@@ -847,7 +847,8 @@ export function createToDoddleMcpServer(
   server.registerTool(
     'get_project_context',
     {
-      description: 'Get bounded board and lane context for ticket planning.',
+      description:
+        'Get bounded project structure, brief summary, and artifact summaries for planning.',
       inputSchema: z.object({ projectId: z.string().min(1) }),
       annotations: {
         readOnlyHint: true,
@@ -1717,7 +1718,7 @@ export function createToDoddleMcpServer(
   server.registerTool(
     'get_project_brief',
     {
-      description: 'Read the canonical project brief before planning or changing tickets.',
+      description: 'Read the complete canonical project brief when its full content is needed.',
       inputSchema: z.object({ projectId: z.string().min(1) }),
       annotations: {
         readOnlyHint: true,
@@ -1733,7 +1734,7 @@ export function createToDoddleMcpServer(
     'list_project_artifacts',
     {
       description:
-        'List bounded project specifications, decisions, proposals, research, processes, and meeting context.',
+        'List bounded summary-only project specifications, decisions, proposals, research, processes, and meeting context.',
       inputSchema: z.object({
         projectId: z.string().min(1),
         search: z.string().optional(),
@@ -1773,12 +1774,13 @@ export function createToDoddleMcpServer(
   server.registerTool(
     'create_project_artifact',
     {
-      description: 'Create a typed Markdown artifact in a project. PRDs use the SPEC type.',
+      description:
+        'Create a typed Markdown artifact and a current short summary. PRDs use the SPEC type.',
       inputSchema: z.object({
         projectId: z.string().min(1),
         type: artifactTypeSchema,
         title: z.string().min(1),
-        summary: z.string().nullable().optional(),
+        summary: z.string().trim().max(500).nullable().optional(),
         content: z.string().optional(),
         ownerId: z.string().optional(),
         metadata: z.record(z.unknown()).optional(),
@@ -1852,13 +1854,13 @@ export function createToDoddleMcpServer(
     'update_project_artifact',
     {
       description:
-        'Update artifact Markdown or metadata using optimistic concurrency. Editing approved content returns it to draft.',
+        'Update artifact Markdown, its current short summary, or metadata using optimistic concurrency. Editing approved content returns it to draft.',
       inputSchema: z.object({
         projectId: z.string().min(1),
         artifactId: z.string().min(1),
         expectedUpdatedAt: z.string().datetime({ offset: true }),
         title: z.string().min(1).optional(),
-        summary: z.string().nullable().optional(),
+        summary: z.string().trim().max(500).nullable().optional(),
         content: z.string().optional(),
         ownerId: z.string().optional(),
         metadata: z.record(z.unknown()).optional(),

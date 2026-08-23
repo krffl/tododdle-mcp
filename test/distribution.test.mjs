@@ -72,6 +72,9 @@ test('workflow skill declares the MCP dependency and core safety rules', async (
   );
 
   assert.match(skill, /get_project_brief/);
+  assert.match(skill, /Read Context summaries before full Markdown/);
+  assert.match(skill, /summary of no more than 500 characters/);
+  assert.match(skill, /missing-summary warning/);
   assert.match(skill, /Simple lookup/);
   assert.match(skill, /Substantial work/);
   assert.match(skill, /Refresh only volatile status/);
@@ -136,8 +139,10 @@ test('README documents bounded and compaction-safe context loading', async () =>
   const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
 
   assert.match(readme, /Bounded Project Context/);
-  assert.match(readme, /get_project_brief` once/);
+  assert.match(readme, /get_project_brief` only/);
   assert.match(readme, /get_project_context` once/);
+  assert.match(readme, /summary-only Context records/);
+  assert.match(readme, /Summaries are limited to 500 characters/);
   assert.match(readme, /follow their pagination metadata/);
   assert.match(readme, /compaction summary/);
   assert.match(readme, /Refresh only volatile ticket state/);
