@@ -1,0 +1,14 @@
+{
+  "name": "tododdle",
+  "displayName": "ToDoddle",
+  "version": "3.2.7",
+  "description": "Disciplined agent workflows for projects managed in ToDoddle.",
+  "author": {
+    "name": "ToDoddle",
+    "url": "https://tododdle.com"
+  },
+  "homepage": "https://tododdle.com",
+  "repository": "https://github.com/krffl/tododdle-mcp",
+  "license": "MIT",
+  "keywords": ["project-management", "tickets", "boards", "time-tracking", "mcp"]
+}

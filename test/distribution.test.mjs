@@ -8,12 +8,30 @@ test('npm package includes the Codex workflow distribution', async () => {
   const packageJson = await readJson('../package.json');
 
   assert.ok(packageJson.files.includes('.codex-plugin'));
+  assert.ok(packageJson.files.includes('.claude-plugin'));
   assert.ok(packageJson.files.includes('skills'));
   assert.ok(packageJson.files.includes('examples'));
   assert.ok(packageJson.files.includes('config'));
   const parity = await readJson('../config/external-api-parity.json');
   assert.ok(Object.keys(parity.tools).length > 0);
   assert.ok(Object.keys(parity.exceptions).length > 0);
+});
+
+test('Claude Code plugin and marketplace distribute the canonical workflow skill', async () => {
+  const packageJson = await readJson('../package.json');
+  const plugin = await readJson('../.claude-plugin/plugin.json');
+  const marketplace = await readJson('../.claude-plugin/marketplace.json');
+  const entry = marketplace.plugins[0];
+
+  assert.equal(plugin.name, 'tododdle');
+  assert.equal(plugin.version, packageJson.version);
+  assert.equal(marketplace.name, 'tododdle');
+  assert.equal(marketplace.version, packageJson.version);
+  assert.equal(entry.name, plugin.name);
+  assert.equal(entry.version, packageJson.version);
+  assert.equal(entry.source.source, 'npm');
+  assert.equal(entry.source.package, packageJson.name);
+  assert.equal(entry.source.version, packageJson.version);
 });
 
 test('npm package entrypoint is executable by npx', async () => {
@@ -135,6 +153,10 @@ test('suggested AGENTS rules require concise, human ticket writing', async () =>
   assert.match(agents, /ASD-STE100 Simplified Technical English/);
   assert.match(agents, /simplicity, brevity, clarity, and humanity/);
   assert.match(agents, /readable Markdown/);
+  assert.match(agents, /Claim the known ticket with `claim_ticket` before substantial implementation/);
+  assert.match(agents, /Renew the claim before its lease expires/);
+  assert.match(agents, /release it when work stops, completes, or is handed off/);
+  assert.match(agents, /Respect another active claim/);
 });
 
 test('README documents bounded and compaction-safe context loading', async () => {
@@ -158,4 +180,14 @@ test('README documents opt-in scheduled workflow recipes', async () => {
   assert.match(readme, /Installing the plugin never creates a schedule/);
   assert.match(readme, /confirm the timezone, project, cadence, and allowed mutation level/);
   assert.match(readme, /server-owned queue or cron system/);
+});
+
+test('README documents separate Claude Code MCP and workflow plugin setup', async () => {
+  const readme = await readFile(new URL('../README.md', import.meta.url), 'utf8');
+
+  assert.match(readme, /\/plugin marketplace add krffl\/tododdle-mcp/);
+  assert.match(readme, /\/plugin install tododdle@tododdle/);
+  assert.match(readme, /Keep the existing ToDoddle MCP connection/);
+  assert.match(readme, /does not start another MCP server/);
+  assert.match(readme, /claim substantial ticket work/);
 });

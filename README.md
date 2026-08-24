@@ -73,9 +73,13 @@ Do not commit a project-level configuration containing real credentials. Restart
 
 For every client, `npx` downloads the package to npm's cache. Cloning ToDoddle or running a local ToDoddle service is not required.
 
-## Codex Workflow Guidance
+## Workflow Guidance
 
 The MCP server provides capabilities; the optional `tododdle-workflow` skill provides a disciplined operating process for choosing and using them. Its small entry file contains the common routing and safety rules. Direct reference links load file handling, project execution, time tracking, and scheduled workflow details only when needed. This keeps the normal prompt smaller without hiding required rules.
+
+The skill tells an agent to claim substantial ticket work, renew a long-running claim before it expires, and release the claim when work stops. It also covers ticket status, durable comments, verification, and handoffs. The skill does not add credentials or tools. Configure the MCP connection separately for each client.
+
+### Codex
 
 The npm package includes a Codex plugin containing this skill. Configure the MCP server first using the Codex instructions above, then add the ToDoddle plugin marketplace:
 
@@ -86,6 +90,19 @@ codex plugin marketplace add krffl/tododdle-mcp
 Restart Codex, open the Plugins Directory, select **ToDoddle**, and install the plugin. Codex can invoke the skill automatically when a request concerns tracked work, or you can invoke it explicitly as `$tododdle-workflow`.
 
 Installing the plugin does not create or expand ToDoddle credentials, scopes, or project grants. The skill declares the separately configured `tododdle` MCP server as a dependency.
+
+### Claude Code
+
+The same npm package includes a Claude Code plugin containing the canonical workflow skill. Keep the existing ToDoddle MCP connection. Add the marketplace and install the plugin in Claude Code:
+
+```text
+/plugin marketplace add krffl/tododdle-mcp
+/plugin install tododdle@tododdle
+```
+
+Choose user scope to use the workflow across projects. Run `/reload-plugins` if Claude Code asks you to activate the plugin. The skill is available as `/tododdle:tododdle-workflow`, and Claude Code can also invoke it from its description when the request concerns tracked ToDoddle work.
+
+Installing this plugin does not start another MCP server. It does not change OAuth, Agent Connection scopes, project grants, or existing MCP credentials.
 
 ### Scheduled ToDoddle Workflows
 

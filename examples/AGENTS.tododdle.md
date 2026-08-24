@@ -2,6 +2,8 @@
 
 - Use the `tododdle` MCP server as this repository's authoritative work ledger.
 - At the start of substantial work, identify the ToDoddle project, read its brief and project context, and find the existing ticket before creating another.
+- Claim the known ticket with `claim_ticket` before substantial implementation. Use one stable, unique run ID for that work session. Renew the claim before its lease expires, and release it when work stops, completes, or is handed off. Do not claim a ticket for a simple read or planning request.
+- Respect another active claim. Report the Agent Connection that holds it, then wait for release or expiry.
 - Keep the ticket's status, lane, assignee, priority, due date, parent, and blocker relationship accurate when the implementation changes them.
 - Transition the relevant ticket to the active status when work begins. Mark it `COMPLETE` only after the requested result is implemented and verified.
 - Leave concise comments for durable decisions, meaningful progress, blockers, verification results, and handoffs. Do not narrate every command or minor edit.
