@@ -64,6 +64,9 @@ test('discovers the bounded production tool surface', async () => {
   assert.equal(names.includes('list_tickets'), true)
   assert.deepEqual(listTicketsTool?.inputSchema.properties?.detail?.default, 'summary')
   assert.equal(names.includes('get_tickets'), true)
+  assert.equal(names.includes('get_support_case'), true)
+  assert.equal(names.includes('update_support_case'), true)
+  assert.equal(names.includes('reply_to_support_case'), true)
   assert.equal(names.includes('begin_upload'), true)
   assert.equal(names.includes('complete_upload'), true)
   assert.equal(names.includes('list_ticket_attributes'), true)
@@ -477,6 +480,58 @@ test('batch reads known tickets with bounded comment detail', async () => {
     })
     assert.equal(oversized.isError, true)
     assert.equal(calls.length, 1)
+  } finally {
+    await client.close()
+    await server.close()
+  }
+})
+
+test('reads and updates support cases through parent-to-child routes', async () => {
+  const calls = []
+  const supportApi = {
+    ...api,
+    get: async (path) => { calls.push({ method: 'GET', path }); return { supportCase: {} } },
+    patch: async (path, body) => { calls.push({ method: 'PATCH', path, body }); return { supportCase: {} } },
+    post: async (path, body, idempotencyKey) => {
+      calls.push({ method: 'POST', path, body, idempotencyKey })
+      return { supportCase: {} }
+    },
+  }
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer(supportApi)
+  const client = new Client({ name: 'support-case-test', version: '1.0.0' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+
+  try {
+    await client.callTool({
+      name: 'get_support_case', arguments: { projectId: 'project-1', taskId: 'task-1' },
+    })
+    await client.callTool({
+      name: 'update_support_case',
+      arguments: { projectId: 'project-1', taskId: 'task-1', status: 'RESOLVED', expectedRevision: 2 },
+    })
+    await client.callTool({
+      name: 'reply_to_support_case',
+      arguments: {
+        projectId: 'project-1', taskId: 'task-1', content: 'Please try again.',
+        visibility: 'REQUESTER_VISIBLE', expectedRevision: 3, idempotencyKey: 'support-reply-key',
+      },
+    })
+    assert.deepEqual(calls, [
+      { method: 'GET', path: '/api/external/projects/project-1/tasks/task-1/support-case' },
+      {
+        method: 'PATCH', path: '/api/external/projects/project-1/tasks/task-1/support-case',
+        body: { status: 'RESOLVED', expectedRevision: 2 },
+      },
+      {
+        method: 'POST', path: '/api/external/projects/project-1/tasks/task-1/support-case/messages',
+        body: {
+          content: 'Please try again.', visibility: 'REQUESTER_VISIBLE', expectedRevision: 3,
+          idempotencyKey: 'support-reply-key',
+        },
+        idempotencyKey: 'support-reply-key',
+      },
+    ])
   } finally {
     await client.close()
     await server.close()

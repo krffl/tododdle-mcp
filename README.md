@@ -152,6 +152,7 @@ Ticket attributes hold small typed integration and handoff facts. Read them befo
 - `remove_ticket_from_focus`
 - `get_ticket`
 - `get_tickets`
+- `get_support_case`
 - `get_project_brief`
 - `list_project_artifacts`
 - `get_project_artifact`
@@ -187,6 +188,14 @@ Ticket create/update accepts the stable kind values `TASK`, `FEATURE`, `EPIC`, `
 - `add_review_checklist_item`, `update_review_checklist_item`
 
 Reviews are optional and stay separate from ticket status. A request can target one Ticket, Document, Board, or Context artifact. Use `list_project_members` before selecting reviewers. Only a named reviewer can respond. Use `expectedRevision` for request updates, completion, and cancellation. Use the reviewer or checklist item `updatedAt` value for a response or checklist change. Create requests, comments, and checklist items require an idempotency key. Reuse that key only to retry the same operation.
+
+### Manage Support Cases
+
+- `get_support_case`
+- `update_support_case`
+- `reply_to_support_case`
+
+Support cases remain linked to internal Tickets. Read the support case before a mutation and use its latest `revision`. Choose `REQUESTER_VISIBLE` only for a customer reply. Choose `INTERNAL_NOTE` for private operator context. MCP does not return the requester's email address.
 
 ### Manage Project Structure
 

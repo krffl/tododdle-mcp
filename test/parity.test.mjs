@@ -141,6 +141,15 @@ test('every discovered tool validates and serializes only to documented External
         argumentsValue.expectedRevision = 1
         argumentsValue.instructions = 'Updated review request.'
       }
+      if (tool.name === 'update_support_case') {
+        argumentsValue.projectId = 'projectId-value'
+        argumentsValue.taskId = 'taskId-value'
+        argumentsValue.expectedRevision = 1
+        argumentsValue.status = 'OPEN'
+      }
+      if (tool.name === 'reply_to_support_case') {
+        argumentsValue.expectedRevision = 1
+      }
       if (tool.name === 'complete_review_request' || tool.name === 'cancel_review_request') {
         argumentsValue.expectedRevision = 1
       }
@@ -149,7 +158,11 @@ test('every discovered tool validates and serializes only to documented External
       }
 
       const result = await client.callTool({ name: tool.name, arguments: argumentsValue })
-      assert.equal(result.isError, undefined, `${tool.name} rejected generated valid input`)
+      assert.equal(
+        result.isError,
+        undefined,
+        `${tool.name} rejected generated valid input: ${JSON.stringify(argumentsValue)} ${JSON.stringify(result.content)}`
+      )
       assert.ok(calls.length > 0, `${tool.name} did not call the External API`)
       for (const call of calls) {
         assert.ok(

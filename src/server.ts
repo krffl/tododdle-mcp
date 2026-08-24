@@ -34,6 +34,8 @@ const artifactStatusSchema = z.enum(['DRAFT', 'IN_REVIEW', 'APPROVED', 'SUPERSED
 const reviewTargetTypeSchema = z.enum(['TASK', 'DOCUMENT', 'PLAN', 'ARTIFACT']);
 const reviewRequestStateSchema = z.enum(['OPEN', 'COMPLETED', 'CANCELLED']);
 const reviewOutcomeSchema = z.enum(['APPROVED', 'CHANGES_REQUESTED', 'ACKNOWLEDGED']);
+const supportStatusSchema = z.enum(['NEW', 'OPEN', 'WAITING_ON_REQUESTER', 'RESOLVED', 'CLOSED']);
+const supportMessageVisibilitySchema = z.enum(['REQUESTER_VISIBLE', 'INTERNAL_NOTE']);
 const commentKindSchema = z.enum([
   'DISCUSSION',
   'STATUS_UPDATE',
@@ -1441,6 +1443,85 @@ export function createToDoddleMcpServer(
       },
     },
     async ({ taskId }) => toolResult(await api.get(`/api/external/tasks/${taskId}`))
+  );
+
+  server.registerTool(
+    'get_support_case',
+    {
+      description:
+        'Get the support case linked to one internal ticket, including customer-visible replies and internal notes.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        taskId: z.string().min(1),
+      }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, taskId }) =>
+      toolResult(await api.get(`/api/external/projects/${projectId}/tasks/${taskId}/support-case`))
+  );
+
+  server.registerTool(
+    'update_support_case',
+    {
+      description:
+        'Update the status or priority of the support case linked to an internal ticket.',
+      inputSchema: z
+        .object({
+          projectId: z.string().min(1),
+          taskId: z.string().min(1),
+          status: supportStatusSchema.optional(),
+          priority: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
+          expectedRevision: z.number().int().positive(),
+        })
+        .refine((value) => value.status !== undefined || value.priority !== undefined, {
+          message: 'Provide a status or priority',
+        }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, taskId, ...body }) =>
+      toolResult(
+        await api.patch(`/api/external/projects/${projectId}/tasks/${taskId}/support-case`, body)
+      )
+  );
+
+  server.registerTool(
+    'reply_to_support_case',
+    {
+      description:
+        'Add a customer-visible reply or private internal note to the support case linked to a ticket.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        taskId: z.string().min(1),
+        content: z.string().trim().min(1).max(20_000),
+        visibility: supportMessageVisibilitySchema,
+        expectedRevision: z.number().int().positive(),
+        idempotencyKey: z.string().min(8).optional(),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    async ({ projectId, taskId, ...body }) =>
+      toolResult(
+        await api.post(
+          `/api/external/projects/${projectId}/tasks/${taskId}/support-case/messages`,
+          body,
+          body.idempotencyKey || randomUUID()
+        )
+      )
   );
 
   server.registerTool(
