@@ -1403,6 +1403,38 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
+    'search_project',
+    {
+      description:
+        'Find compact ticket, board, lane, Note, Context, and document matches within one known project. Use this for discovery before narrow get tools instead of scanning every board or lane.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        query: z.string().trim().min(2).max(200),
+        types: z
+          .array(z.enum(['TICKET', 'BOARD', 'LANE', 'NOTE', 'CONTEXT', 'DOCUMENT']))
+          .min(1)
+          .max(6)
+          .optional(),
+        limit: z.number().int().min(1).max(50).default(20),
+      }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, query, types, limit }) =>
+      toolResult(
+        await api.get(`/api/external/projects/${projectId}/search`, {
+          query,
+          types: types?.join(','),
+          limit,
+        })
+      )
+  );
+
+  server.registerTool(
     'list_tickets',
     {
       description:

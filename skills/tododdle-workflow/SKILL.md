@@ -12,7 +12,7 @@ Use the `tododdle` MCP tools for live project state. Make the fewest calls neede
 Reuse verified IDs from the current conversation or its compaction summary. The API keeps `planId`, `sectionId`, and `taskId` for board, lane, and ticket IDs. Never invent or rediscover a stable ID.
 
 - **Unknown project:** Call `list_projects` once. Skip it when the project is clear.
-- **Simple lookup:** Use the narrowest read tool. Prefer compact, bounded lists. Use `get_ticket` for one ticket and `get_tickets` for 1–20 known tickets. Do not request full list detail unless it is necessary.
+- **Simple lookup:** Use the narrowest read tool. Prefer compact, bounded lists. Use `search_project` when the project is known but the item ID is not. Follow one selected result with its narrow get tool. Use `get_ticket` for one known ticket and `get_tickets` for 1–20 known tickets. Do not scan each board or lane to find an item. Do not request full list detail unless it is necessary.
 - **Batch read:** Select tickets from a bounded list, then call `get_tickets`. Keep `commentMode: none` unless comments matter. Use `latest_update` for a handoff. Use `all` only for full history.
 - **Substantial work:** Read `get_project_context` once for the workstream. It returns the brief and artifact summaries. Use `get_project_brief` or `get_project_artifact` only when the full content is relevant. Find the existing ticket and reuse this context until it can be stale.
 - **Known mutation:** Refresh only the affected item when current state or `updatedAt` matters. Do not reload unrelated hierarchy.

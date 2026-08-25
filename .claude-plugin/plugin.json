@@ -1,7 +1,7 @@
 {
   "name": "tododdle",
   "displayName": "ToDoddle",
-  "version": "3.2.8",
+  "version": "3.2.9",
   "description": "Disciplined agent workflows for projects managed in ToDoddle.",
   "author": {
     "name": "ToDoddle",

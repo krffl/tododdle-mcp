@@ -32,6 +32,7 @@ test('discovers the bounded production tool surface', async () => {
   const resources = await client.listResourceTemplates()
   const names = result.tools.map(tool => tool.name)
   const listTicketsTool = result.tools.find(tool => tool.name === 'list_tickets')
+  const searchProjectTool = result.tools.find(tool => tool.name === 'search_project')
   const getTicketsTool = result.tools.find(tool => tool.name === 'get_tickets')
   const getProjectContextTool = result.tools.find(tool => tool.name === 'get_project_context')
   const listProjectArtifactsTool = result.tools.find(tool => tool.name === 'list_project_artifacts')
@@ -62,6 +63,8 @@ test('discovers the bounded production tool surface', async () => {
   assert.equal(names.includes('get_active_time_entries'), true)
   assert.equal(names.includes('get_focus_list'), true)
   assert.equal(names.includes('list_tickets'), true)
+  assert.equal(names.includes('search_project'), true)
+  assert.match(searchProjectTool?.description || '', /discovery.*instead of scanning/)
   assert.deepEqual(listTicketsTool?.inputSchema.properties?.detail?.default, 'summary')
   assert.equal(names.includes('get_tickets'), true)
   assert.equal(names.includes('get_support_case'), true)
@@ -430,6 +433,41 @@ test('lists tasks with bounded hierarchy and task filters', async () => {
         query: { includeArchived: false, page: 1, limit: 50, detail: 'summary' },
       },
     ])
+  } finally {
+    await client.close()
+    await server.close()
+  }
+})
+
+test('searches one project with compact resource filters', async () => {
+  const calls = []
+  const searchApi = {
+    ...api,
+    get: async (path, query) => {
+      calls.push({ path, query })
+      return { query: 'product hunt', results: [] }
+    },
+  }
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer(searchApi)
+  const client = new Client({ name: 'project-search-test', version: '1.0.0' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+
+  try {
+    await client.callTool({
+      name: 'search_project',
+      arguments: {
+        projectId: 'project-1',
+        query: 'product hunt',
+        types: ['TICKET', 'NOTE', 'CONTEXT'],
+        limit: 12,
+      },
+    })
+
+    assert.deepEqual(calls, [{
+      path: '/api/external/projects/project-1/search',
+      query: { query: 'product hunt', types: 'TICKET,NOTE,CONTEXT', limit: 12 },
+    }])
   } finally {
     await client.close()
     await server.close()

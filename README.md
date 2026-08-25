@@ -119,12 +119,12 @@ For substantial planning or implementation, load project context in a small, pre
 1. Call `get_project_context` once for bounded board and lane structure, the brief summary, and artifact summaries.
 2. Call `get_project_brief` only when the complete canonical brief is relevant.
 3. Use `list_project_artifacts` to scan summary-only Context records. Call `get_project_artifact` only for the artifacts needed for the current work.
-4. Use `list_tickets`, `get_ticket`, or `get_tickets` only for relevant work. Keep list calls bounded and follow their pagination metadata.
+4. Use `search_project` to discover an item in a known project. Follow the selected result with a narrow get tool. Use list tools for bounded browsing and reports, not repeated discovery scans. Keep list calls bounded and follow their pagination metadata.
 5. Reuse returned project, board, lane, ticket, and artifact IDs in the active conversation and its compaction summary. Refresh only volatile ticket state before a mutation.
 
 When an agent creates or changes artifact Markdown, it should provide a current summary in the same request. Summaries are limited to 500 characters. Older clients may omit the summary; the API accepts the write and returns a warning so the summary can be repaired before handoff.
 
-Simple lookups should skip the brief and full context entirely. Call the narrowest read tool, such as `get_ticket` for one known ticket, `get_tickets` for 1–20 known ticket IDs, or hierarchy-filtered `list_tickets` for one board or lane. `list_tickets` and `get_work_queue` return compact summaries by default. Set `detail` to `full` only when the complete list payload is necessary. `get_tickets` excludes comments by default. Request `latest_update` for one recent handoff or status update per ticket, or `all` only when full history is necessary. Do not batch-hydrate a broad list without a clear need. `get_work_queue` remains the cross-project operational view. The stable API fields `planId`, `sectionId`, and `taskId` identify boards, lanes, and tickets.
+Simple lookups should skip the brief and full context entirely. Use `search_project` when you know the project but not the item ID. It returns compact ticket, board, lane, Note, Context, and document matches. Follow the selected result with the narrowest get tool. Use `get_ticket` for one known ticket, `get_tickets` for 1–20 known ticket IDs, or hierarchy-filtered `list_tickets` for bounded browsing. `list_tickets` and `get_work_queue` return compact summaries by default. Set `detail` to `full` only when the complete list payload is necessary. `get_tickets` excludes comments by default. Request `latest_update` for one recent handoff or status update per ticket, or `all` only when full history is necessary. Do not batch-hydrate a broad list without a clear need. `get_work_queue` remains the cross-project operational view. The stable API fields `planId`, `sectionId`, and `taskId` identify boards, lanes, and tickets.
 
 ### Version 3 migration
 
@@ -156,6 +156,7 @@ When ToDoddle should be mandatory for one repository, merge the relevant rules f
 - `list_notes`
 - `get_note`
 - `list_tickets`
+- `search_project`
 - `list_ticket_attributes`
 - `set_ticket_attribute`
 - `delete_ticket_attribute`

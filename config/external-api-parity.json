@@ -58,6 +58,7 @@
     "add_ticket_to_focus": ["POST /api/external/focus"],
     "move_focus_ticket": ["PATCH /api/external/focus/[taskId]"],
     "remove_ticket_from_focus": ["DELETE /api/external/focus/[taskId]"],
+    "search_project": ["GET /api/external/projects/[projectId]/search"],
     "list_tickets": ["GET /api/external/tasks"],
     "get_ticket": ["GET /api/external/tasks/[taskId]"],
     "get_support_case": ["GET /api/external/projects/[projectId]/tasks/[taskId]/support-case"],
