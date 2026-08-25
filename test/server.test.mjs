@@ -188,7 +188,7 @@ test('requires only Agent Connection credentials', () => {
       TODODDLE_CLIENT_ID: 'client-id',
       TODODDLE_CLIENT_SECRET: 'client-secret',
     })
-  assert.equal(config.baseUrl, 'https://www.tododdle.com')
+  assert.equal(config.baseUrl, 'https://app.tododdle.com')
   assert.equal(config.clientId, 'client-id')
   assert.equal(config.clientSecret, 'client-secret')
   assert.deepEqual(config.uploadRoots, [])
@@ -215,7 +215,12 @@ test('requires only Agent Connection credentials', () => {
     TODODDLE_BASE_URL: 'https://trackingti.me',
     TODODDLE_CLIENT_ID: 'client-id',
     TODODDLE_CLIENT_SECRET: 'client-secret',
-  }), /has moved.*www\.tododdle\.com/)
+  }), /application origin.*app\.tododdle\.com/)
+  assert.throws(() => loadMcpConfig({
+    TODODDLE_BASE_URL: 'https://www.tododdle.com',
+    TODODDLE_CLIENT_ID: 'client-id',
+    TODODDLE_CLIENT_SECRET: 'client-secret',
+  }), /application origin.*app\.tododdle\.com/)
 })
 
 test('uses the configured base URL for tokens and API requests', async () => {

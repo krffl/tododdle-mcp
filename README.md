@@ -300,13 +300,13 @@ Uploading a project document requires `projects:read` and `documents:write`. Att
 | --- | --- | --- | --- |
 | `TODODDLE_CLIENT_ID` | Yes | None | Agent Connection identifier |
 | `TODODDLE_CLIENT_SECRET` | Yes | None | Agent Connection secret |
-| `TODODDLE_BASE_URL` | No | `https://www.tododdle.com` | Hosted API origin; HTTPS is required except for loopback development |
+| `TODODDLE_BASE_URL` | No | `https://app.tododdle.com` | Application API origin; HTTPS is required except for loopback development |
 | `TODODDLE_UPLOAD_ROOTS` | No | None | Optional platform path-delimited list of additional directories the MCP may read for uploads |
 | `TODODDLE_MAX_UPLOAD_BYTES` | No | `1073741824` | Local safety ceiling; the hosted API may enforce a lower limit |
 
 No upload-root configuration is needed for normal local use. Stage temporary files below `<system-temp>/tododdle-mcp-uploads`; do not use the full system temporary directory as an approved root. On macOS and Linux, separate optional roots with `:`; on Windows, use `;`. The server resolves symlinks and rejects files outside managed staging and approved roots. Add optional roots only for Docker, sandboxes, or directories whose contents you approve for upload. HTTPS sources reject embedded credentials, private-network destinations, unsafe redirects, oversized responses, and empty files.
 
-Use the final API origin directly. Legacy `trackingti.me` URLs redirect to ToDoddle and are rejected because cross-origin redirects must not forward bearer credentials.
+Use the final application API origin directly. The public `tododdle.com` and `www.tododdle.com` hosts serve the marketing site and are rejected. Legacy `trackingti.me` hosts are also rejected because cross-origin redirects must not forward bearer credentials.
 
 Tokens are held in memory only and refreshed automatically. The client secret is sent only to ToDoddle's hosted token endpoint. Server diagnostics go to stderr so stdout remains reserved for MCP JSON-RPC.
 

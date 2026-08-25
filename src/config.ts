@@ -26,7 +26,7 @@ export function getDefaultManagedUploadRoot(
 }
 
 function normalizeBaseUrl(value: string | undefined): string {
-  const rawValue = value || 'https://www.tododdle.com';
+  const rawValue = value || 'https://app.tododdle.com';
   let url: URL;
 
   try {
@@ -36,10 +36,12 @@ function normalizeBaseUrl(value: string | undefined): string {
   }
 
   const isLoopback = ['localhost', '127.0.0.1', '::1'].includes(url.hostname);
-  if (['trackingti.me', 'www.trackingti.me'].includes(url.hostname)) {
-    throw new Error(
-      'TODODDLE_BASE_URL has moved; use https://www.tododdle.com instead of trackingti.me'
-    );
+  if (
+    ['trackingti.me', 'www.trackingti.me', 'tododdle.com', 'www.tododdle.com'].includes(
+      url.hostname
+    )
+  ) {
+    throw new Error('TODODDLE_BASE_URL must use the application origin https://app.tododdle.com');
   }
   if (url.protocol !== 'https:' && !(isLoopback && url.protocol === 'http:')) {
     throw new Error('TODODDLE_BASE_URL must use HTTPS except for loopback development');
