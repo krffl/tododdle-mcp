@@ -5,17 +5,17 @@
     "url": "https://tododdle.com"
   },
   "description": "Agent workflow plugins for ToDoddle.",
-  "version": "3.2.9",
+  "version": "3.3.0",
   "plugins": [
     {
       "name": "tododdle",
       "displayName": "ToDoddle",
       "description": "Use ToDoddle as the work ledger for project context and ticket execution.",
-      "version": "3.2.9",
+      "version": "3.3.0",
       "source": {
         "source": "npm",
         "package": "tododdle-mcp",
-        "version": "3.2.9"
+        "version": "3.3.0"
       },
       "category": "productivity",
       "tags": ["project-management", "tickets", "mcp"]

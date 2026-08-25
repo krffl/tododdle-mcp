@@ -6,7 +6,7 @@ The package contains no ToDoddle application or database code. It is a small std
 
 Version 3 sends its package version and compatibility level with every token and API request. If ToDoddle returns `MCP_UPDATE_REQUIRED`, run `npx --yes --prefer-online tododdle-mcp@latest` and restart the MCP host. The error includes the installed version, minimum supported level, update command, and current troubleshooting guide.
 
-Agent work claims let any connected agent indicate that it is actively handling a ticket without becoming the human assignee. Claims use the configured Agent Connection label, an opaque run ID, and an expiring lease.
+Agent work claims let any connected agent indicate that it is actively handling a ticket without becoming the human assignee. Claims use the configured Agent Connection label, an opaque run ID, and an expiring lease. Each claim also starts or resumes a durable Agent Run. The agent can record a terminal result, evidence, and optional usage telemetry without changing ticket status.
 
 ## Requirements
 
@@ -77,7 +77,7 @@ For every client, `npx` downloads the package to npm's cache. Cloning ToDoddle o
 
 The MCP server provides capabilities; the optional `tododdle-workflow` skill provides a disciplined operating process for choosing and using them. Its small entry file contains the common routing and safety rules. Direct reference links load file handling, project execution, time tracking, and scheduled workflow details only when needed. This keeps the normal prompt smaller without hiding required rules.
 
-The skill tells an agent to claim substantial ticket work, renew a long-running claim before it expires, and release the claim when work stops. It also covers ticket status, durable comments, verification, and handoffs. The skill does not add credentials or tools. Configure the MCP connection separately for each client.
+The skill tells an agent to claim substantial ticket work, renew a long-running claim before it expires, and finish its Agent Run with evidence. It also covers ticket status, durable comments, verification, and handoffs. The skill does not add credentials or tools. Configure the MCP connection separately for each client.
 
 ### Codex
 
@@ -175,12 +175,15 @@ Ticket attributes hold small typed integration and handoff facts. Read them befo
 - `list_project_artifacts`
 - `get_project_artifact`
 - `get_agent_inbox`
+- `list_agent_runs`
+- `get_agent_run`
 
 ### Manage Tickets
 
 - `claim_ticket`
 - `claim_next_ticket`
 - `renew_ticket_claim`
+- `finish_agent_run`
 - `release_ticket`
 - `create_ticket`
 - `update_ticket`
@@ -192,7 +195,7 @@ Ticket attributes hold small typed integration and handoff facts. Read them befo
 - `acknowledge_agent_reply`
 - `archive_ticket`
 
-`list_available_work` reads only unblocked, currently unclaimed work in one project. `claim_next_ticket` selects the highest-ranked eligible ticket. `claim_ticket`, `renew_ticket_claim`, and `release_ticket` manage its agent lease without changing human assignment. `preview_ticket_move` reports lane automation and hierarchy blockers before a board move. `move_ticket` and `archive_ticket` are destructive because a destination lane can archive the ticket. Ticket deletion is unavailable.
+`list_available_work` reads only unblocked, currently unclaimed work in one project. `claim_next_ticket` selects the highest-ranked eligible ticket. `claim_ticket` and `renew_ticket_claim` manage its agent lease without changing human assignment. `finish_agent_run` records the terminal result and releases the matching lease. `release_ticket` stops work without a result and records the run as cancelled. None of these tools changes ticket status. `preview_ticket_move` reports lane automation and hierarchy blockers before a board move. `move_ticket` and `archive_ticket` are destructive because a destination lane can archive the ticket. Ticket deletion is unavailable.
 
 Durable agent-to-human handoffs use typed `HANDOFF` comments with a concise outcome, verification and immutable evidence, and any remaining risk or next action. External mutations return a stable ToDoddle `uiUrl`; expiring asset token URLs must not be copied into comments. A continuing run reads and handles its Agent Connection inbox reply before acknowledgement, then reloads the linked record.
 

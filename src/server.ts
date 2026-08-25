@@ -36,6 +36,25 @@ const reviewRequestStateSchema = z.enum(['OPEN', 'COMPLETED', 'CANCELLED']);
 const reviewOutcomeSchema = z.enum(['APPROVED', 'CHANGES_REQUESTED', 'ACKNOWLEDGED']);
 const supportStatusSchema = z.enum(['NEW', 'OPEN', 'WAITING_ON_REQUESTER', 'RESOLVED', 'CLOSED']);
 const supportMessageVisibilitySchema = z.enum(['REQUESTER_VISIBLE', 'INTERNAL_NOTE']);
+const agentRunStateSchema = z.enum([
+  'ACTIVE',
+  'WAITING',
+  'SUCCEEDED',
+  'FAILED',
+  'CANCELLED',
+  'ABANDONED',
+]);
+const agentRunEvidenceTypeSchema = z.enum([
+  'COMMIT',
+  'PULL_REQUEST',
+  'DEPLOYMENT',
+  'TEST_RESULT',
+  'DOCUMENT',
+  'ATTACHMENT',
+  'COMMENT',
+  'CONTEXT',
+  'LINK',
+]);
 const commentKindSchema = z.enum([
   'DISCUSSION',
   'STATUS_UPDATE',
@@ -1696,6 +1715,86 @@ export function createToDoddleMcpServer(
     },
     async ({ taskId, ...body }) =>
       toolResult(await api.delete(`/api/external/tasks/${taskId}/claim`, body))
+  );
+
+  server.registerTool(
+    'list_agent_runs',
+    {
+      description:
+        'List bounded durable Agent Run attempts for one ticket and the current Agent Connection.',
+      inputSchema: z.object({
+        taskId: z.string().min(1),
+        state: agentRunStateSchema.optional(),
+        cursor: z.string().min(1).optional(),
+        limit: z.number().int().min(1).max(100).default(20),
+      }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ taskId, ...query }) =>
+      toolResult(await api.get(`/api/external/tasks/${taskId}/agent-runs`, query))
+  );
+
+  server.registerTool(
+    'get_agent_run',
+    {
+      description: 'Get one durable Agent Run owned by the current Agent Connection.',
+      inputSchema: z.object({ taskId: z.string().min(1), runId: z.string().min(1).max(200) }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ taskId, runId }) =>
+      toolResult(await api.get(`/api/external/tasks/${taskId}/agent-runs/${runId}`))
+  );
+
+  server.registerTool(
+    'finish_agent_run',
+    {
+      description:
+        'Submit the terminal result for a claimed Agent Run. This releases the matching claim but does not change ticket status or human assignment.',
+      inputSchema: z.object({
+        taskId: z.string().min(1),
+        runId: z.string().min(1).max(200),
+        state: z.enum(['SUCCEEDED', 'FAILED', 'CANCELLED']),
+        outcome: z.string().trim().min(1).max(2000),
+        failureClass: z.string().trim().min(1).max(120).optional(),
+        evidence: z
+          .array(
+            z.object({
+              type: agentRunEvidenceTypeSchema,
+              reference: z.string().trim().min(1).max(2000),
+              label: z.string().trim().min(1).max(200).optional(),
+            })
+          )
+          .max(25)
+          .default([]),
+        telemetry: z
+          .object({
+            durationMs: z.number().int().nonnegative().optional(),
+            inputTokens: z.number().int().nonnegative().optional(),
+            outputTokens: z.number().int().nonnegative().optional(),
+            costMicros: z.number().int().nonnegative().optional(),
+          })
+          .optional(),
+        idempotencyKey: z.string().trim().min(8).max(200),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ taskId, runId, ...body }) =>
+      toolResult(await api.post(`/api/external/tasks/${taskId}/agent-runs/${runId}`, body))
   );
 
   server.registerTool(

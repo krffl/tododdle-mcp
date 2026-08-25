@@ -80,6 +80,9 @@ test('discovers the bounded production tool surface', async () => {
   assert.equal(names.includes('renew_ticket_claim'), true)
   assert.equal(names.includes('list_available_work'), true)
   assert.equal(names.includes('release_ticket'), true)
+  assert.equal(names.includes('list_agent_runs'), true)
+  assert.equal(names.includes('get_agent_run'), true)
+  assert.equal(names.includes('finish_agent_run'), true)
   assert.equal(names.includes('add_ticket_to_focus'), true)
   assert.equal(names.includes('move_focus_ticket'), true)
   assert.equal(names.includes('remove_ticket_from_focus'), true)
@@ -880,6 +883,41 @@ test('serializes Agent Connection task claims and releases', async () => {
         method: 'DELETE',
         path: '/api/external/tasks/task-1/claim',
         body: { runId: 'run-1' },
+      },
+    ])
+  } finally {
+    await client.close()
+    await server.close()
+  }
+})
+
+test('serializes durable Agent Run reads and terminal results', async () => {
+  const calls = []
+  const runApi = {
+    ...api,
+    get: async (path, query) => { calls.push({ method: 'GET', path, query }); return { items: [] } },
+    post: async (path, body) => { calls.push({ method: 'POST', path, body }); return { entity: {} } },
+  }
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer(runApi)
+  const client = new Client({ name: 'agent-run-test', version: '1.0.0' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  try {
+    await client.callTool({ name: 'list_agent_runs', arguments: { taskId: 'task-1', state: 'FAILED', limit: 5 } })
+    await client.callTool({ name: 'get_agent_run', arguments: { taskId: 'task-1', runId: 'run-1' } })
+    await client.callTool({
+      name: 'finish_agent_run',
+      arguments: {
+        taskId: 'task-1', runId: 'run-1', state: 'SUCCEEDED', outcome: 'Tests passed',
+        idempotencyKey: 'finish-run-1', evidence: [{ type: 'COMMIT', reference: 'abc123' }],
+      },
+    })
+    assert.deepEqual(calls, [
+      { method: 'GET', path: '/api/external/tasks/task-1/agent-runs', query: { state: 'FAILED', limit: 5 } },
+      { method: 'GET', path: '/api/external/tasks/task-1/agent-runs/run-1', query: undefined },
+      {
+        method: 'POST', path: '/api/external/tasks/task-1/agent-runs/run-1',
+        body: { state: 'SUCCEEDED', outcome: 'Tests passed', idempotencyKey: 'finish-run-1', evidence: [{ type: 'COMMIT', reference: 'abc123' }] },
       },
     ])
   } finally {

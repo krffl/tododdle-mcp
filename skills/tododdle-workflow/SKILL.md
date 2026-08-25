@@ -26,7 +26,7 @@ Before choosing new work or answering an operational “what’s next,” call `
 
 - Read before creating project structure. Do not duplicate boards or lanes. Use `list_project_members` for assignees; never guess a user ID.
 - Transition the ticket to the active status when substantial work begins.
-- For a known ticket, call `claim_ticket` with a unique run ID. Renew before expiry. Use `WAITING` only for a short pause. Release the claim when work stops, completes, or hands off. Do not claim for simple reads or planning.
+- For a known ticket, call `claim_ticket` with a unique run ID. This starts or resumes its durable Agent Run. Renew before expiry. Use `WAITING` only for a short pause. Do not claim for simple reads or planning.
 - Respect another active claim. Report its Agent Connection label and wait for release or expiry.
 - Keep ticket kind, parent, lane, assignee, due date, priority, and blockers accurate.
 - Read typed attributes before changes. Use them for durable integration facts, never secrets.
@@ -43,9 +43,10 @@ For detailed project structure and execution rules, read [project-work.md](refer
 
 1. Run appropriate verification.
 2. Add one typed `HANDOFF` comment with `## Outcome`, `## Verification`, and `## Remaining` when useful. Include stable links and immutable commit, release, document, or artifact IDs. Never store expiring URLs.
-3. Set the ticket to `COMPLETE` only when the requested result is achieved.
-4. Release the active claim after the durable update.
-5. Keep incomplete work active and state what remains.
+3. Call `finish_agent_run` once with a short outcome and durable evidence. Use `SUCCEEDED`, `FAILED`, or `CANCELLED`. Reuse its idempotency key if delivery is uncertain.
+4. Set the ticket to `COMPLETE` only when the requested result is achieved. A run result never changes ticket status.
+5. Use `release_ticket` only when stopping without a terminal result. It records the run as cancelled.
+6. Keep incomplete work active and state what remains.
 
 When resuming, read the agent inbox, handle the reply, then reload the linked item. Use a new run ID and refer to the prior handoff.
 
