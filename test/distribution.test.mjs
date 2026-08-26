@@ -101,6 +101,8 @@ test('workflow skill declares the MCP dependency and core safety rules', async (
   assert.match(skill, /Do not request full list detail/);
   assert.match(skill, /list_project_members/);
   assert.match(projectWork, /Archive a project, board, lane, or Note only with explicit approval/);
+  assert.match(projectWork, /Pass `parentArtifactId` when a Context artifact belongs under another artifact/);
+  assert.match(projectWork, /Set it to `null` on update to move the artifact to the top level/);
   assert.match(skill, /COMPLETE/);
   assert.match(timeTracking, /Never invent elapsed time/);
   assert.match(skill, /typed `HANDOFF` comment/);
@@ -196,6 +198,9 @@ test('README documents bounded and compaction-safe context loading', async () =>
   assert.match(readme, /follow their pagination metadata/);
   assert.match(readme, /compaction summary/);
   assert.match(readme, /Refresh only volatile ticket state/);
+  assert.match(readme, /Context artifacts can form a tree/);
+  assert.match(readme, /Supply `parentArtifactId` when creating or updating a child artifact/);
+  assert.match(readme, /hierarchy cycles/);
   assert.match(readme, /Simple lookups should skip the brief and full context entirely/);
 });
 

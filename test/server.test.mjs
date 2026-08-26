@@ -60,6 +60,8 @@ test('discovers the bounded production tool surface', async () => {
   assert.match(listProjectArtifactsTool?.description || '', /summary-only/)
   assert.match(JSON.stringify(createProjectArtifactTool?.inputSchema.properties?.summary), /"maxLength":500/)
   assert.match(JSON.stringify(updateProjectArtifactTool?.inputSchema.properties?.summary), /"maxLength":500/)
+  assert.match(JSON.stringify(createProjectArtifactTool?.inputSchema.properties?.parentArtifactId), /"null"/)
+  assert.match(JSON.stringify(updateProjectArtifactTool?.inputSchema.properties?.parentArtifactId), /"null"/)
   assert.equal(names.includes('get_active_time_entries'), true)
   assert.equal(names.includes('get_focus_list'), true)
   assert.equal(names.includes('list_tickets'), true)
@@ -295,6 +297,7 @@ test('serializes project, plan, section, Note, and supporting tools', async () =
     get: async (path, query) => { calls.push({ method: 'GET', path, query }); return { items: [] } },
     post: async (path, body, idempotencyKey) => { calls.push({ method: 'POST', path, body, idempotencyKey }); return { entity: {} } },
     put: async (path, body) => { calls.push({ method: 'PUT', path, body }); return { entity: {} } },
+    patch: async (path, body) => { calls.push({ method: 'PATCH', path, body }); return { entity: {} } },
     delete: async (path, body) => { calls.push({ method: 'DELETE', path, body }); return { entity: {} } },
   }
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
@@ -315,6 +318,8 @@ test('serializes project, plan, section, Note, and supporting tools', async () =
     await client.callTool({ name: 'create_note', arguments: { projectId: 'project-1', title: 'Runbook', content: 'Project steps.', idempotencyKey: 'note-key-1' } })
     await client.callTool({ name: 'update_note', arguments: { projectId: 'project-1', noteId: 'note-1', expectedUpdatedAt, title: 'Updated runbook' } })
     await client.callTool({ name: 'archive_note', arguments: { projectId: 'project-1', noteId: 'note-1', expectedUpdatedAt } })
+    await client.callTool({ name: 'create_project_artifact', arguments: { projectId: 'project-1', type: 'SPEC', title: 'Child spec', summary: 'A nested project specification.', parentArtifactId: 'artifact-parent', idempotencyKey: 'artifact-key-1' } })
+    await client.callTool({ name: 'update_project_artifact', arguments: { projectId: 'project-1', artifactId: 'artifact-1', expectedUpdatedAt, parentArtifactId: null, changeNote: 'Move the artifact to the top level.' } })
     await client.callTool({ name: 'list_artifact_revisions', arguments: { projectId: 'project-1', artifactId: 'artifact-1' } })
 
     assert.deepEqual(calls, [
@@ -329,6 +334,8 @@ test('serializes project, plan, section, Note, and supporting tools', async () =
       { method: 'POST', path: '/api/external/notes', body: { projectId: 'project-1', title: 'Runbook', content: 'Project steps.' }, idempotencyKey: 'note-key-1' },
       { method: 'PUT', path: '/api/external/notes/note-1', body: { projectId: 'project-1', expectedUpdatedAt, title: 'Updated runbook' } },
       { method: 'DELETE', path: '/api/external/notes/note-1', body: { projectId: 'project-1', expectedUpdatedAt } },
+      { method: 'POST', path: '/api/external/projects/project-1/artifacts', body: { type: 'SPEC', title: 'Child spec', summary: 'A nested project specification.', parentArtifactId: 'artifact-parent' }, idempotencyKey: 'artifact-key-1' },
+      { method: 'PATCH', path: '/api/external/projects/project-1/artifacts/artifact-1', body: { expectedUpdatedAt, parentArtifactId: null, changeNote: 'Move the artifact to the top level.' } },
       { method: 'GET', path: '/api/external/projects/project-1/artifacts/artifact-1/revisions', query: undefined },
     ])
   } finally {

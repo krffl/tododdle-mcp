@@ -126,6 +126,8 @@ For substantial planning or implementation, load project context in a small, pre
 
 When an agent creates or changes artifact Markdown, it should provide a current summary in the same request. Summaries are limited to 500 characters. Older clients may omit the summary; the API accepts the write and returns a warning so the summary can be repaired before handoff.
 
+Context artifacts can form a tree. Supply `parentArtifactId` when creating or updating a child artifact. Set `parentArtifactId` to `null` during an update to move the artifact to the top level. The parent must belong to the same project. The canonical project brief cannot be a parent or child. ToDoddle rejects self-parenting and hierarchy cycles.
+
 Simple lookups should skip the brief and full context entirely. Use `search_project` when you know the project but not the item ID. It returns compact ticket, board, lane, Note, Context, and document matches. Follow the selected result with the narrowest get tool. Use `get_ticket` for one known ticket, `get_tickets` for 1–20 known ticket IDs, or hierarchy-filtered `list_tickets` for bounded browsing. `list_tickets` and `get_work_queue` return compact summaries by default. Set `detail` to `full` only when the complete list payload is necessary. `get_tickets` excludes comments by default. Request `latest_update` for one recent handoff or status update per ticket, or `all` only when full history is necessary. Do not batch-hydrate a broad list without a clear need. `get_work_queue` remains the cross-project operational view. The stable API fields `planId`, `sectionId`, and `taskId` identify boards, lanes, and tickets.
 
 ### Version 3 migration
@@ -262,6 +264,8 @@ Omit `projectId` to work with workspace Notes. Supply `projectId` to work with N
 - `add_artifact_comment`
 - `list_artifact_revisions`
 - `link_project_artifacts`
+
+`create_project_artifact` and `update_project_artifact` accept an optional `parentArtifactId`. Use it for true parent-child Context nesting. Set it to `null` on update to remove the current parent.
 
 ### Upload Files
 

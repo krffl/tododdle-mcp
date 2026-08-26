@@ -21,6 +21,8 @@ Read this file only when creating project structure or when execution needs thes
 ## Durable State
 
 - Keep the ticket’s kind, parent, lane, assignee, due date, priority, blockers, and active-child links accurate.
+- Keep Context hierarchy accurate. Pass `parentArtifactId` when a Context artifact belongs under another artifact. Set it to `null` on update to move the artifact to the top level.
+- Use only a parent from the same project. Do not parent the canonical project brief. Avoid self-parenting and hierarchy cycles.
 - Use typed attributes for facts such as `source.repository`, `source.branch`, and `delivery.environment`.
 - Do not store credentials or tokens in attributes.
 - Set a blocker relationship when a tracked ticket prevents progress. Add one concise comment that explains the effect.
