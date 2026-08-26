@@ -146,6 +146,32 @@ test('workflow skill declares the MCP dependency and core safety rules', async (
   assert.match(metadata, /allow_implicit_invocation: true/);
 });
 
+test('bootstrap skill safely binds an existing repository to a verified project', async () => {
+  const skill = await readFile(
+    new URL('../skills/tododdle-bootstrap/SKILL.md', import.meta.url),
+    'utf8'
+  );
+  const metadata = await readFile(
+    new URL('../skills/tododdle-bootstrap/agents/openai.yaml', import.meta.url),
+    'utf8'
+  );
+  const updater = await readFile(
+    new URL('../skills/tododdle-bootstrap/scripts/update-agents.mjs', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(skill, /Verify the target project through ToDoddle/);
+  assert.match(skill, /`AGENTS\.override\.md` takes precedence/);
+  assert.match(skill, /Run it with `--dry-run` first/);
+  assert.match(skill, /start a new agent task or restart the agent host/);
+  assert.match(skill, /Preserve all content outside/);
+  assert.match(skill, /Stop on unmatched or duplicate markers/);
+  assert.match(metadata, /value: "tododdle"/);
+  assert.match(metadata, /\$tododdle-bootstrap/);
+  assert.match(updater, /<!-- tododdle:start -->/);
+  assert.match(updater, /Malformed ToDoddle markers/);
+});
+
 test('suggested AGENTS rules require concise, human ticket writing', async () => {
   const agents = await readFile(new URL('../examples/AGENTS.tododdle.md', import.meta.url), 'utf8');
 

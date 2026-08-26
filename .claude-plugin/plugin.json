@@ -2,7 +2,7 @@
   "name": "tododdle",
   "displayName": "ToDoddle",
   "version": "3.3.0",
-  "description": "Disciplined agent workflows for projects managed in ToDoddle.",
+  "description": "Connect repositories and run disciplined agent workflows in ToDoddle.",
   "author": {
     "name": "ToDoddle",
     "url": "https://tododdle.com"

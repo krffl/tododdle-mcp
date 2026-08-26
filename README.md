@@ -75,32 +75,34 @@ For every client, `npx` downloads the package to npm's cache. Cloning ToDoddle o
 
 ## Workflow Guidance
 
-The MCP server provides capabilities; the optional `tododdle-workflow` skill provides a disciplined operating process for choosing and using them. Its small entry file contains the common routing and safety rules. Direct reference links load file handling, project execution, time tracking, and scheduled workflow details only when needed. This keeps the normal prompt smaller without hiding required rules.
+The MCP server provides capabilities. The optional `tododdle-workflow` skill provides a disciplined operating process for choosing and using them. The separate `tododdle-bootstrap` skill binds an existing repository to one verified ToDoddle project. Its deterministic updater adds a small managed block to the effective root agent instructions.
+
+The workflow skill keeps common routing and safety rules in a small entry file. Direct reference links load file handling, project execution, time tracking, and scheduled workflow details only when needed. This keeps the normal prompt smaller without hiding required rules.
 
 The skill tells an agent to claim substantial ticket work, renew a long-running claim before it expires, and finish its Agent Run with evidence. It also covers ticket status, durable comments, verification, and handoffs. The skill does not add credentials or tools. Configure the MCP connection separately for each client.
 
 ### Codex
 
-The npm package includes a Codex plugin containing this skill. Configure the MCP server first using the Codex instructions above, then add the ToDoddle plugin marketplace:
+The npm package includes a Codex plugin containing both skills. Configure the MCP server first using the Codex instructions above, then add the ToDoddle plugin marketplace:
 
 ```bash
 codex plugin marketplace add krffl/tododdle-mcp
 ```
 
-Restart Codex, open the Plugins Directory, select **ToDoddle**, and install the plugin. Codex can invoke the skill automatically when a request concerns tracked work, or you can invoke it explicitly as `$tododdle-workflow`.
+Restart Codex, open the Plugins Directory, select **ToDoddle**, and install the plugin. Codex can invoke the skills automatically. Use `$tododdle-bootstrap` to connect an existing repository. Use `$tododdle-workflow` for tracked work after setup.
 
-Installing the plugin does not create or expand ToDoddle credentials, scopes, or project grants. The skill declares the separately configured `tododdle` MCP server as a dependency.
+Installing the plugin does not create or expand ToDoddle credentials, scopes, or project grants. Both skills declare the separately configured `tododdle` MCP server as a dependency.
 
 ### Claude Code
 
-The same npm package includes a Claude Code plugin containing the canonical workflow skill. Keep the existing ToDoddle MCP connection. Add the marketplace and install the plugin in Claude Code:
+The same npm package includes a Claude Code plugin containing the workflow and bootstrap skills. Keep the existing ToDoddle MCP connection. Add the marketplace and install the plugin in Claude Code:
 
 ```text
 /plugin marketplace add krffl/tododdle-mcp
 /plugin install tododdle@tododdle
 ```
 
-Choose user scope to use the workflow across projects. Run `/reload-plugins` if Claude Code asks you to activate the plugin. The skill is available as `/tododdle:tododdle-workflow`, and Claude Code can also invoke it from its description when the request concerns tracked ToDoddle work.
+Choose user scope to use the workflow across projects. Run `/reload-plugins` if Claude Code asks you to activate the plugin. Use `/tododdle:tododdle-bootstrap` for repository setup and `/tododdle:tododdle-workflow` for tracked work. Claude Code can also invoke each skill from its description.
 
 Installing this plugin does not start another MCP server. It does not change OAuth, Agent Connection scopes, project grants, or existing MCP credentials.
 
@@ -134,7 +136,11 @@ The server returns authoritative website URLs with records so an agent can hand 
 
 ### Repository Policy
 
-When ToDoddle should be mandatory for one repository, merge the relevant rules from [`examples/AGENTS.tododdle.md`](examples/AGENTS.tododdle.md) into that repository's `AGENTS.md`. The policy makes tracking updates durable repository guidance; the skill remains the reusable workflow.
+When adding ToDoddle to an existing repository, invoke `$tododdle-bootstrap`. It verifies the ToDoddle project and adds a managed work-ledger block to the effective root instruction file. It uses `AGENTS.override.md` when that file already exists. Otherwise, it updates or creates `AGENTS.md`.
+
+The bootstrap updater preserves every instruction outside `<!-- tododdle:start -->` and `<!-- tododdle:end -->`. It updates an existing block instead of adding a duplicate. It stops on malformed markers. Run its dry mode first and review the diff before writing. The updater never commits, pushes, or stores credentials.
+
+Start a new agent task or restart the agent host after bootstrap. Agents load repository instructions at task start. [`examples/AGENTS.tododdle.md`](examples/AGENTS.tododdle.md) remains the detailed manual policy for repositories that need more rules than the managed block.
 
 ## Tools
 

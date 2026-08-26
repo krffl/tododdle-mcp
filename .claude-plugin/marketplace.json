@@ -10,7 +10,7 @@
     {
       "name": "tododdle",
       "displayName": "ToDoddle",
-      "description": "Use ToDoddle as the work ledger for project context and ticket execution.",
+      "description": "Connect repositories and use ToDoddle for project context and ticket execution.",
       "version": "3.3.0",
       "source": {
         "source": "npm",

@@ -14,7 +14,7 @@
   "interface": {
     "displayName": "ToDoddle",
     "shortDescription": "Manage tracked work with project context",
-    "longDescription": "Use ToDoddle as the shared work ledger for project context, board and lane structure, ticket execution, durable status updates, blockers, comments, and time tracking.",
+    "longDescription": "Connect an existing repository to a verified ToDoddle project, then use ToDoddle as the shared work ledger for project context, board and lane structure, ticket execution, durable status updates, blockers, comments, and time tracking.",
     "developerName": "ToDoddle",
     "category": "Productivity",
     "capabilities": ["Read", "Write"],

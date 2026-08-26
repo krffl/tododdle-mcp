@@ -1,0 +1,14 @@
+interface:
+  display_name: "ToDoddle Bootstrap"
+  short_description: "Connect an existing repository to ToDoddle"
+  default_prompt: "Use $tododdle-bootstrap to connect this repository to its verified ToDoddle project."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "tododdle"
+      description: "ToDoddle project discovery and verification tools"
+      transport: "stdio"
+
+policy:
+  allow_implicit_invocation: true
