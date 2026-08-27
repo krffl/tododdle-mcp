@@ -75,7 +75,15 @@ For every client, `npx` downloads the package to npm's cache. Cloning ToDoddle o
 
 ## Workflow Guidance
 
-The MCP server provides capabilities. The optional `tododdle-workflow` skill provides a disciplined operating process for choosing and using them. The separate `tododdle-bootstrap` skill binds an existing repository to one verified ToDoddle project. Its deterministic updater adds a small managed block to the effective root agent instructions.
+The MCP server provides capabilities. The package distributes three optional skills:
+
+| Skill | Use |
+| --- | --- |
+| `tododdle-workflow` | Manage ordinary tracked work and use ToDoddle as the durable ledger. |
+| `tododdle-bootstrap` | Bind an existing repository to one verified ToDoddle project. |
+| `tododdle-factory` | Run one explicit, supervised autonomous delivery attempt with an Agent Run and stable evidence. |
+
+The bootstrap skill has a deterministic updater that adds a small managed block to the effective root agent instructions. The Factory skill reuses the workflow rules and adds bounded delivery, escalation, cleanup, and package staging checks.
 
 The workflow skill keeps common routing and safety rules in a small entry file. Direct reference links load file handling, project execution, time tracking, and scheduled workflow details only when needed. This keeps the normal prompt smaller without hiding required rules.
 
@@ -83,26 +91,32 @@ The skill tells an agent to claim substantial ticket work, renew a long-running 
 
 ### Codex
 
-The npm package includes a Codex plugin containing both skills. Configure the MCP server first using the Codex instructions above, then add the ToDoddle plugin marketplace:
+The npm package includes a Codex plugin containing all three skills. Configure the MCP server first using the Codex instructions above, then add the ToDoddle plugin marketplace:
 
 ```bash
 codex plugin marketplace add krffl/tododdle-mcp
 ```
 
-Restart Codex, open the Plugins Directory, select **ToDoddle**, and install the plugin. Codex can invoke the skills automatically. Use `$tododdle-bootstrap` to connect an existing repository. Use `$tododdle-workflow` for tracked work after setup.
+Restart Codex, open the Plugins Directory, select **ToDoddle**, and install the plugin. Codex can invoke the skills automatically. Use `$tododdle-bootstrap` to connect an existing repository. Use `$tododdle-workflow` for ordinary tracked work. Invoke `$tododdle-factory` only for an explicit supervised factory run or autonomous delivery request.
 
-Installing the plugin does not create or expand ToDoddle credentials, scopes, or project grants. Both skills declare the separately configured `tododdle` MCP server as a dependency.
+Installing the plugin does not create or expand ToDoddle credentials, scopes, or project grants. All three skills declare the separately configured `tododdle` MCP server as a dependency.
 
 ### Claude Code
 
-The same npm package includes a Claude Code plugin containing the workflow and bootstrap skills. Keep the existing ToDoddle MCP connection. Add the marketplace and install the plugin in Claude Code:
+The same npm package includes a Claude Code plugin containing the workflow, bootstrap, and Factory skills. Keep the existing ToDoddle MCP connection. Add the marketplace and install the plugin in Claude Code:
 
 ```text
 /plugin marketplace add krffl/tododdle-mcp
 /plugin install tododdle@tododdle
 ```
 
-Choose user scope to use the workflow across projects. Run `/reload-plugins` if Claude Code asks you to activate the plugin. Use `/tododdle:tododdle-bootstrap` for repository setup and `/tododdle:tododdle-workflow` for tracked work. Claude Code can also invoke each skill from its description.
+Choose user scope to use the workflow across projects. Run `/reload-plugins` if Claude Code asks you to activate the plugin. Use `/tododdle:tododdle-bootstrap` for repository setup, `/tododdle:tododdle-workflow` for ordinary tracked work, and `/tododdle:tododdle-factory` for an explicit supervised delivery run. Claude Code can also invoke each skill from its description.
+
+### Supervised Factory Runs
+
+The optional Factory skill coordinates one delivery attempt. The installed coding client supplies the model, repository, terminal, Git, and tests. ToDoddle supplies the brief, Context, Ticket, claim, durable Agent Run, evidence, review, and human oversight.
+
+The skill stops for unclear requirements, destructive actions, migrations that need review, security or billing risk, production access, stale revisions, claim conflicts, missing access, failed verification, or exhausted limits. It records a handoff and releases the claim. It never silently completes or archives a Ticket. Before publishing a package that changes the Factory skill, complete its supervised staging dogfood gate.
 
 Installing this plugin does not start another MCP server. It does not change OAuth, Agent Connection scopes, project grants, or existing MCP credentials.
 

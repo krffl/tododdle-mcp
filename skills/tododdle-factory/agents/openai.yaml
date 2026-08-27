@@ -1,0 +1,14 @@
+interface:
+  display_name: "ToDoddle Factory"
+  short_description: "Run supervised autonomous ticket delivery"
+  default_prompt: "Use $tododdle-factory to deliver one tracked Ticket through a supervised, bounded Agent Run."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "tododdle"
+      description: "ToDoddle project context, ticket, claim, Agent Run, evidence, comment, and review tools"
+      transport: "stdio"
+
+policy:
+  allow_implicit_invocation: true

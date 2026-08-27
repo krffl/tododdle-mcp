@@ -174,6 +174,43 @@ test('bootstrap skill safely binds an existing repository to a verified project'
   assert.match(updater, /Malformed ToDoddle markers/);
 });
 
+test('factory skill scopes autonomous delivery and preserves human control', async () => {
+  const skill = await readFile(
+    new URL('../skills/tododdle-factory/SKILL.md', import.meta.url),
+    'utf8'
+  );
+  const metadata = await readFile(
+    new URL('../skills/tododdle-factory/agents/openai.yaml', import.meta.url),
+    'utf8'
+  );
+  const dogfood = await readFile(
+    new URL('../skills/tododdle-factory/references/staging-dogfood.md', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(skill, /only when the user explicitly asks for a factory run or autonomous delivery/);
+  assert.match(skill, /Use tododdle-workflow for ordinary ledger updates/);
+  assert.match(skill, /\.\.\/tododdle-workflow\/SKILL\.md/);
+  assert.match(skill, /unique opaque run ID/);
+  assert.match(skill, /claim_ticket/);
+  assert.match(skill, /renew_ticket_claim/);
+  assert.match(skill, /finish_agent_run/);
+  assert.match(skill, /stable evidence/);
+  assert.match(skill, /Never approve your own work/);
+  assert.match(skill, /finish the run as `FAILED`/);
+  assert.match(skill, /call `release_ticket`/);
+  assert.match(skill, /Confirm the claim is released/);
+  assert.match(skill, /Remove only temporary files created by the run/);
+  assert.match(skill, /Never silently complete, close, reject, move, or archive/);
+  assert.match(metadata, /value: "tododdle"/);
+  assert.match(metadata, /\$tododdle-factory/);
+  assert.match(metadata, /allow_implicit_invocation: true/);
+  assert.match(dogfood, /non-critical staging Ticket/);
+  assert.match(dogfood, /Exercise one safe stop/);
+  assert.match(dogfood, /terminal result releases the claim/);
+  assert.match(dogfood, /Do not publish when any check fails/);
+});
+
 test('suggested AGENTS rules require concise, human ticket writing', async () => {
   const agents = await readFile(new URL('../examples/AGENTS.tododdle.md', import.meta.url), 'utf8');
 
