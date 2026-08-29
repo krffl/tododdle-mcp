@@ -4,6 +4,7 @@ import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mc
 import { z } from 'zod';
 import type { ToDoddleApi } from './api-client.js';
 import { prepareUploadSource } from './upload-source.js';
+import { TODODDLE_WORKFLOW_GUIDANCE } from './workflow-guidance.js';
 
 const packageVersion = JSON.parse(
   readFileSync(new URL('../package.json', import.meta.url), 'utf8')
@@ -129,6 +130,23 @@ function toolResult(value: Record<string, unknown>) {
     content: [{ type: 'text' as const, text: JSON.stringify(value) }],
     structuredContent: value,
   };
+}
+
+type RunAction =
+  | 'READ_PROJECT_DATA'
+  | 'UPDATE_TICKET'
+  | 'ADD_INTERNAL_COMMENT'
+  | 'UPDATE_INTERNAL_WORKFLOW'
+  | 'RECORD_EVIDENCE'
+  | 'UPLOAD_INTERNAL_ATTACHMENT';
+
+function runContext(
+  runId: string | undefined,
+  projectId: string | undefined,
+  taskId: string,
+  action: RunAction
+) {
+  return runId && projectId ? { runId, projectId, taskId, action } : undefined;
 }
 
 export interface ToDoddleMcpServerOptions {
@@ -269,7 +287,10 @@ export function createToDoddleMcpServer(
     managedUploadRoot: serverOptions.managedUploadRoot,
     maxUploadBytes: serverOptions.maxUploadBytes ?? 1024 * 1024 * 1024,
   };
-  const server = new McpServer({ name: 'tododdle', version: packageVersion.version });
+  const server = new McpServer(
+    { name: 'tododdle', version: packageVersion.version },
+    { instructions: TODODDLE_WORKFLOW_GUIDANCE }
+  );
 
   server.registerTool(
     'list_projects',
@@ -1175,7 +1196,11 @@ export function createToDoddleMcpServer(
     {
       description:
         'Get bounded project structure, brief summary, and artifact summaries for planning.',
-      inputSchema: z.object({ projectId: z.string().min(1) }),
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        taskId: z.string().min(1).optional(),
+        runId: z.string().min(1).max(200).optional(),
+      }),
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -1183,8 +1208,12 @@ export function createToDoddleMcpServer(
         openWorldHint: false,
       },
     },
-    async ({ projectId }) =>
-      toolResult(await api.get(`/api/external/projects/${projectId}/context`))
+    async ({ projectId, taskId, runId }) =>
+      toolResult(await api.get(
+        `/api/external/projects/${projectId}/context`,
+        undefined,
+        taskId ? runContext(runId, projectId, taskId, 'READ_PROJECT_DATA') : undefined
+      ))
   );
 
   server.registerTool(
@@ -1485,7 +1514,11 @@ export function createToDoddleMcpServer(
     'get_ticket',
     {
       description: 'Get complete ticket context including comments and blocker information.',
-      inputSchema: z.object({ taskId: z.string().min(1) }),
+      inputSchema: z.object({
+        taskId: z.string().min(1),
+        projectId: z.string().min(1).optional(),
+        runId: z.string().min(1).max(200).optional(),
+      }),
       annotations: {
         readOnlyHint: true,
         destructiveHint: false,
@@ -1493,7 +1526,11 @@ export function createToDoddleMcpServer(
         openWorldHint: false,
       },
     },
-    async ({ taskId }) => toolResult(await api.get(`/api/external/tasks/${taskId}`))
+    async ({ taskId, projectId, runId }) => toolResult(await api.get(
+      `/api/external/tasks/${taskId}`,
+      undefined,
+      runContext(runId, projectId, taskId, 'READ_PROJECT_DATA')
+    ))
   );
 
   server.registerTool(
@@ -1763,6 +1800,7 @@ export function createToDoddleMcpServer(
       inputSchema: z.object({
         taskId: z.string().min(1),
         runId: z.string().min(1).max(200),
+        projectId: z.string().min(1).optional(),
         state: z.enum(['SUCCEEDED', 'FAILED', 'CANCELLED']),
         outcome: z.string().trim().min(1).max(2000),
         failureClass: z.string().trim().min(1).max(120).optional(),
@@ -1793,8 +1831,13 @@ export function createToDoddleMcpServer(
         openWorldHint: false,
       },
     },
-    async ({ taskId, runId, ...body }) =>
-      toolResult(await api.post(`/api/external/tasks/${taskId}/agent-runs/${runId}`, body))
+    async ({ taskId, runId, projectId, ...body }) =>
+      toolResult(await api.post(
+        `/api/external/tasks/${taskId}/agent-runs/${runId}`,
+        body,
+        undefined,
+        runContext(runId, projectId, taskId, 'RECORD_EVIDENCE')
+      ))
   );
 
   server.registerTool(
@@ -1834,6 +1877,8 @@ export function createToDoddleMcpServer(
         'Update editable ticket fields. Requires the latest updatedAt value to prevent overwriting newer changes.',
       inputSchema: z.object({
         taskId: z.string().min(1),
+        projectId: z.string().min(1).optional(),
+        runId: z.string().min(1).max(200).optional(),
         expectedUpdatedAt: expectedUpdatedAtSchema,
         title: z.string().min(1).optional(),
         description: z.string().nullable().optional(),
@@ -1850,7 +1895,11 @@ export function createToDoddleMcpServer(
         openWorldHint: false,
       },
     },
-    async ({ taskId, ...body }) => toolResult(await api.put(`/api/external/tasks/${taskId}`, body))
+    async ({ taskId, projectId, runId, ...body }) => toolResult(await api.put(
+      `/api/external/tasks/${taskId}`,
+      body,
+      runContext(runId, projectId, taskId, 'UPDATE_TICKET')
+    ))
   );
 
   server.registerTool(
@@ -1859,6 +1908,8 @@ export function createToDoddleMcpServer(
       description: 'Transition a ticket to a canonical status.',
       inputSchema: z.object({
         taskId: z.string().min(1),
+        projectId: z.string().min(1).optional(),
+        runId: z.string().min(1).max(200).optional(),
         status: statusSchema,
         expectedUpdatedAt: expectedUpdatedAtSchema,
       }),
@@ -1869,7 +1920,11 @@ export function createToDoddleMcpServer(
         openWorldHint: false,
       },
     },
-    async ({ taskId, ...body }) => toolResult(await api.put(`/api/external/tasks/${taskId}`, body))
+    async ({ taskId, projectId, runId, ...body }) => toolResult(await api.put(
+      `/api/external/tasks/${taskId}`,
+      body,
+      runContext(runId, projectId, taskId, 'UPDATE_INTERNAL_WORKFLOW')
+    ))
   );
 
   server.registerTool(
@@ -1923,6 +1978,8 @@ export function createToDoddleMcpServer(
       description: 'Set or clear the active same-project ticket blocking this ticket.',
       inputSchema: z.object({
         taskId: z.string().min(1),
+        projectId: z.string().min(1).optional(),
+        runId: z.string().min(1).max(200).optional(),
         blockedByTaskId: z.string().nullable(),
         expectedUpdatedAt: expectedUpdatedAtSchema,
       }),
@@ -1933,7 +1990,11 @@ export function createToDoddleMcpServer(
         openWorldHint: false,
       },
     },
-    async ({ taskId, ...body }) => toolResult(await api.put(`/api/external/tasks/${taskId}`, body))
+    async ({ taskId, projectId, runId, ...body }) => toolResult(await api.put(
+      `/api/external/tasks/${taskId}`,
+      body,
+      runContext(runId, projectId, taskId, 'UPDATE_INTERNAL_WORKFLOW')
+    ))
   );
 
   server.registerTool(
@@ -1943,6 +2004,8 @@ export function createToDoddleMcpServer(
         'Add an implementation note, finding, decision, or completion evidence to a ticket.',
       inputSchema: z.object({
         taskId: z.string().min(1),
+        projectId: z.string().min(1).optional(),
+        runId: z.string().min(1).max(200).optional(),
         content: z.string().min(1),
         kind: commentKindSchema.default('DISCUSSION'),
         replyToCommentId: z.string().min(1).optional(),
@@ -1955,12 +2018,13 @@ export function createToDoddleMcpServer(
         openWorldHint: false,
       },
     },
-    async ({ taskId, idempotencyKey, ...body }) =>
+    async ({ taskId, projectId, runId, idempotencyKey, ...body }) =>
       toolResult(
         await api.post(
           `/api/external/tasks/${taskId}/comments`,
           body,
-          idempotencyKey || randomUUID()
+          idempotencyKey || randomUUID(),
+          runContext(runId, projectId, taskId, 'ADD_INTERNAL_COMMENT')
         )
       )
   );

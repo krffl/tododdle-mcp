@@ -7,6 +7,20 @@ interface TokenResponse {
   expires_in: number;
 }
 
+export interface AgentRunRequestContext {
+  runId: string;
+  projectId: string;
+  taskId: string;
+  action:
+    | 'READ_PROJECT_DATA'
+    | 'UPDATE_TICKET'
+    | 'ADD_INTERNAL_COMMENT'
+    | 'UPDATE_INTERNAL_WORKFLOW'
+    | 'RECORD_EVIDENCE'
+    | 'UPLOAD_INTERNAL_ATTACHMENT'
+    | 'TRACK_INTERNAL_TIME';
+}
+
 export class ToDoddleApiError extends Error {
   constructor(
     readonly status: number,
@@ -22,12 +36,13 @@ export class ToDoddleApiError extends Error {
 export interface ToDoddleApi {
   get(
     path: string,
-    query?: Record<string, string | number | boolean | undefined>
+    query?: Record<string, string | number | boolean | undefined>,
+    runContext?: AgentRunRequestContext
   ): Promise<Record<string, unknown>>;
-  post(path: string, body: unknown, idempotencyKey?: string): Promise<Record<string, unknown>>;
-  put(path: string, body: unknown): Promise<Record<string, unknown>>;
-  patch(path: string, body: unknown): Promise<Record<string, unknown>>;
-  delete(path: string, body: unknown): Promise<Record<string, unknown>>;
+  post(path: string, body: unknown, idempotencyKey?: string, runContext?: AgentRunRequestContext): Promise<Record<string, unknown>>;
+  put(path: string, body: unknown, runContext?: AgentRunRequestContext): Promise<Record<string, unknown>>;
+  patch(path: string, body: unknown, runContext?: AgentRunRequestContext): Promise<Record<string, unknown>>;
+  delete(path: string, body: unknown, runContext?: AgentRunRequestContext): Promise<Record<string, unknown>>;
   uploadFile(
     url: string,
     headers: Record<string, string>,
@@ -77,7 +92,8 @@ export class ToDoddleApiClient implements ToDoddleApi {
     body?: unknown,
     query?: Record<string, string | number | boolean | undefined>,
     idempotencyKey?: string,
-    retry = true
+    retry = true,
+    runContext?: AgentRunRequestContext
   ): Promise<Record<string, unknown>> {
     const url = new URL(path, this.config.baseUrl);
     Object.entries(query || {}).forEach(([key, value]) => {
@@ -92,6 +108,12 @@ export class ToDoddleApiClient implements ToDoddleApi {
         ...MCP_REQUEST_HEADERS,
         ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
         ...(idempotencyKey ? { 'idempotency-key': idempotencyKey } : {}),
+        ...(runContext ? {
+          'x-tododdle-run-id': runContext.runId,
+          'x-tododdle-run-project-id': runContext.projectId,
+          'x-tododdle-run-ticket-id': runContext.taskId,
+          'x-tododdle-run-action': runContext.action,
+        } : {}),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
       redirect: 'manual',
@@ -101,7 +123,7 @@ export class ToDoddleApiClient implements ToDoddleApi {
     if (response.status === 401 && retry) {
       this.accessToken = null;
       this.tokenExpiresAt = 0;
-      return this.request(method, path, body, query, idempotencyKey, false);
+      return this.request(method, path, body, query, idempotencyKey, false, runContext);
     }
 
     const payload = await this.readPayload(response);
@@ -150,24 +172,24 @@ export class ToDoddleApiClient implements ToDoddleApi {
     );
   }
 
-  get(path: string, query?: Record<string, string | number | boolean | undefined>) {
-    return this.request('GET', path, undefined, query);
+  get(path: string, query?: Record<string, string | number | boolean | undefined>, runContext?: AgentRunRequestContext) {
+    return this.request('GET', path, undefined, query, undefined, true, runContext);
   }
 
-  post(path: string, body: unknown, idempotencyKey?: string) {
-    return this.request('POST', path, body, undefined, idempotencyKey);
+  post(path: string, body: unknown, idempotencyKey?: string, runContext?: AgentRunRequestContext) {
+    return this.request('POST', path, body, undefined, idempotencyKey, true, runContext);
   }
 
-  put(path: string, body: unknown) {
-    return this.request('PUT', path, body);
+  put(path: string, body: unknown, runContext?: AgentRunRequestContext) {
+    return this.request('PUT', path, body, undefined, undefined, true, runContext);
   }
 
-  patch(path: string, body: unknown) {
-    return this.request('PATCH', path, body);
+  patch(path: string, body: unknown, runContext?: AgentRunRequestContext) {
+    return this.request('PATCH', path, body, undefined, undefined, true, runContext);
   }
 
-  delete(path: string, body: unknown) {
-    return this.request('DELETE', path, body);
+  delete(path: string, body: unknown, runContext?: AgentRunRequestContext) {
+    return this.request('DELETE', path, body, undefined, undefined, true, runContext);
   }
 
   async uploadFile(

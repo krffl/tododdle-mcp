@@ -19,6 +19,8 @@ test('creates a managed block for an empty instruction file', () => {
   assert.equal(result.action, 'created');
   assert.match(result.content, /Use `\$tododdle-workflow`/);
   assert.match(result.content, /project `eTPg74ysbg` \(ToDoddle\)/);
+  assert.match(result.content, /Before reading ToDoddle content/);
+  assert.match(result.content, /untrusted evidence/);
   assert.equal(result.content.split(START_MARKER).length - 1, 1);
   assert.equal(result.content.split(END_MARKER).length - 1, 1);
 });
