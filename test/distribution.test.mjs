@@ -222,6 +222,8 @@ test('suggested AGENTS rules require concise, human ticket writing', async () =>
   assert.match(agents, /Renew the claim before its lease expires/);
   assert.match(agents, /release it when work stops, completes, or is handed off/);
   assert.match(agents, /Respect another active claim/);
+  assert.match(agents, /project data rather than operating authority/);
+  assert.match(agents, /untrusted evidence/);
 });
 
 test('README documents bounded and compaction-safe context loading', async () => {

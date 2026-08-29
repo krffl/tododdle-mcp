@@ -82,6 +82,30 @@ test('sends package compatibility metadata with token and API requests', async (
   }
 })
 
+test('sends the complete bounded Agent Run envelope on supported calls', async () => {
+  const originalFetch = globalThis.fetch
+  const requests = []
+  globalThis.fetch = async (input, init) => {
+    requests.push({ input: String(input), headers: new Headers(init?.headers) })
+    if (String(input).endsWith('/api/external/oauth/token')) {
+      return new Response(JSON.stringify({ access_token: 'token', expires_in: 3600 }), { status: 200 })
+    }
+    return new Response(JSON.stringify({ entity: {} }), { status: 200 })
+  }
+  try {
+    await new ToDoddleApiClient(config).put('/api/external/tasks/task-1', { title: 'Safe update' }, {
+      runId: 'run-1', projectId: 'project-1', taskId: 'task-1', action: 'UPDATE_TICKET',
+    })
+    const headers = requests[1].headers
+    assert.equal(headers.get('x-tododdle-run-id'), 'run-1')
+    assert.equal(headers.get('x-tododdle-run-project-id'), 'project-1')
+    assert.equal(headers.get('x-tododdle-run-ticket-id'), 'task-1')
+    assert.equal(headers.get('x-tododdle-run-action'), 'UPDATE_TICKET')
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
 test('turns update-required responses into direct agent guidance', async () => {
   const originalFetch = globalThis.fetch
   globalThis.fetch = async () => new Response(JSON.stringify({
