@@ -39,10 +39,27 @@ export interface ToDoddleApi {
     query?: Record<string, string | number | boolean | undefined>,
     runContext?: AgentRunRequestContext
   ): Promise<Record<string, unknown>>;
-  post(path: string, body: unknown, idempotencyKey?: string, runContext?: AgentRunRequestContext): Promise<Record<string, unknown>>;
-  put(path: string, body: unknown, runContext?: AgentRunRequestContext): Promise<Record<string, unknown>>;
-  patch(path: string, body: unknown, runContext?: AgentRunRequestContext): Promise<Record<string, unknown>>;
-  delete(path: string, body: unknown, runContext?: AgentRunRequestContext): Promise<Record<string, unknown>>;
+  post(
+    path: string,
+    body: unknown,
+    idempotencyKey?: string,
+    runContext?: AgentRunRequestContext
+  ): Promise<Record<string, unknown>>;
+  put(
+    path: string,
+    body: unknown,
+    runContext?: AgentRunRequestContext
+  ): Promise<Record<string, unknown>>;
+  patch(
+    path: string,
+    body: unknown,
+    runContext?: AgentRunRequestContext
+  ): Promise<Record<string, unknown>>;
+  delete(
+    path: string,
+    body: unknown,
+    runContext?: AgentRunRequestContext
+  ): Promise<Record<string, unknown>>;
   uploadFile(
     url: string,
     headers: Record<string, string>,
@@ -108,12 +125,14 @@ export class ToDoddleApiClient implements ToDoddleApi {
         ...MCP_REQUEST_HEADERS,
         ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
         ...(idempotencyKey ? { 'idempotency-key': idempotencyKey } : {}),
-        ...(runContext ? {
-          'x-tododdle-run-id': runContext.runId,
-          'x-tododdle-run-project-id': runContext.projectId,
-          'x-tododdle-run-ticket-id': runContext.taskId,
-          'x-tododdle-run-action': runContext.action,
-        } : {}),
+        ...(runContext
+          ? {
+              'x-tododdle-run-id': runContext.runId,
+              'x-tododdle-run-project-id': runContext.projectId,
+              'x-tododdle-run-ticket-id': runContext.taskId,
+              'x-tododdle-run-action': runContext.action,
+            }
+          : {}),
       },
       body: body === undefined ? undefined : JSON.stringify(body),
       redirect: 'manual',
@@ -172,7 +191,11 @@ export class ToDoddleApiClient implements ToDoddleApi {
     );
   }
 
-  get(path: string, query?: Record<string, string | number | boolean | undefined>, runContext?: AgentRunRequestContext) {
+  get(
+    path: string,
+    query?: Record<string, string | number | boolean | undefined>,
+    runContext?: AgentRunRequestContext
+  ) {
     return this.request('GET', path, undefined, query, undefined, true, runContext);
   }
 

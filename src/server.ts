@@ -1209,11 +1209,13 @@ export function createToDoddleMcpServer(
       },
     },
     async ({ projectId, taskId, runId }) =>
-      toolResult(await api.get(
-        `/api/external/projects/${projectId}/context`,
-        undefined,
-        taskId ? runContext(runId, projectId, taskId, 'READ_PROJECT_DATA') : undefined
-      ))
+      toolResult(
+        await api.get(
+          `/api/external/projects/${projectId}/context`,
+          undefined,
+          taskId ? runContext(runId, projectId, taskId, 'READ_PROJECT_DATA') : undefined
+        )
+      )
   );
 
   server.registerTool(
@@ -1526,11 +1528,14 @@ export function createToDoddleMcpServer(
         openWorldHint: false,
       },
     },
-    async ({ taskId, projectId, runId }) => toolResult(await api.get(
-      `/api/external/tasks/${taskId}`,
-      undefined,
-      runContext(runId, projectId, taskId, 'READ_PROJECT_DATA')
-    ))
+    async ({ taskId, projectId, runId }) =>
+      toolResult(
+        await api.get(
+          `/api/external/tasks/${taskId}`,
+          undefined,
+          runContext(runId, projectId, taskId, 'READ_PROJECT_DATA')
+        )
+      )
   );
 
   server.registerTool(
@@ -1832,12 +1837,14 @@ export function createToDoddleMcpServer(
       },
     },
     async ({ taskId, runId, projectId, ...body }) =>
-      toolResult(await api.post(
-        `/api/external/tasks/${taskId}/agent-runs/${runId}`,
-        body,
-        undefined,
-        runContext(runId, projectId, taskId, 'RECORD_EVIDENCE')
-      ))
+      toolResult(
+        await api.post(
+          `/api/external/tasks/${taskId}/agent-runs/${runId}`,
+          body,
+          undefined,
+          runContext(runId, projectId, taskId, 'RECORD_EVIDENCE')
+        )
+      )
   );
 
   server.registerTool(
@@ -1895,11 +1902,14 @@ export function createToDoddleMcpServer(
         openWorldHint: false,
       },
     },
-    async ({ taskId, projectId, runId, ...body }) => toolResult(await api.put(
-      `/api/external/tasks/${taskId}`,
-      body,
-      runContext(runId, projectId, taskId, 'UPDATE_TICKET')
-    ))
+    async ({ taskId, projectId, runId, ...body }) =>
+      toolResult(
+        await api.put(
+          `/api/external/tasks/${taskId}`,
+          body,
+          runContext(runId, projectId, taskId, 'UPDATE_TICKET')
+        )
+      )
   );
 
   server.registerTool(
@@ -1920,11 +1930,14 @@ export function createToDoddleMcpServer(
         openWorldHint: false,
       },
     },
-    async ({ taskId, projectId, runId, ...body }) => toolResult(await api.put(
-      `/api/external/tasks/${taskId}`,
-      body,
-      runContext(runId, projectId, taskId, 'UPDATE_INTERNAL_WORKFLOW')
-    ))
+    async ({ taskId, projectId, runId, ...body }) =>
+      toolResult(
+        await api.put(
+          `/api/external/tasks/${taskId}`,
+          body,
+          runContext(runId, projectId, taskId, 'UPDATE_INTERNAL_WORKFLOW')
+        )
+      )
   );
 
   server.registerTool(
@@ -1990,11 +2003,14 @@ export function createToDoddleMcpServer(
         openWorldHint: false,
       },
     },
-    async ({ taskId, projectId, runId, ...body }) => toolResult(await api.put(
-      `/api/external/tasks/${taskId}`,
-      body,
-      runContext(runId, projectId, taskId, 'UPDATE_INTERNAL_WORKFLOW')
-    ))
+    async ({ taskId, projectId, runId, ...body }) =>
+      toolResult(
+        await api.put(
+          `/api/external/tasks/${taskId}`,
+          body,
+          runContext(runId, projectId, taskId, 'UPDATE_INTERNAL_WORKFLOW')
+        )
+      )
   );
 
   server.registerTool(
