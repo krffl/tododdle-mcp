@@ -1168,3 +1168,46 @@ test('creates and completes a direct upload without handling file bytes', async 
     await server.close()
   }
 })
+
+test('returns private image content once, with metadata and no URL', async () => {
+  const calls = []
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer({ ...api, get: async (path, query) => {
+    calls.push({ path, query })
+    return { document: { id: 'doc', name: 'Design' }, image: { data: '/9j/', mimeType: 'image/jpeg', width: 1280, height: 640 } }
+  } })
+  const client = new Client({ name: 'test', version: '1' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  try {
+    for (const size of [undefined, 'large']) {
+      const result = await client.callTool({ name: 'get_document_image', arguments: { projectId: 'project', documentId: 'doc', ...(size ? { size } : {}) } })
+      assert.equal(result.isError, undefined)
+      assert.deepEqual(result.content[1], { type: 'image', data: '/9j/', mimeType: 'image/jpeg' })
+      assert.equal(result.structuredContent, undefined)
+      assert.equal(result.content[0].text.includes('/9j/'), false)
+      assert.deepEqual(calls.at(-1), { path: '/api/external/projects/project/documents/doc/image', query: { size: size || 'standard' } })
+    }
+    const invalid = await client.callTool({ name: 'get_document_image', arguments: { projectId: 'project', documentId: 'doc', size: 'huge' } })
+    assert.equal(invalid.isError, true)
+    assert.equal(calls.length, 2)
+  } finally { await client.close(); await server.close() }
+})
+
+test('rejects malformed image payloads and preserves API failures', async () => {
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  let response = {}
+  const server = createToDoddleMcpServer({ ...api, get: async () => {
+    if (response instanceof Error) throw response
+    return response
+  } })
+  const client = new Client({ name: 'test', version: '1' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  try {
+    for (const value of [{}, { document: { id: 'doc', name: 'x' }, image: { data: 'bad!', mimeType: 'image/jpeg', width: 1, height: 1 } }, new Error('Project access denied')]) {
+      response = value
+      const result = await client.callTool({ name: 'get_document_image', arguments: { projectId: 'project', documentId: 'doc' } })
+      assert.equal(result.isError, true)
+      assert.equal(result.content.some(item => item.type === 'image'), false)
+    }
+  } finally { await client.close(); await server.close() }
+})

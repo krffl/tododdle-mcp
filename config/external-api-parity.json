@@ -1,6 +1,7 @@
 {
   "source": "ToDoddle External API inventory, reviewed 2026-08-09",
   "tools": {
+    "get_document_image": ["GET /api/external/projects/[projectId]/documents/[documentId]/image"],
     "list_projects": ["GET /api/external/projects"],
     "get_project": ["GET /api/external/projects/[projectId]"],
     "create_project": ["POST /api/external/projects"],

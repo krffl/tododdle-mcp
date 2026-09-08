@@ -90,7 +90,14 @@ test('every discovered tool validates and serializes only to documented External
   await writeFile(filePath, 'parity evidence')
   const calls = []
   const api = {
-    get: async (path, query) => { calls.push({ method: 'GET', path, query }); return {} },
+    get: async (path, query) => {
+      calls.push({ method: 'GET', path, query })
+      if (path.endsWith('/image')) return {
+        document: { id: 'document-value', name: 'Design' },
+        image: { data: '/9j/', mimeType: 'image/jpeg', width: 100, height: 50 },
+      }
+      return {}
+    },
     post: async (path, body, idempotencyKey) => {
       calls.push({ method: 'POST', path, body, idempotencyKey })
       if (path.endsWith('/upload-sessions')) {

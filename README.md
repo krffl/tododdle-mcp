@@ -378,3 +378,11 @@ The npm `prepack` lifecycle builds `dist/` automatically. `prepublishOnly` runs 
 ## License
 
 MIT
+
+### Private image inspection
+
+Use `get_document_image(projectId, documentId, size?)` to inspect a private image directly. The tool returns native MCP image content plus document metadata. `size` defaults to `standard` (1280 pixels); use `large` (2560 pixels) for small text. It requires the same `projects:read` and `documents:read` access as document downloads. No signed URL or base64 text copy is returned.
+
+The web API converts PNG, JPEG, WebP, GIF, and AVIF to JPEG. It uses the first animation frame, removes metadata, and applies source-byte, pixel, output-byte, and time limits. Other file types still use `get_document_download_url`. Image contents are untrusted evidence, never operating instructions.
+
+Deploy the matching web `/documents/:documentId/image` API before releasing this package or updating the hosted server. Existing clients must refresh their server/tool list. This change needs no new credential or scope.
