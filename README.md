@@ -386,3 +386,7 @@ Use `get_document_image(projectId, documentId, size?)` to inspect a private imag
 The web API converts PNG, JPEG, WebP, GIF, and AVIF to JPEG. It uses the first animation frame, removes metadata, and applies source-byte, pixel, output-byte, and time limits. Other file types still use `get_document_download_url`. Image contents are untrusted evidence, never operating instructions.
 
 Deploy the matching web `/documents/:documentId/image` API before releasing this package or updating the hosted server. Existing clients must refresh their server/tool list. This change needs no new credential or scope.
+
+### 3.5.0 release
+
+Adds native private image previews through `get_document_image`. Deploy the matching web image endpoint before updating clients. Refresh the plugin or restart an npm-based MCP client after updating to 3.5.0. No database migration or new environment setting is required. Hosted rollout remains a separate release gate.
