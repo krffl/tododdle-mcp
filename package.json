@@ -1,6 +1,6 @@
 {
   "name": "tododdle-mcp",
-  "version": "3.5.0",
+  "version": "3.5.1",
   "description": "Agent-first task, project context, and time tracking for ToDoddle",
   "type": "module",
   "main": "dist/index.js",
@@ -29,7 +29,7 @@
     "test": "npm run build && node --test test/*.test.mjs",
     "test:coverage": "npm run build && node --test --experimental-test-coverage --test-coverage-include='dist/**/*.js' --test-coverage-exclude='dist/index.js' --test-coverage-lines=90 --test-coverage-branches=75 --test-coverage-functions=85 test/*.test.mjs",
     "prepack": "npm run build",
-    "prepublishOnly": "npm run test:coverage"
+    "prepublishOnly": "npm audit --audit-level=low && npm run test:coverage"
   },
   "keywords": [
     "mcp",

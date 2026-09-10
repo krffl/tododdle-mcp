@@ -390,3 +390,7 @@ Deploy the matching web `/documents/:documentId/image` API before releasing this
 ### 3.5.0 release
 
 Adds native private image previews through `get_document_image`. Deploy the matching web image endpoint before updating clients. Refresh the plugin or restart an npm-based MCP client after updating to 3.5.0. No database migration or new environment setting is required. Hosted rollout remains a separate release gate.
+
+### 3.5.1 release
+
+Updates vulnerable transitive dependencies and enforces the dependency audit in both the publish workflow and `prepublishOnly`. A release must pass Quality before its tag is published. Failed audits must be fixed, not bypassed.

@@ -9,7 +9,7 @@
       "source": {
         "source": "npm",
         "package": "tododdle-mcp",
-        "version": "^3.5.0",
+        "version": "^3.5.1",
         "registry": "https://registry.npmjs.org"
       },
       "policy": {
