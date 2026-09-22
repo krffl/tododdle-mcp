@@ -1,5 +1,5 @@
 {
-  "source": "ToDoddle External API inventory, reviewed 2026-08-09",
+  "source": "ToDoddle External API inventory, reviewed 2026-09-22",
   "tools": {
     "get_document_image": ["GET /api/external/projects/[projectId]/documents/[documentId]/image"],
     "list_projects": ["GET /api/external/projects"],
@@ -75,6 +75,10 @@
     "list_agent_runs": ["GET /api/external/tasks/[taskId]/agent-runs"],
     "get_agent_run": ["GET /api/external/tasks/[taskId]/agent-runs/[runId]"],
     "finish_agent_run": ["POST /api/external/tasks/[taskId]/agent-runs/[runId]"],
+    "get_supervisor_state": ["GET /api/external/tasks/[taskId]/supervisor-state"],
+    "record_work_event": ["POST /api/external/tasks/[taskId]/work-events"],
+    "record_assessment": ["POST /api/external/tasks/[taskId]/assessments"],
+    "record_verification": ["POST /api/external/tasks/[taskId]/work-events"],
     "create_ticket": ["POST /api/external/tasks"],
     "update_ticket": ["PUT /api/external/tasks/[taskId]"],
     "transition_ticket": ["PUT /api/external/tasks/[taskId]"],
@@ -113,6 +117,8 @@
     "DELETE /api/external/projects/[projectId]/plans/[planId]/sections/[sectionId]": "Compatibility endpoint is intentionally omitted; MCP exposes explicit optimistic archive and restore tools.",
     "POST /api/external/projects/[projectId]/tasks/[taskId]/attachments": "Attachment creation is completed by the direct-upload finalize operation used by attach_file_to_ticket.",
     "GET /api/external/tasks/[taskId]/comments": "get_ticket returns bounded comments with the complete ticket context, avoiding a redundant model-callable read.",
+    "GET /api/external/tasks/[taskId]/assessments": "get_supervisor_state returns bounded current and optional previous assessments for decision guidance, avoiding a redundant model-callable history read.",
+    "GET /api/external/tasks/[taskId]/work-events": "get_supervisor_state returns bounded meaningful work events with the compact Ticket state, avoiding a redundant model-callable history read.",
     "DELETE /api/external/tasks/[taskId]": "Compatibility hard-delete endpoint is intentionally omitted; MCP exposes archive_ticket.",
     "GET /api/external/todos": "Superseded personal-list contract; MCP uses the bounded Focus API.",
     "POST /api/external/todos": "Superseded personal-list contract; MCP uses add_ticket_to_focus.",

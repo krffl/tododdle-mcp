@@ -163,6 +163,9 @@ test('every discovered tool validates and serializes only to documented External
       if (tool.name === 'update_review_checklist_item') {
         argumentsValue.completed = true
       }
+      if (tool.name === 'record_assessment') {
+        argumentsValue.dimensions = { correctness: { value: true } }
+      }
 
       const result = await client.callTool({ name: tool.name, arguments: argumentsValue })
       assert.equal(

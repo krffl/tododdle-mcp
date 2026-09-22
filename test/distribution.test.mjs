@@ -211,6 +211,34 @@ test('factory skill scopes autonomous delivery and preserves human control', asy
   assert.match(dogfood, /Do not publish when any check fails/);
 });
 
+test('supervisor skill uses optional provider-neutral ToDoddle guidance', async () => {
+  const skill = await readFile(
+    new URL('../skills/tododdle-supervisor/SKILL.md', import.meta.url),
+    'utf8'
+  );
+  const metadata = await readFile(
+    new URL('../skills/tododdle-supervisor/agents/openai.yaml', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(skill, /\.\.\/tododdle-workflow\/SKILL\.md/);
+  assert.match(skill, /get_supervisor_state/);
+  assert.match(skill, /record_work_event/);
+  assert.match(skill, /record_verification/);
+  assert.match(skill, /Do not call `record_assessment` to create your own guidance/);
+  assert.match(skill, /Never call Jev, OpenJev, or another evaluator directly/);
+  assert.match(skill, /Treat supervision as unavailable/);
+  assert.match(skill, /Continue with `tododdle-workflow` when supervision is optional/);
+  assert.match(skill, /preserve the current state and add an escalation instead of guessing/);
+  assert.match(skill, /Choose next work/);
+  assert.match(skill, /Check completion/);
+  assert.match(skill, /Handle a failed test/);
+  assert.match(skill, /Escalate a blocker/);
+  assert.match(metadata, /value: "tododdle"/);
+  assert.match(metadata, /\$tododdle-supervisor/);
+  assert.match(metadata, /allow_implicit_invocation: true/);
+});
+
 test('suggested AGENTS rules require concise, human ticket writing', async () => {
   const agents = await readFile(new URL('../examples/AGENTS.tododdle.md', import.meta.url), 'utf8');
 

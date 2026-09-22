@@ -122,6 +122,68 @@ const ticketAttributeValueSchema = z.union([
   z.boolean(),
   z.array(z.string()),
 ]);
+const workEventCategorySchema = z.enum([
+  'PROGRESS',
+  'DECISION',
+  'DISCOVERY',
+  'BLOCKER',
+  'FAILED_ATTEMPT',
+  'VERIFICATION',
+  'QUESTION',
+  'HANDOFF',
+  'REVIEW',
+  'ASSESSMENT',
+  'ESCALATION',
+  'NOISE',
+]);
+const assessmentEvidenceReferenceTypeSchema = z.enum([
+  'COMMENT',
+  'ATTACHMENT',
+  'ARTIFACT',
+  'AGENT_RUN',
+  'WORK_EVENT',
+  'EXTERNAL_URL',
+]);
+const jsonValueSchema: z.ZodType<unknown> = z.lazy(() =>
+  z.union([
+    z.string().max(10_000),
+    z.number().finite(),
+    z.boolean(),
+    z.null(),
+    z.array(jsonValueSchema).max(100),
+    z.record(jsonValueSchema),
+  ])
+);
+const assessmentDimensionSchema = z.object({
+  value: jsonValueSchema,
+  label: z.string().trim().min(1).max(120).optional(),
+  rationale: z.string().trim().min(1).max(2_000).optional(),
+  confidence: z.number().min(0).max(1).optional(),
+});
+const assessmentEvidenceSchema = z
+  .object({
+    referenceType: assessmentEvidenceReferenceTypeSchema,
+    referenceId: z.string().trim().min(1).max(200).optional(),
+    externalUrl: z.string().url().max(2_048).optional(),
+    label: z.string().trim().min(1).max(200).optional(),
+  })
+  .superRefine((value, context) => {
+    if (value.referenceType === 'EXTERNAL_URL') {
+      if (!value.externalUrl || value.referenceId) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: 'External URL evidence requires only externalUrl',
+        });
+      }
+      return;
+    }
+    if (!value.referenceId || value.externalUrl) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Internal evidence requires only referenceId',
+      });
+    }
+  });
 
 function toolResult(value: Record<string, unknown>) {
   return {
@@ -1894,6 +1956,141 @@ export function createToDoddleMcpServer(
           body,
           undefined,
           runContext(runId, projectId, taskId, 'RECORD_EVIDENCE')
+        )
+      )
+  );
+
+  server.registerTool(
+    'get_supervisor_state',
+    {
+      description:
+        'Get compact, permission-filtered task state for an external supervisor. The response contains evidence and policy hints, but grants no authority to change work state.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        taskId: z.string().min(1),
+        runId: z.string().min(1).max(200),
+        maxEvents: z.number().int().min(1).max(20).default(8),
+        includePreviousAssessments: z.boolean().default(false),
+      }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, taskId, runId, ...query }) =>
+      toolResult(
+        await api.get(
+          `/api/external/tasks/${taskId}/supervisor-state`,
+          query,
+          runContext(runId, projectId, taskId, 'READ_PROJECT_DATA')
+        )
+      )
+  );
+
+  server.registerTool(
+    'record_work_event',
+    {
+      description:
+        'Record one meaningful semantic event in the existing ticket timeline. Use this for durable progress, decisions, blockers, discoveries, or handoffs, not routine command logs.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        taskId: z.string().min(1),
+        runId: z.string().min(1).max(200),
+        category: workEventCategorySchema,
+        summary: z.string().trim().min(1).max(200),
+        body: z.string().trim().min(1).max(5_000).optional(),
+        metadata: z.record(jsonValueSchema).optional(),
+        idempotencyKey: z.string().trim().min(8).max(200),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, taskId, runId, idempotencyKey, ...body }) =>
+      toolResult(
+        await api.post(
+          `/api/external/tasks/${taskId}/work-events`,
+          body,
+          idempotencyKey,
+          runContext(runId, projectId, taskId, 'ADD_INTERNAL_COMMENT')
+        )
+      )
+  );
+
+  server.registerTool(
+    'record_assessment',
+    {
+      description:
+        'Record an immutable, attributed assessment with validated evidence. A correction creates a new row and cannot complete work, approve access, merge, or deploy.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        taskId: z.string().min(1),
+        runId: z.string().min(1).max(200),
+        evaluatorType: z.string().trim().min(1).max(80),
+        evaluatorName: z.string().trim().min(1).max(160),
+        evaluatorVersion: z.string().trim().min(1).max(80).optional(),
+        schemaId: z.string().trim().min(1).max(160),
+        schemaVersion: z.string().trim().min(1).max(80).optional(),
+        dimensions: z
+          .record(z.string().regex(/^[a-zA-Z][a-zA-Z0-9._-]*$/), assessmentDimensionSchema)
+          .refine((value) => Object.keys(value).length > 0, 'At least one dimension is required')
+          .refine((value) => Object.keys(value).length <= 50, 'Too many dimensions'),
+        metadata: z.record(jsonValueSchema).optional(),
+        correctsAssessmentId: z.string().trim().min(1).max(200).optional(),
+        evidence: z.array(assessmentEvidenceSchema).max(50).optional(),
+        idempotencyKey: z.string().trim().min(8).max(200),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, taskId, runId, idempotencyKey, ...body }) =>
+      toolResult(
+        await api.post(
+          `/api/external/tasks/${taskId}/assessments`,
+          body,
+          idempotencyKey,
+          runContext(runId, projectId, taskId, 'RECORD_EVIDENCE')
+        )
+      )
+  );
+
+  server.registerTool(
+    'record_verification',
+    {
+      description:
+        'Record a verified test or check as a semantic VERIFICATION event in the existing ticket timeline.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        taskId: z.string().min(1),
+        runId: z.string().min(1).max(200),
+        summary: z.string().trim().min(1).max(200),
+        body: z.string().trim().min(1).max(5_000).optional(),
+        metadata: z.record(jsonValueSchema).optional(),
+        idempotencyKey: z.string().trim().min(8).max(200),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, taskId, runId, idempotencyKey, ...body }) =>
+      toolResult(
+        await api.post(
+          `/api/external/tasks/${taskId}/work-events`,
+          { category: 'VERIFICATION', ...body },
+          idempotencyKey,
+          runContext(runId, projectId, taskId, 'ADD_INTERNAL_COMMENT')
         )
       )
   );
