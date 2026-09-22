@@ -201,6 +201,7 @@ Ticket attributes hold small typed integration and handoff facts. Read them befo
 - `get_agent_inbox`
 - `list_agent_runs`
 - `get_agent_run`
+- `get_supervisor_state`
 
 ### Manage Tickets
 
@@ -208,6 +209,9 @@ Ticket attributes hold small typed integration and handoff facts. Read them befo
 - `claim_next_ticket`
 - `renew_ticket_claim`
 - `finish_agent_run`
+- `record_work_event`
+- `record_assessment`
+- `record_verification`
 - `release_ticket`
 - `create_ticket`
 - `update_ticket`
@@ -222,6 +226,8 @@ Ticket attributes hold small typed integration and handoff facts. Read them befo
 `list_available_work` reads only unblocked, currently unclaimed work in one project. `claim_next_ticket` selects the highest-ranked eligible ticket. `claim_ticket` and `renew_ticket_claim` manage its agent lease without changing human assignment. `finish_agent_run` records the terminal result and releases the matching lease. `release_ticket` stops work without a result and records the run as cancelled. None of these tools changes ticket status. `preview_ticket_move` reports lane automation and hierarchy blockers before a board move. `move_ticket` and `archive_ticket` are destructive because a destination lane can archive the ticket. Ticket deletion is unavailable.
 
 Supported run-bound tools accept the stable `runId` and `projectId` needed to send the complete `X-ToDoddle-Run-*` header set. The API then binds the request to the stored workspace, project, Ticket, Agent Connection, allowed action, and expiry. Keep the same run ID from claim through completion. A run cannot approve itself or expand its own authority.
+
+`get_supervisor_state` returns compact, permission-filtered facts for one Ticket. `record_work_event` and `record_verification` add meaningful events to the existing Ticket timeline. `record_assessment` creates an immutable assessment with validated evidence. A correction refers to the earlier assessment and creates a new row. These tools cannot complete a Ticket, approve access, merge code, or deploy changes.
 
 Durable agent-to-human handoffs use typed `HANDOFF` comments with a concise outcome, verification and immutable evidence, and any remaining risk or next action. External mutations return a stable ToDoddle `uiUrl`; expiring asset token URLs must not be copied into comments. A continuing run reads and handles its Agent Connection inbox reply before acknowledgement, then reloads the linked record.
 

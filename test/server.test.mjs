@@ -88,6 +88,10 @@ test('discovers the bounded production tool surface', async () => {
   assert.equal(names.includes('list_agent_runs'), true)
   assert.equal(names.includes('get_agent_run'), true)
   assert.equal(names.includes('finish_agent_run'), true)
+  assert.equal(names.includes('get_supervisor_state'), true)
+  assert.equal(names.includes('record_work_event'), true)
+  assert.equal(names.includes('record_assessment'), true)
+  assert.equal(names.includes('record_verification'), true)
   assert.equal(names.includes('add_ticket_to_focus'), true)
   assert.equal(names.includes('move_focus_ticket'), true)
   assert.equal(names.includes('remove_ticket_from_focus'), true)
@@ -930,6 +934,94 @@ test('serializes durable Agent Run reads and terminal results', async () => {
         body: { state: 'SUCCEEDED', outcome: 'Tests passed', idempotencyKey: 'finish-run-1', evidence: [{ type: 'COMMIT', reference: 'abc123' }] },
         idempotencyKey: undefined,
         runContext: { runId: 'run-1', projectId: 'project-1', taskId: 'task-1', action: 'RECORD_EVIDENCE' },
+      },
+    ])
+  } finally {
+    await client.close()
+    await server.close()
+  }
+})
+
+test('serializes supervision tools through bounded external API routes and Agent Run envelopes', async () => {
+  const calls = []
+  const supervisionApi = {
+    ...api,
+    get: async (path, query, runContext) => {
+      calls.push({ method: 'GET', path, query, runContext })
+      return { version: 1, payloadBytes: 900 }
+    },
+    post: async (path, body, idempotencyKey, runContext) => {
+      calls.push({ method: 'POST', path, body, idempotencyKey, runContext })
+      return { entity: { id: 'result-1' } }
+    },
+  }
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer(supervisionApi)
+  const client = new Client({ name: 'supervision-test', version: '1.0.0' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  try {
+    const state = await client.callTool({
+      name: 'get_supervisor_state',
+      arguments: {
+        projectId: 'project-1', taskId: 'task-1', runId: 'run-1',
+        maxEvents: 12, includePreviousAssessments: true,
+      },
+    })
+    assert.equal(state.structuredContent.payloadBytes, 900)
+    await client.callTool({
+      name: 'record_work_event',
+      arguments: {
+        projectId: 'project-1', taskId: 'task-1', runId: 'run-1',
+        category: 'DECISION', summary: 'Use the shared boundary',
+        metadata: { source: 'test' }, idempotencyKey: 'event-key-1',
+      },
+    })
+    await client.callTool({
+      name: 'record_assessment',
+      arguments: {
+        projectId: 'project-1', taskId: 'task-1', runId: 'run-1',
+        evaluatorType: 'generic', evaluatorName: 'Test evaluator', schemaId: 'phase-1',
+        dimensions: { correctness: { value: 0.9, confidence: 0.8 } },
+        evidence: [{ referenceType: 'WORK_EVENT', referenceId: 'event-1' }],
+        idempotencyKey: 'assessment-key-1',
+      },
+    })
+    await client.callTool({
+      name: 'record_verification',
+      arguments: {
+        projectId: 'project-1', taskId: 'task-1', runId: 'run-1',
+        summary: 'Focused tests passed', body: '12 checks passed.',
+        idempotencyKey: 'verification-key-1',
+      },
+    })
+
+    assert.deepEqual(calls, [
+      {
+        method: 'GET', path: '/api/external/tasks/task-1/supervisor-state',
+        query: { maxEvents: 12, includePreviousAssessments: true },
+        runContext: { runId: 'run-1', projectId: 'project-1', taskId: 'task-1', action: 'READ_PROJECT_DATA' },
+      },
+      {
+        method: 'POST', path: '/api/external/tasks/task-1/work-events',
+        body: { category: 'DECISION', summary: 'Use the shared boundary', metadata: { source: 'test' } },
+        idempotencyKey: 'event-key-1',
+        runContext: { runId: 'run-1', projectId: 'project-1', taskId: 'task-1', action: 'ADD_INTERNAL_COMMENT' },
+      },
+      {
+        method: 'POST', path: '/api/external/tasks/task-1/assessments',
+        body: {
+          evaluatorType: 'generic', evaluatorName: 'Test evaluator', schemaId: 'phase-1',
+          dimensions: { correctness: { value: 0.9, confidence: 0.8 } },
+          evidence: [{ referenceType: 'WORK_EVENT', referenceId: 'event-1' }],
+        },
+        idempotencyKey: 'assessment-key-1',
+        runContext: { runId: 'run-1', projectId: 'project-1', taskId: 'task-1', action: 'RECORD_EVIDENCE' },
+      },
+      {
+        method: 'POST', path: '/api/external/tasks/task-1/work-events',
+        body: { category: 'VERIFICATION', summary: 'Focused tests passed', body: '12 checks passed.' },
+        idempotencyKey: 'verification-key-1',
+        runContext: { runId: 'run-1', projectId: 'project-1', taskId: 'task-1', action: 'ADD_INTERNAL_COMMENT' },
       },
     ])
   } finally {
