@@ -1,0 +1,14 @@
+interface:
+  display_name: "ToDoddle Supervisor"
+  short_description: "Use available ToDoddle supervision decisions"
+  default_prompt: "Use $tododdle-supervisor to follow available ToDoddle supervision at meaningful workflow decisions."
+
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "tododdle"
+      description: "ToDoddle workflow, supervisor state, assessment, and evidence tools"
+      transport: "stdio"
+
+policy:
+  allow_implicit_invocation: true
