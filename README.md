@@ -405,3 +405,7 @@ Adds native private image previews through `get_document_image`. Deploy the matc
 ### 3.5.1 release
 
 Updates vulnerable transitive dependencies and enforces the dependency audit in both the publish workflow and `prepublishOnly`. A release must pass Quality before its tag is published. Failed audits must be fixed, not bypassed.
+
+### 3.6.0 release
+
+Adds the provider-neutral supervision tools and the optional `tododdle-supervisor` skill. The skill uses current ToDoddle assessments when a compatible decision backend is available and falls back to the normal workflow when it is not. This release also accounts for the bounded supervision aggregate in the External API parity manifest. No new MCP credential or scope is required.
