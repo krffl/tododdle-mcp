@@ -104,6 +104,9 @@ test('workflow skill declares the MCP dependency and core safety rules', async (
   assert.match(projectWork, /Pass `parentArtifactId` when a Context artifact belongs under another artifact/);
   assert.match(projectWork, /Set it to `null` on update to move the artifact to the top level/);
   assert.match(skill, /COMPLETE/);
+  assert.match(skill, /Compare the ticket creator with the authenticated Agent Connection user/);
+  assert.match(skill, /Agent Run success and supervision assessment are evidence, not human acceptance/);
+  assert.match(projectWork, /a different ticket creator needs explicit acceptance/);
   assert.match(timeTracking, /Never invent elapsed time/);
   assert.match(skill, /typed `HANDOFF` comment/);
   assert.match(skill, /## Outcome/);

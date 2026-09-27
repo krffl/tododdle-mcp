@@ -409,3 +409,7 @@ Updates vulnerable transitive dependencies and enforces the dependency audit in 
 ### 3.6.0 release
 
 Adds the provider-neutral supervision tools and the optional `tododdle-supervisor` skill. The skill uses current ToDoddle assessments when a compatible decision backend is available and falls back to the normal workflow when it is not. This release also accounts for the bounded supervision aggregate in the External API parity manifest. No new MCP credential or scope is required.
+
+### 3.6.1 release
+
+The distributed workflow skill now uses the ticket creator, rather than the assignee, to decide whether an agent can complete verified work. When an Agent Connection acts for a different creator, it hands off for creator or named reviewer acceptance unless an approved ticket or project policy delegates completion. Review requests remain separate from ticket status. No MCP API, scope, or database change is required.
