@@ -56,7 +56,7 @@ For detailed project structure and execution rules, read [project-work.md](refer
 1. Run appropriate verification.
 2. Add one typed `HANDOFF` comment with `## Outcome`, `## Verification`, and `## Remaining` when useful. Include stable links and immutable commit, release, document, or artifact IDs. Never store expiring URLs.
 3. Call `finish_agent_run` once with a short outcome and durable evidence. Use `SUCCEEDED`, `FAILED`, or `CANCELLED`. Reuse its idempotency key if delivery is uncertain.
-4. Compare the ticket creator with the authenticated Agent Connection user, not the assignee. If they match, set `COMPLETE` after the result is achieved and verified. If they differ, hand off for the creator or an explicitly named reviewer to accept the result before setting `COMPLETE`, unless the ticket or approved project policy delegates that decision. Keep the ticket active while acceptance is pending.
+4. Compare the ticket creator with the authenticated Agent Connection user, not the assignee. If they match, set `COMPLETE` after the result is achieved and verified. If they differ, move the ticket to its existing `REVIEW` status and hand off to the creator or an explicitly named human reviewer. Keep it in `REVIEW` until that person records acceptance, then set `COMPLETE`. Do not add a ticket status.
 5. Agent Run success and supervision assessment are evidence, not human acceptance. A run result never changes ticket status. A review request is separate from ticket status; archive is separate cleanup.
 6. Use `release_ticket` only when stopping without a terminal result. It records the run as cancelled.
 7. Keep incomplete work active and state what remains.

@@ -31,8 +31,8 @@ Read this file only when creating project structure or when execution needs thes
 ## Review Requests
 
 - Use `list_review_requests` with one project and narrow filters. Read one request with `get_review_request` before changing it.
-- A review is optional. It does not change a ticket status or block work.
-- For creator-aware completion, a different ticket creator needs explicit acceptance from that creator or a named reviewer before an agent marks the ticket complete, unless the ticket or approved project policy delegates completion. Use a review request when useful; a clear creator response can also record acceptance. Do not infer acceptance from an Agent Run or supervisor result.
+- A formal review request is optional. It does not change ticket status or block work.
+- Compare the ticket creator with the authenticated Agent Connection user, not the assignee. If they match, mark the ticket `COMPLETE` after the result is achieved and verified. If they differ, move it to its existing `REVIEW` status and hand it off to the creator or a named human reviewer. Keep it in `REVIEW` until that person records acceptance, then mark it `COMPLETE`. Use a formal review request when useful; a clear creator or reviewer response can also record acceptance. Do not infer acceptance from an Agent Run or supervisor result. Do not add a ticket status.
 - Use `list_project_members` before selecting reviewers. Do not guess user IDs.
 - Create a review only for an accessible ticket, document, board, or Context artifact. Supply an idempotency key for every create, review comment, and checklist addition. Reuse the same key only when retrying that same operation.
 - Only a named reviewer can use `respond_to_review_request`. Use that reviewer’s current `updatedAt` value as `expectedUpdatedAt`.

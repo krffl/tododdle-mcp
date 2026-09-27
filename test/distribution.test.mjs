@@ -105,8 +105,13 @@ test('workflow skill declares the MCP dependency and core safety rules', async (
   assert.match(projectWork, /Set it to `null` on update to move the artifact to the top level/);
   assert.match(skill, /COMPLETE/);
   assert.match(skill, /Compare the ticket creator with the authenticated Agent Connection user/);
+  assert.match(skill, /If they match, set `COMPLETE` after the result is achieved and verified/);
+  assert.match(skill, /If they differ, move the ticket to its existing `REVIEW` status/);
+  assert.match(skill, /until that person records acceptance, then set `COMPLETE`/);
+  assert.match(skill, /Do not add a ticket status/);
   assert.match(skill, /Agent Run success and supervision assessment are evidence, not human acceptance/);
-  assert.match(projectWork, /a different ticket creator needs explicit acceptance/);
+  assert.match(projectWork, /A formal review request is optional/);
+  assert.match(projectWork, /Keep it in `REVIEW` until that person records acceptance/);
   assert.match(timeTracking, /Never invent elapsed time/);
   assert.match(skill, /typed `HANDOFF` comment/);
   assert.match(skill, /## Outcome/);
