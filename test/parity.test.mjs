@@ -155,6 +155,15 @@ test('every discovered tool validates and serializes only to documented External
         argumentsValue.status = 'OPEN'
       }
       if (tool.name === 'reply_to_support_case') {
+        argumentsValue.projectId = 'projectId-value'
+        argumentsValue.taskId = 'taskId-value'
+        argumentsValue.content = 'Please try again.'
+        argumentsValue.visibility = 'REQUESTER_VISIBLE'
+        argumentsValue.idempotencyKey = 'support-reply-key'
+        argumentsValue.expectedRevision = 1
+        argumentsValue.confirmSend = true
+      }
+      if (tool.name === 'preview_support_reply') {
         argumentsValue.expectedRevision = 1
       }
       if (tool.name === 'complete_review_request' || tool.name === 'cancel_review_request') {

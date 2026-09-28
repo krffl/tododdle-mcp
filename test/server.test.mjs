@@ -73,7 +73,12 @@ test('discovers the bounded production tool surface', async () => {
   assert.deepEqual(listTicketsTool?.inputSchema.properties?.detail?.default, 'summary')
   assert.equal(names.includes('get_tickets'), true)
   assert.equal(names.includes('get_support_case'), true)
+  assert.equal(names.includes('list_support_cases'), true)
+  assert.equal(names.includes('list_support_case_messages'), true)
+  assert.equal(names.includes('get_support_module'), true)
+  assert.equal(names.includes('get_support_attachment_url'), true)
   assert.equal(names.includes('update_support_case'), true)
+  assert.equal(names.includes('preview_support_reply'), true)
   assert.equal(names.includes('reply_to_support_case'), true)
   assert.equal(names.includes('begin_upload'), true)
   assert.equal(names.includes('complete_upload'), true)
@@ -546,15 +551,47 @@ test('batch reads known tickets with bounded comment detail', async () => {
   }
 })
 
-test('reads and updates support cases through parent-to-child routes', async () => {
+test('uses bounded Support reads, previews, and explicit case mutations', async () => {
   const calls = []
+  let replyAttempts = 0
   const supportApi = {
     ...api,
-    get: async (path) => { calls.push({ method: 'GET', path }); return { supportCase: {} } },
+    get: async (path, query) => {
+      calls.push({ method: 'GET', path, query })
+      if (path.endsWith('/support/cases')) {
+        return {
+          cases: [{ subject: 'Login help', contentTrust: { subject: 'UNTRUSTED_EVIDENCE' } }],
+          pagination: { page: 2, limit: 15, total: 16, pages: 2 },
+        }
+      }
+      if (path.endsWith('/support-case/messages')) {
+        return {
+          messages: [{
+            id: 'message-1',
+            contentTrust: { content: 'UNTRUSTED_EVIDENCE' },
+            deliveryStatus: 'BLOCKED',
+          }],
+          pagination: { page: 1, limit: 25, total: 1, pages: 1 },
+        }
+      }
+      return { supportCase: {} }
+    },
     patch: async (path, body) => { calls.push({ method: 'PATCH', path, body }); return { supportCase: {} } },
     post: async (path, body, idempotencyKey) => {
       calls.push({ method: 'POST', path, body, idempotencyKey })
-      return { supportCase: {} }
+      if (path.endsWith('/reply-preview')) {
+        return {
+          preview: {
+            content: body.content,
+            delivery: { willSend: false, target: 'requester', channelMode: 'EXTERNAL', deliveryKind: 'EMAIL' },
+          },
+        }
+      }
+      return {
+        replayed: replyAttempts++ > 0,
+        messageId: 'message-1',
+        delivery: { status: 'SENT', channelMode: 'EXTERNAL', deliveryKind: 'EMAIL' },
+      }
     },
   }
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
@@ -563,33 +600,157 @@ test('reads and updates support cases through parent-to-child routes', async () 
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
 
   try {
+    const listCasesTool = (await client.listTools()).tools.find(tool => tool.name === 'list_support_cases')
+    const listMessagesTool = (await client.listTools()).tools.find(tool => tool.name === 'list_support_case_messages')
+    const previewTool = (await client.listTools()).tools.find(tool => tool.name === 'preview_support_reply')
+    assert.equal(listCasesTool?.inputSchema.properties?.limit?.maximum, 50)
+    assert.equal(listCasesTool?.inputSchema.properties?.search?.maxLength, 120)
+    assert.equal(listMessagesTool?.inputSchema.properties?.limit?.maximum, 25)
+    assert.deepEqual(previewTool?.annotations, {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    })
+
+    for (const [name, argumentsValue] of [
+      ['list_support_cases', { projectId: 'project-1', search: 'x'.repeat(121) }],
+      ['list_support_cases', { projectId: 'project-1', page: 10_001 }],
+      ['list_support_case_messages', { projectId: 'project-1', taskId: 'task-1', limit: 26 }],
+      ['reply_to_support_case', {
+        projectId: 'project-1', taskId: 'task-1', content: 'Please try again.',
+        visibility: 'REQUESTER_VISIBLE', expectedRevision: 3, confirmSend: true,
+      }],
+      ['reply_to_support_case', {
+        projectId: 'project-1', taskId: 'task-1', content: 'Please try again.',
+        visibility: 'REQUESTER_VISIBLE', expectedRevision: 3, idempotencyKey: 'support-reply-key',
+      }],
+      ['reply_to_support_case', {
+        projectId: 'project-1', taskId: 'task-1', content: 'Private note.',
+        visibility: 'INTERNAL_NOTE', expectedRevision: 3, idempotencyKey: 'support-reply-key', confirmSend: true,
+      }],
+      ['reply_to_support_case', {
+        projectId: 'project-1', taskId: 'task-1', content: 'Private note.',
+        visibility: 'INTERNAL_NOTE', expectedRevision: 3, idempotencyKey: 'short',
+      }],
+    ]) {
+      const invalid = await client.callTool({ name, arguments: argumentsValue })
+      assert.equal(invalid.isError, true, `${name} should reject invalid input`)
+    }
+    assert.deepEqual(calls, [], 'invalid Support input must not call the External API')
+
+    const cases = await client.callTool({
+      name: 'list_support_cases',
+      arguments: {
+        projectId: 'project-1', status: 'OPEN', priority: 'CRITICAL',
+        search: 'login issue', page: 2, limit: 15,
+      },
+    })
+    assert.deepEqual(cases.structuredContent?.cases?.[0]?.contentTrust, {
+      subject: 'UNTRUSTED_EVIDENCE',
+    })
+    await client.callTool({
+      name: 'get_support_module', arguments: { projectId: 'project-1' },
+    })
     await client.callTool({
       name: 'get_support_case', arguments: { projectId: 'project-1', taskId: 'task-1' },
+    })
+    const messages = await client.callTool({
+      name: 'list_support_case_messages',
+      arguments: { projectId: 'project-1', taskId: 'task-1', page: 1, limit: 25 },
+    })
+    assert.deepEqual(messages.structuredContent?.messages?.[0], {
+      id: 'message-1',
+      contentTrust: { content: 'UNTRUSTED_EVIDENCE' },
+      deliveryStatus: 'BLOCKED',
+    })
+    await client.callTool({
+      name: 'get_support_attachment_url',
+      arguments: { projectId: 'project-1', taskId: 'task-1', attachmentId: 'attachment-1' },
     })
     await client.callTool({
       name: 'update_support_case',
       arguments: { projectId: 'project-1', taskId: 'task-1', status: 'RESOLVED', expectedRevision: 2 },
     })
+    const preview = await client.callTool({
+      name: 'preview_support_reply',
+      arguments: {
+        projectId: 'project-1', taskId: 'task-1',
+        content: 'Please try again.', expectedRevision: 3,
+      },
+    })
+    assert.deepEqual(preview.structuredContent?.preview?.delivery, {
+      willSend: false, target: 'requester', channelMode: 'EXTERNAL', deliveryKind: 'EMAIL',
+    })
+    const replyArguments = {
+      projectId: 'project-1', taskId: 'task-1', content: 'Please try again.',
+      visibility: 'REQUESTER_VISIBLE', expectedRevision: 3,
+      idempotencyKey: 'support-reply-key', confirmSend: true,
+    }
+    const reply = await client.callTool({
+      name: 'reply_to_support_case', arguments: replyArguments,
+    })
+    assert.equal(reply.structuredContent?.replayed, false)
+    assert.equal(reply.structuredContent?.delivery?.status, 'SENT')
+    const replay = await client.callTool({
+      name: 'reply_to_support_case', arguments: replyArguments,
+    })
+    assert.equal(replay.structuredContent?.replayed, true)
     await client.callTool({
       name: 'reply_to_support_case',
       arguments: {
-        projectId: 'project-1', taskId: 'task-1', content: 'Please try again.',
-        visibility: 'REQUESTER_VISIBLE', expectedRevision: 3, idempotencyKey: 'support-reply-key',
+        projectId: 'project-1', taskId: 'task-1', content: 'Private note.',
+        visibility: 'INTERNAL_NOTE', expectedRevision: 4, idempotencyKey: 'support-note-key',
       },
     })
     assert.deepEqual(calls, [
-      { method: 'GET', path: '/api/external/projects/project-1/tasks/task-1/support-case' },
+      {
+        method: 'GET', path: '/api/external/projects/project-1/support/cases',
+        query: { status: 'OPEN', priority: 'CRITICAL', search: 'login issue', page: 2, limit: 15 },
+      },
+      { method: 'GET', path: '/api/external/projects/project-1/support/status', query: undefined },
+      { method: 'GET', path: '/api/external/projects/project-1/tasks/task-1/support-case', query: undefined },
+      {
+        method: 'GET', path: '/api/external/projects/project-1/tasks/task-1/support-case/messages',
+        query: { page: 1, limit: 25 },
+      },
+      {
+        method: 'GET',
+        path: '/api/external/projects/project-1/tasks/task-1/support-case/attachments/attachment-1/access-url',
+        query: undefined,
+      },
       {
         method: 'PATCH', path: '/api/external/projects/project-1/tasks/task-1/support-case',
         body: { status: 'RESOLVED', expectedRevision: 2 },
       },
       {
+        method: 'POST', path: '/api/external/projects/project-1/tasks/task-1/support-case/reply-preview',
+        body: { content: 'Please try again.', expectedRevision: 3 },
+        idempotencyKey: undefined,
+      },
+      {
         method: 'POST', path: '/api/external/projects/project-1/tasks/task-1/support-case/messages',
         body: {
           content: 'Please try again.', visibility: 'REQUESTER_VISIBLE', expectedRevision: 3,
-          idempotencyKey: 'support-reply-key',
+          idempotencyKey: 'support-reply-key', confirmSend: true,
         },
         idempotencyKey: 'support-reply-key',
+      },
+      {
+        method: 'POST', path: '/api/external/projects/project-1/tasks/task-1/support-case/messages',
+        body: {
+          content: 'Please try again.', visibility: 'REQUESTER_VISIBLE', expectedRevision: 3,
+          idempotencyKey: 'support-reply-key', confirmSend: true,
+        },
+        idempotencyKey: 'support-reply-key',
+      },
+      {
+        method: 'POST', path: '/api/external/projects/project-1/tasks/task-1/support-case/messages',
+        body: {
+          content: 'Private note.', visibility: 'INTERNAL_NOTE', expectedRevision: 4,
+          idempotencyKey: 'support-note-key',
+        },
+        idempotencyKey: 'support-note-key',
       },
     ])
   } finally {

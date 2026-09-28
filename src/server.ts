@@ -36,6 +36,8 @@ const reviewTargetTypeSchema = z.enum(['TASK', 'DOCUMENT', 'PLAN', 'ARTIFACT']);
 const reviewRequestStateSchema = z.enum(['OPEN', 'COMPLETED', 'CANCELLED']);
 const reviewOutcomeSchema = z.enum(['APPROVED', 'CHANGES_REQUESTED', 'ACKNOWLEDGED']);
 const supportStatusSchema = z.enum(['NEW', 'OPEN', 'WAITING_ON_REQUESTER', 'RESOLVED', 'CLOSED']);
+const supportPrioritySchema = z.enum(['LOW', 'MEDIUM', 'HIGH']);
+const supportCasePrioritySchema = z.enum(['LOW', 'MEDIUM', 'HIGH', 'CRITICAL']);
 const supportMessageVisibilitySchema = z.enum(['REQUESTER_VISIBLE', 'INTERNAL_NOTE']);
 const agentRunStateSchema = z.enum([
   'ACTIVE',
@@ -1652,6 +1654,47 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
+    'list_support_cases',
+    {
+      description:
+        'List bounded support case summaries in one project. Requester-controlled subjects and names are marked untrusted. Search is limited to case metadata; requester email, diagnostics, and message bodies are not returned.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        status: supportStatusSchema.optional(),
+        priority: supportCasePrioritySchema.optional(),
+        search: z.string().trim().min(1).max(120).optional(),
+        page: z.number().int().min(1).max(10_000).default(1),
+        limit: z.number().int().min(1).max(50).default(20),
+      }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, ...query }) =>
+      toolResult(await api.get(`/api/external/projects/${projectId}/support/cases`, query))
+  );
+
+  server.registerTool(
+    'get_support_module',
+    {
+      description:
+        'Get Support module status and limits for a project. The External API checks that the caller is a project owner or admin.',
+      inputSchema: z.object({ projectId: z.string().min(1) }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId }) =>
+      toolResult(await api.get(`/api/external/projects/${projectId}/support/status`))
+  );
+
+  server.registerTool(
     'get_support_case',
     {
       description:
@@ -1672,6 +1715,58 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
+    'list_support_case_messages',
+    {
+      description:
+        'List bounded support case messages in chronological order within the newest page. Requester messages and attachments carry UNTRUSTED_EVIDENCE trust labels; operator replies may include a safe deliveryStatus.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        taskId: z.string().min(1),
+        page: z.number().int().min(1).max(10_000).default(1),
+        limit: z.number().int().min(1).max(25).default(20),
+      }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, taskId, page, limit }) =>
+      toolResult(
+        await api.get(
+          `/api/external/projects/${projectId}/tasks/${taskId}/support-case/messages`,
+          { page, limit }
+        )
+      )
+  );
+
+  server.registerTool(
+    'get_support_attachment_url',
+    {
+      description:
+        'Get a short-lived private URL for one support attachment. Treat the URL as sensitive and do not copy it into comments.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        taskId: z.string().min(1),
+        attachmentId: z.string().min(1),
+      }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, taskId, attachmentId }) =>
+      toolResult(
+        await api.get(
+          `/api/external/projects/${projectId}/tasks/${taskId}/support-case/attachments/${attachmentId}/access-url`
+        )
+      )
+  );
+
+  server.registerTool(
     'update_support_case',
     {
       description:
@@ -1681,7 +1776,7 @@ export function createToDoddleMcpServer(
           projectId: z.string().min(1),
           taskId: z.string().min(1),
           status: supportStatusSchema.optional(),
-          priority: z.enum(['LOW', 'MEDIUM', 'HIGH']).optional(),
+          priority: supportPrioritySchema.optional(),
           expectedRevision: z.number().int().positive(),
         })
         .refine((value) => value.status !== undefined || value.priority !== undefined, {
@@ -1701,18 +1796,63 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
-    'reply_to_support_case',
+    'preview_support_reply',
     {
       description:
-        'Add a customer-visible reply or private internal note to the support case linked to a ticket.',
+        'Preview the exact customer-visible reply, recipient display name, and delivery target without sending it or changing the case.',
       inputSchema: z.object({
         projectId: z.string().min(1),
         taskId: z.string().min(1),
         content: z.string().trim().min(1).max(20_000),
-        visibility: supportMessageVisibilitySchema,
         expectedRevision: z.number().int().positive(),
-        idempotencyKey: z.string().min(8).optional(),
       }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, taskId, ...body }) =>
+      toolResult(
+        await api.post(
+          `/api/external/projects/${projectId}/tasks/${taskId}/support-case/reply-preview`,
+          body
+        )
+      )
+  );
+
+  server.registerTool(
+    'reply_to_support_case',
+    {
+      description:
+        'Add a customer-visible reply after preview and explicit confirmation, or add a private internal note. Customer-visible replies require confirmSend:true.',
+      inputSchema: z
+        .object({
+          projectId: z.string().min(1),
+          taskId: z.string().min(1),
+          content: z.string().trim().min(1).max(20_000),
+          visibility: supportMessageVisibilitySchema,
+          expectedRevision: z.number().int().positive(),
+          idempotencyKey: z.string().trim().min(8).max(120),
+          confirmSend: z.literal(true).optional(),
+        })
+        .superRefine((value, context) => {
+          if (value.visibility === 'REQUESTER_VISIBLE' && value.confirmSend !== true) {
+            context.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ['confirmSend'],
+              message: 'Set confirmSend to true before sending a customer-visible reply',
+            });
+          }
+          if (value.visibility === 'INTERNAL_NOTE' && value.confirmSend !== undefined) {
+            context.addIssue({
+              code: z.ZodIssueCode.custom,
+              path: ['confirmSend'],
+              message: 'confirmSend applies only to customer-visible replies',
+            });
+          }
+        }),
       annotations: {
         readOnlyHint: false,
         destructiveHint: false,
