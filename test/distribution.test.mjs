@@ -234,7 +234,7 @@ test('supervisor skill uses optional provider-neutral ToDoddle guidance', async 
   assert.match(skill, /record_work_event/);
   assert.match(skill, /record_verification/);
   assert.match(skill, /Do not call `record_assessment` to create your own guidance/);
-  assert.match(skill, /Never call Jev, OpenJev, or another evaluator directly/);
+  assert.match(skill, /Never call an external decision or supervision provider directly/);
   assert.match(skill, /Treat supervision as unavailable/);
   assert.match(skill, /Continue with `tododdle-workflow` when supervision is optional/);
   assert.match(skill, /preserve the current state and add an escalation instead of guessing/);

@@ -86,7 +86,7 @@ The MCP server provides capabilities. The package distributes four optional skil
 | `tododdle-factory` | Run one explicit, supervised autonomous delivery attempt with an Agent Run and stable evidence. |
 | `tododdle-supervisor` | Use current ToDoddle supervision assessments at meaningful workflow decisions when a compatible backend is available. |
 
-The bootstrap skill has a deterministic updater that adds a small managed block to the effective root agent instructions. The Factory skill reuses the workflow rules and adds bounded delivery, escalation, cleanup, and package staging checks. The Supervisor skill adds optional decision guidance without connecting the coding agent to Jev, OpenJev, or another evaluator.
+The bootstrap skill has a deterministic updater that adds a small managed block to the effective root agent instructions. The Factory skill reuses the workflow rules and adds bounded delivery, escalation, cleanup, and package staging checks. The Supervisor skill adds optional decision guidance without connecting the coding agent to an external decision or supervision provider.
 
 The workflow skill keeps common routing and safety rules in a small entry file. Direct reference links load file handling, project execution, time tracking, and scheduled workflow details only when needed. This keeps the normal prompt smaller without hiding required rules.
 
@@ -117,7 +117,9 @@ Choose user scope to use the workflow across projects. Run `/reload-plugins` if 
 
 ### Supervision Guidance
 
-The optional Supervisor skill reads current assessments through `get_supervisor_state`. It uses the normal ToDoddle workflow when no compatible evaluator is available. The coding agent never contacts Jev, OpenJev, or another decision engine directly. It does not manufacture guidance with `record_assessment`, and it does not let an assessment change Ticket status or bypass human control.
+The optional Supervisor skill reads current assessments through `get_supervisor_state`. It uses the normal ToDoddle workflow when no compatible evaluator is available. The coding agent never contacts an external decision or supervision provider directly. It does not manufacture guidance with `record_assessment`, and it does not let an assessment change Ticket status or bypass human control.
+
+Decision APIs, supervision services, model reviewers, and deterministic rules use the same assessment boundary. Project Context must approve the evaluator type and assessment schema. No provider type receives implicit approval. Provider adapters own SDKs, wire formats, and credentials. Jev and OpenAI Decisions are candidate integrations, not prerequisites or claims of shipped support. Confirm each provider contract and adapter before enabling it.
 
 ### Supervised Factory Runs
 

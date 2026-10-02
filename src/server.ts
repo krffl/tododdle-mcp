@@ -2104,7 +2104,7 @@ export function createToDoddleMcpServer(
     'get_supervisor_state',
     {
       description:
-        'Get compact, permission-filtered task state for an external supervisor. The response contains evidence and policy hints, but grants no authority to change work state.',
+        'Get compact, permission-filtered task state for an external decision or supervision provider. The response contains evidence and policy hints, but grants no authority to change work state.',
       inputSchema: z.object({
         projectId: z.string().min(1),
         taskId: z.string().min(1),
@@ -2166,7 +2166,7 @@ export function createToDoddleMcpServer(
     'record_assessment',
     {
       description:
-        'Record an immutable, attributed assessment with validated evidence. A correction creates a new row and cannot complete work, approve access, merge, or deploy.',
+        'Record an immutable, attributed assessment with validated evidence from a decision service, model reviewer, rules engine, CI, or human evaluator. Provider identity is metadata, not authority. A correction creates a new row and cannot complete work, approve access, merge, or deploy.',
       inputSchema: z.object({
         projectId: z.string().min(1),
         taskId: z.string().min(1),
