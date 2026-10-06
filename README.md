@@ -429,3 +429,5 @@ The distributed workflow skill now uses the ticket creator, rather than the assi
 ### 3.7.0 release
 
 Adds bounded Support case, message, module, and attachment tools, plus a reply preview. Customer-visible replies require explicit confirmation and a stable idempotency key. The matching Support External API routes must be deployed before clients update. The hosted gateway must install this package and map its OAuth scopes before it advertises these tools.
+
+The release lockfile also updates `fast-uri`, `ip-address`, and `proxy-addr` to patched versions. Publication requires a clean dependency audit, formatting, TypeScript, tests, coverage, and package-content checks. The GitHub release workflow publishes with npm provenance.

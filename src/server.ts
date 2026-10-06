@@ -1734,10 +1734,10 @@ export function createToDoddleMcpServer(
     },
     async ({ projectId, taskId, page, limit }) =>
       toolResult(
-        await api.get(
-          `/api/external/projects/${projectId}/tasks/${taskId}/support-case/messages`,
-          { page, limit }
-        )
+        await api.get(`/api/external/projects/${projectId}/tasks/${taskId}/support-case/messages`, {
+          page,
+          limit,
+        })
       )
   );
 
