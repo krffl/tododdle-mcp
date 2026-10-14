@@ -1464,3 +1464,57 @@ test('rejects malformed image payloads and preserves API failures', async () => 
     }
   } finally { await client.close(); await server.close() }
 })
+
+test('sends Agent Run context on move, archive, attribute, and time tools only when runId is given', async () => {
+  const calls = []
+  const record = method => async (path, ...rest) => {
+    calls.push({ method, path, runContext: rest[rest.length - 1] })
+    return { entity: {} }
+  }
+  const runBoundApi = {
+    ...api,
+    get: async () => ({}),
+    post: record('POST'),
+    put: record('PUT'),
+    patch: record('PATCH'),
+    delete: record('DELETE'),
+  }
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer(runBoundApi)
+  const client = new Client({ name: 'run-bound-test', version: '1.0.0' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  const expectedUpdatedAt = '2026-10-14T12:00:00.000Z'
+  const startedAt = '2026-10-14T10:00:00.000Z'
+  const endedAt = '2026-10-14T11:00:00.000Z'
+  const base = { projectId: 'project-1', taskId: 'task-1' }
+  const cases = [
+    ['move_ticket', { sectionId: 'lane-1', position: 0, expectedUpdatedAt }, 'PUT /api/external/tasks/task-1/move', 'UPDATE_INTERNAL_WORKFLOW'],
+    ['archive_ticket', { expectedUpdatedAt }, 'PATCH /api/external/tasks/task-1/archive', 'UPDATE_INTERNAL_WORKFLOW'],
+    ['set_ticket_attribute', { key: 'k', type: 'STRING', value: 'v' }, 'PUT /api/external/tasks/task-1/attributes', 'UPDATE_TICKET'],
+    ['delete_ticket_attribute', { key: 'k', expectedUpdatedAt }, 'DELETE /api/external/tasks/task-1/attributes', 'UPDATE_TICKET'],
+    ['start_ticket_timer', {}, 'POST /api/external/projects/project-1/tasks/task-1/time-entries', 'TRACK_INTERNAL_TIME'],
+    ['log_ticket_time', { startedAt, endedAt }, 'POST /api/external/projects/project-1/tasks/task-1/time-entries', 'TRACK_INTERNAL_TIME'],
+    ['stop_ticket_timer', { timeEntryId: 'entry-1', expectedUpdatedAt }, 'POST /api/external/projects/project-1/tasks/task-1/time-entries/entry-1/stop', 'TRACK_INTERNAL_TIME'],
+    ['update_time_entry', { timeEntryId: 'entry-1', expectedUpdatedAt, note: 'n' }, 'PATCH /api/external/projects/project-1/tasks/task-1/time-entries/entry-1', 'TRACK_INTERNAL_TIME'],
+    ['archive_time_entry', { timeEntryId: 'entry-1', expectedUpdatedAt }, 'DELETE /api/external/projects/project-1/tasks/task-1/time-entries/entry-1', 'TRACK_INTERNAL_TIME'],
+  ]
+  try {
+    for (const [name, args, route, action] of cases) {
+      const [method, path] = route.split(' ')
+      calls.length = 0
+      const withRun = await client.callTool({ name, arguments: { ...base, ...args, runId: 'run-1' } })
+      assert.notEqual(withRun.isError, true, name)
+      assert.deepEqual(calls, [{
+        method, path,
+        runContext: { runId: 'run-1', projectId: 'project-1', taskId: 'task-1', action },
+      }], name)
+      calls.length = 0
+      const withoutRun = await client.callTool({ name, arguments: { ...base, ...args } })
+      assert.notEqual(withoutRun.isError, true, name)
+      assert.deepEqual(calls, [{ method, path, runContext: undefined }], name)
+    }
+  } finally {
+    await client.close()
+    await server.close()
+  }
+})
