@@ -1,5 +1,5 @@
 import { createWriteStream } from 'node:fs';
-import { chmod, lstat, mkdir, mkdtemp, realpath, rm, rmdir } from 'node:fs/promises';
+import { lstat, mkdir, mkdtemp, realpath, rm, rmdir } from 'node:fs/promises';
 import { lookup as dnsLookup } from 'node:dns/promises';
 import type { LookupAddress } from 'node:dns';
 import type { IncomingMessage } from 'node:http';
@@ -30,7 +30,19 @@ export interface PreparedUpload {
 
 export async function ensureManagedUploadRoot(root: string): Promise<string> {
   await mkdir(root, { recursive: true, mode: 0o700 });
-  if (process.platform !== 'win32') await chmod(root, 0o700);
+  const stats = await lstat(root);
+  if (stats.isSymbolicLink() || !stats.isDirectory()) {
+    throw new Error('ToDoddle managed upload root must be a real directory, not a symlink');
+  }
+  if (process.platform !== 'win32') {
+    const uid = typeof process.getuid === 'function' ? process.getuid() : undefined;
+    if (uid !== undefined && stats.uid !== uid) {
+      throw new Error('ToDoddle managed upload root is not owned by the current user');
+    }
+    if ((stats.mode & 0o022) !== 0) {
+      throw new Error('ToDoddle managed upload root must not be group or world writable');
+    }
+  }
   return realpath(root);
 }
 

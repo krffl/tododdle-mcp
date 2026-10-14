@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict'
-import { lstat, mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
+import { chmod, lstat, mkdtemp, mkdir, readFile, rm, stat, symlink, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
@@ -74,7 +74,8 @@ test('managed staging rejects symlink escapes', { skip: process.platform === 'wi
 test('upload-root parsing and managed paths follow POSIX and Windows conventions', () => {
   assert.deepEqual(parseUploadRoots('/tmp/a:/tmp/b', 'linux'), ['/tmp/a', '/tmp/b'])
   assert.deepEqual(parseUploadRoots('C:\\one;D:\\two', 'win32'), ['C:\\one', 'D:\\two'])
-  assert.equal(getDefaultManagedUploadRoot('/tmp', 'linux'), '/tmp/tododdle-mcp-uploads')
+  assert.equal(getDefaultManagedUploadRoot('/tmp', 'linux', 1000), '/tmp/tododdle-mcp-uploads-1000')
+  assert.equal(getDefaultManagedUploadRoot('/tmp', 'linux', null), '/tmp/tododdle-mcp-uploads')
   assert.equal(
     getDefaultManagedUploadRoot('C:\\Temp', 'win32'),
     'C:\\Temp\\tododdle-mcp-uploads'
@@ -141,4 +142,40 @@ test('URL fetch connects only through the validating lookup and rejects private 
   await assert.rejects(fetchWithSafeRedirects('http://example.com/a'), /Only HTTPS/)
   await assert.rejects(fetchWithSafeRedirects('https://u:p@example.com/a'), /credentials/)
   await assert.rejects(fetchWithSafeRedirects('https://[::1]/a'), /private or reserved/)
+})
+
+test('managed upload root rejects symlinks and loose permissions', { skip: process.platform === 'win32' }, async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'tododdle-root-test-'))
+  try {
+    const target = join(directory, 'target')
+    await mkdir(target, { mode: 0o700 })
+    const link = join(directory, 'link')
+    await symlink(target, link)
+    await assert.rejects(ensureManagedUploadRoot(link), /not a symlink/)
+
+    const loose = join(directory, 'loose')
+    await mkdir(loose)
+    await chmod(loose, 0o777)
+    await assert.rejects(ensureManagedUploadRoot(loose), /group or world writable/)
+
+    const file = join(directory, 'file')
+    await writeFile(file, 'x')
+    await assert.rejects(ensureManagedUploadRoot(file), /Not a directory|ENOTDIR|EEXIST|real directory/i)
+  } finally {
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('managed upload root rejects a directory owned by another user', { skip: process.platform === 'win32' || typeof process.getuid !== 'function' }, async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'tododdle-owner-test-'))
+  const original = process.getuid
+  try {
+    const root = join(directory, 'root')
+    await mkdir(root, { mode: 0o700 })
+    process.getuid = () => original.call(process) + 1
+    await assert.rejects(ensureManagedUploadRoot(root), /not owned by the current user/)
+  } finally {
+    process.getuid = original
+    await rm(directory, { recursive: true, force: true })
+  }
 })

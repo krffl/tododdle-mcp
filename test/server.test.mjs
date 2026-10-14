@@ -212,7 +212,7 @@ test('requires only Agent Connection credentials', () => {
   assert.equal(config.clientId, 'client-id')
   assert.equal(config.clientSecret, 'client-secret')
   assert.deepEqual(config.uploadRoots, [])
-  assert.equal(config.managedUploadRoot, join(tmpdir(), 'tododdle-mcp-uploads'))
+  assert.equal(config.managedUploadRoot, join(tmpdir(), typeof process.getuid === 'function' ? `tododdle-mcp-uploads-${process.getuid()}` : 'tododdle-mcp-uploads'))
   assert.equal(config.maxUploadBytes, 1073741824)
 
   assert.throws(() => loadMcpConfig({}), /TODODDLE_CLIENT_ID and TODODDLE_CLIENT_SECRET/)

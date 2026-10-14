@@ -19,10 +19,14 @@ export function parseUploadRoots(value: string | undefined, platform = process.p
 
 export function getDefaultManagedUploadRoot(
   temporaryDirectory = tmpdir(),
-  platform = process.platform
+  platform = process.platform,
+  uid: number | null = typeof process.getuid === 'function' ? process.getuid() : null
 ): string {
   const paths = platform === 'win32' ? win32 : posix;
-  return paths.resolve(temporaryDirectory, 'tododdle-mcp-uploads');
+  // Shared temp directories are world-writable, so scope the root to the user.
+  const name =
+    platform !== 'win32' && uid !== null ? `tododdle-mcp-uploads-${uid}` : 'tododdle-mcp-uploads';
+  return paths.resolve(temporaryDirectory, name);
 }
 
 function normalizeBaseUrl(value: string | undefined): string {
