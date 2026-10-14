@@ -4,7 +4,12 @@ import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import test from 'node:test'
 import { getDefaultManagedUploadRoot, parseUploadRoots } from '../dist/config.js'
-import { ensureManagedUploadRoot, prepareUploadSource } from '../dist/upload-source.js'
+import {
+  createValidatingLookup,
+  ensureManagedUploadRoot,
+  fetchWithSafeRedirects,
+  prepareUploadSource,
+} from '../dist/upload-source.js'
 
 test('local upload sources accept optional approved roots without deleting originals', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'tododdle-source-test-'))
@@ -88,4 +93,52 @@ test('URL upload sources reject private network destinations', async () => {
     prepareUploadSource({ sourceUrl: 'https://127.0.0.1/private.txt' }, [], 100),
     /private or reserved/
   )
+})
+
+const lookupOnce = (hostname, options, resolver) =>
+  new Promise((resolve) =>
+    createValidatingLookup(resolver)(hostname, options, (error, address, family) =>
+      resolve({ error, address, family })
+    )
+  )
+
+test('connect-time lookup rejects a private address returned after pre-validation passed', async () => {
+  // Simulates DNS rebinding: first answer is public, later answers are private.
+  const answers = [[{ address: '93.184.216.34', family: 4 }], [{ address: '169.254.169.254', family: 4 }]]
+  const resolver = async () => answers.shift()
+  const first = await lookupOnce('rebind.example', {}, resolver)
+  assert.equal(first.error, null)
+  assert.equal(first.address, '93.184.216.34')
+  const second = await lookupOnce('rebind.example', { all: true }, resolver)
+  assert.match(second.error.message, /private or reserved/)
+})
+
+test('connect-time lookup checks every address and supports all-address mode', async () => {
+  const mixed = async () => [
+    { address: '93.184.216.34', family: 4 },
+    { address: '10.0.0.5', family: 4 },
+  ]
+  assert.match((await lookupOnce('mixed.example', { all: true }, mixed)).error.message, /private/)
+  const pub = async () => [{ address: '93.184.216.34', family: 4 }]
+  const result = await lookupOnce('ok.example', { all: true }, pub)
+  assert.deepEqual(result.address, [{ address: '93.184.216.34', family: 4 }])
+  const failing = async () => {
+    throw new Error('ENOTFOUND')
+  }
+  assert.match((await lookupOnce('x.example', {}, failing)).error.message, /ENOTFOUND/)
+  for (const address of ['::1', 'fd00::1', '100.64.0.1', '192.168.1.1', '::ffff:127.0.0.1']) {
+    const blocked = await lookupOnce('v.example', {}, async () => [{ address, family: 4 }])
+    assert.ok(blocked.error, address)
+  }
+})
+
+test('URL fetch connects only through the validating lookup and rejects private resolution', async () => {
+  const resolver = async () => [{ address: '127.0.0.1', family: 4 }]
+  await assert.rejects(
+    fetchWithSafeRedirects('https://rebind.example/file.txt', resolver),
+    /private or reserved/
+  )
+  await assert.rejects(fetchWithSafeRedirects('http://example.com/a'), /Only HTTPS/)
+  await assert.rejects(fetchWithSafeRedirects('https://u:p@example.com/a'), /credentials/)
+  await assert.rejects(fetchWithSafeRedirects('https://[::1]/a'), /private or reserved/)
 })
