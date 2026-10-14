@@ -196,6 +196,42 @@ function toolResult(value: Record<string, unknown>) {
   };
 }
 
+function asRecord(value: unknown): Record<string, unknown> | undefined {
+  return value && typeof value === 'object' && !Array.isArray(value)
+    ? (value as Record<string, unknown>)
+    : undefined;
+}
+
+// A customer-visible reply on a project that requires approval returns HTTP 202
+// with an approval envelope. Nothing is sent until a human decides.
+function supportReplyResult(response: Record<string, unknown>) {
+  const approval = asRecord(response.approval);
+  if (response.action !== 'approval_required' && response.action !== 'approval_resolved') {
+    return response;
+  }
+  const status = typeof approval?.status === 'string' ? approval.status : 'PENDING';
+  return {
+    ...response,
+    sent: false,
+    result: 'PENDING_APPROVAL',
+    approvalId: approval?.id,
+    approvalStatus: status,
+    instruction:
+      'The reply was recorded as a proposal and was NOT sent to the customer. Wait for a human to approve or reject it in ToDoddle (see uiUrl). Do not report the reply as sent. Do not retry with a new idempotencyKey; the same key returns the same proposal. To check the outcome, read the case messages with list_support_case_messages. The approval API is not available as an MCP tool.',
+  };
+}
+
+function supportPreviewResult(response: Record<string, unknown>) {
+  const approval = asRecord(asRecord(response.preview)?.approval);
+  if (!approval) return response;
+  return {
+    ...response,
+    approvalRequired: approval.required === true,
+    approvalPolicy: approval.policy,
+    approvalMessage: approval.message,
+  };
+}
+
 type RunAction = AgentRunRequestContext['action'];
 
 function runContext(
@@ -1793,7 +1829,7 @@ export function createToDoddleMcpServer(
     'preview_support_reply',
     {
       description:
-        'Preview the exact customer-visible reply, recipient display name, and delivery target without sending it or changing the case.',
+        'Preview the exact customer-visible reply, recipient display name, and delivery target without sending it or changing the case. The result includes the project approval policy (preview.approval.required, policy HUMAN_APPROVAL_REQUIRED or DIRECT_SEND_ALLOWED, and message). When approval is required, a customer-visible reply is only proposed and a human must approve it before it is sent.',
       inputSchema: z.object({
         projectId: z.string().min(1),
         taskId: z.string().min(1),
@@ -1809,9 +1845,11 @@ export function createToDoddleMcpServer(
     },
     async ({ projectId, taskId, ...body }) =>
       toolResult(
-        await api.post(
-          `/api/external/projects/${projectId}/tasks/${taskId}/support-case/reply-preview`,
-          body
+        supportPreviewResult(
+          await api.post(
+            `/api/external/projects/${projectId}/tasks/${taskId}/support-case/reply-preview`,
+            body
+          )
         )
       )
   );
@@ -1820,7 +1858,7 @@ export function createToDoddleMcpServer(
     'reply_to_support_case',
     {
       description:
-        'Add a customer-visible reply after preview and explicit confirmation, or add a private internal note. Customer-visible replies require confirmSend:true.',
+        'Add a private internal note (immediate) or a customer-visible reply. Customer-visible replies require preview and confirmSend:true, but confirmSend does not bypass project policy. Projects require human approval by default: the reply is then only recorded as a proposal (result PENDING_APPROVAL, sent:false) and nothing reaches the customer until a human approves it. Wait for that decision; do not retry with a new idempotencyKey. Only projects that opted in send directly.',
       inputSchema: z
         .object({
           projectId: z.string().min(1),
@@ -1856,10 +1894,12 @@ export function createToDoddleMcpServer(
     },
     async ({ projectId, taskId, ...body }) =>
       toolResult(
-        await api.post(
-          `/api/external/projects/${projectId}/tasks/${taskId}/support-case/messages`,
-          body,
-          body.idempotencyKey || randomUUID()
+        supportReplyResult(
+          await api.post(
+            `/api/external/projects/${projectId}/tasks/${taskId}/support-case/messages`,
+            body,
+            body.idempotencyKey || randomUUID()
+          )
         )
       )
   );

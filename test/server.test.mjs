@@ -1518,3 +1518,71 @@ test('sends Agent Run context on move, archive, attribute, and time tools only w
     await server.close()
   }
 })
+
+test('reports pending approval for customer-visible Support replies instead of sent', async () => {
+  const approvalEnvelope = {
+    action: 'approval_required',
+    approval: { id: 'approval-1', action: 'REPLY_TO_SUPPORT_CASE', status: 'PENDING' },
+    requestId: 'request-1',
+    uiUrl: '/dashboard/everything?view=inflight&approvalId=approval-1',
+  }
+  const responses = {
+    approval: approvalEnvelope,
+    direct: { replayed: false, messageId: 'message-1', delivery: { status: 'SENT' } },
+    preview: {
+      preview: {
+        content: 'Hello',
+        delivery: { willSend: false },
+        approval: { required: true, policy: 'HUMAN_APPROVAL_REQUIRED', message: 'A human must approve.' },
+      },
+    },
+  }
+  let mode = 'approval'
+  const supportApi = {
+    ...api,
+    post: async (path) => (path.endsWith('/reply-preview') ? responses.preview : responses[mode]),
+  }
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer(supportApi)
+  const client = new Client({ name: 'support-approval-test', version: '1.0.0' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  const replyArguments = {
+    projectId: 'project-1', taskId: 'task-1', content: 'Hello',
+    visibility: 'REQUESTER_VISIBLE', expectedRevision: 3,
+    idempotencyKey: 'support-reply-key', confirmSend: true,
+  }
+
+  try {
+    const tools = (await client.listTools()).tools
+    assert.match(tools.find(tool => tool.name === 'reply_to_support_case')?.description ?? '', /human approval/)
+    assert.match(tools.find(tool => tool.name === 'preview_support_reply')?.description ?? '', /approval/)
+
+    const pending = await client.callTool({ name: 'reply_to_support_case', arguments: replyArguments })
+    assert.equal(pending.isError, undefined)
+    assert.equal(pending.structuredContent?.sent, false)
+    assert.equal(pending.structuredContent?.result, 'PENDING_APPROVAL')
+    assert.equal(pending.structuredContent?.approvalId, 'approval-1')
+    assert.equal(pending.structuredContent?.approvalStatus, 'PENDING')
+    assert.equal(pending.structuredContent?.uiUrl, approvalEnvelope.uiUrl)
+    assert.match(pending.structuredContent?.instruction, /NOT sent/)
+    assert.match(pending.structuredContent?.instruction, /new idempotencyKey/)
+
+    mode = 'direct'
+    const sent = await client.callTool({ name: 'reply_to_support_case', arguments: replyArguments })
+    assert.equal(sent.structuredContent?.delivery?.status, 'SENT')
+    assert.equal(sent.structuredContent?.sent, undefined)
+    assert.equal(sent.structuredContent?.result, undefined)
+
+    const preview = await client.callTool({
+      name: 'preview_support_reply',
+      arguments: { projectId: 'project-1', taskId: 'task-1', content: 'Hello', expectedRevision: 3 },
+    })
+    assert.equal(preview.structuredContent?.approvalRequired, true)
+    assert.equal(preview.structuredContent?.approvalPolicy, 'HUMAN_APPROVAL_REQUIRED')
+    assert.equal(preview.structuredContent?.approvalMessage, 'A human must approve.')
+    assert.equal(preview.structuredContent?.preview?.approval?.required, true)
+  } finally {
+    await client.close()
+    await server.close()
+  }
+})
