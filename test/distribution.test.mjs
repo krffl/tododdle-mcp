@@ -125,7 +125,8 @@ test('workflow skill declares the MCP dependency and core safety rules', async (
   assert.match(files, /For a clipboard image/);
   assert.match(files, /private directory with `mktemp -d`/);
   assert.match(files, /`TODODDLE_UPLOAD_ROOTS` is optional/);
-  assert.match(files, /Never approve the full system temporary directory/);
+  assert.match(files, /owned by the current user/);
+  assert.doesNotMatch(files, /tododdle-mcp-uploads/);
   assert.match(files, /keep a suitable extension/);
   assert.match(files, /Do not alter the original/);
   assert.match(files, /Never delete the user’s original/);

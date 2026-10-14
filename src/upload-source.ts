@@ -1,5 +1,5 @@
 import { createWriteStream } from 'node:fs';
-import { lstat, mkdir, mkdtemp, realpath, rm, rmdir } from 'node:fs/promises';
+import { lstat, mkdtemp, realpath, rm, rmdir } from 'node:fs/promises';
 import { lookup as dnsLookup } from 'node:dns/promises';
 import type { LookupAddress } from 'node:dns';
 import type { IncomingMessage } from 'node:http';
@@ -26,24 +26,6 @@ export interface PreparedUpload {
   fileSize: number;
   contentType: string;
   cleanup(uploadConfirmed?: boolean): Promise<void>;
-}
-
-export async function ensureManagedUploadRoot(root: string): Promise<string> {
-  await mkdir(root, { recursive: true, mode: 0o700 });
-  const stats = await lstat(root);
-  if (stats.isSymbolicLink() || !stats.isDirectory()) {
-    throw new Error('ToDoddle managed upload root must be a real directory, not a symlink');
-  }
-  if (process.platform !== 'win32') {
-    const uid = typeof process.getuid === 'function' ? process.getuid() : undefined;
-    if (uid !== undefined && stats.uid !== uid) {
-      throw new Error('ToDoddle managed upload root is not owned by the current user');
-    }
-    if ((stats.mode & 0o022) !== 0) {
-      throw new Error('ToDoddle managed upload root must not be group or world writable');
-    }
-  }
-  return realpath(root);
 }
 
 const mimeTypes: Record<string, string> = {
@@ -86,17 +68,35 @@ async function prepareLocalSource(
   maxBytes: number
 ): Promise<PreparedUpload> {
   if (!input.filePath) throw new Error('filePath is required');
-  const resolvedFile = await realpath(resolve(input.filePath));
-  const resolvedRoots = await Promise.all(roots.map((root) => realpath(resolve(root))));
-  const resolvedManagedRoot = managedRoot ? await ensureManagedUploadRoot(managedRoot) : null;
+  const requestedPath = resolve(input.filePath);
+  // Reject a symlink as the final path component before following it.
+  const requestedStats = await lstat(requestedPath);
+  if (!requestedStats.isFile()) throw new Error('Local upload source must be a regular file');
+  const resolvedFile = await realpath(requestedPath);
+  const resolvedRoots = await Promise.all(
+    roots.map((root) => realpath(resolve(root)).catch(() => null))
+  );
+  const resolvedManagedRoot = managedRoot
+    ? await realpath(resolve(managedRoot)).catch(() => null)
+    : null;
   const isManagedFile = Boolean(
     resolvedManagedRoot && isInsideRoot(resolvedFile, resolvedManagedRoot)
   );
-  if (!isManagedFile && !resolvedRoots.some((root) => isInsideRoot(resolvedFile, root))) {
-    throw new Error('Local file is outside ToDoddle managed staging and approved upload roots');
+  if (
+    !isManagedFile &&
+    !resolvedRoots.some((root) => root !== null && isInsideRoot(resolvedFile, root))
+  ) {
+    throw new Error(
+      'Local file must be in the system temporary directory or an approved upload root'
+    );
   }
   const stats = await lstat(resolvedFile);
   if (!stats.isFile()) throw new Error('Local upload source must be a regular file');
+  if (process.platform !== 'win32' && typeof process.getuid === 'function') {
+    if (stats.uid !== process.getuid()) {
+      throw new Error('Local upload source must be owned by the current user');
+    }
+  }
   if (stats.size <= 0 || stats.size > maxBytes) throw new Error('Local file size is not allowed');
   const fileName = sanitizeFileName(input.fileName || basename(resolvedFile));
   return {

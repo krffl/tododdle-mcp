@@ -5,13 +5,13 @@ Read this file only when uploading or reviewing a ToDoddle file.
 ## Upload a Local File
 
 - Use `upload_project_document` or `attach_file_to_ticket` for approved files.
-- For a clipboard image, create a private directory with `mktemp -d` inside `<system-temp>/tododdle-mcp-uploads-<uid>`. Copy the image into it and keep a suitable extension. Do not alter the original.
-- If a source is outside managed staging or optional approved roots, copy it into the managed staging directory. Never move the original.
-- After confirmed success, the local MCP deletes the staged file and its empty operation directory.
+- For a clipboard image, create a private directory with `mktemp -d` in the system temporary directory. Copy the image into it and keep a suitable extension. Do not alter the original.
+- Files must be regular files (no symlinks) in the system temporary directory or an optional approved root, and owned by the current user. If a source is elsewhere, copy it into a private directory in the system temporary directory. Never move the original.
+- After confirmed success, the local MCP deletes the staged file and its empty parent directory.
 - If upload fails or is uncertain, keep the staged file for retry and report its path.
-- Never delete the user’s original, a pre-existing file, or a file outside managed staging.
+- Never delete the user’s original, a pre-existing file, or a file outside the system temporary directory that the agent did not create.
 
-`TODODDLE_UPLOAD_ROOTS` is optional. Use it only for Docker, sandboxes, or approved permanent directories. Never approve the full system temporary directory.
+`TODODDLE_UPLOAD_ROOTS` is optional. Use it only for Docker, sandboxes, or approved permanent directories. The system temporary directory is always allowed.
 
 ## Upload Through Hosted MCP
 

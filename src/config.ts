@@ -1,5 +1,6 @@
+import { realpathSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { posix, win32 } from 'node:path';
+import { resolve } from 'node:path';
 
 export interface McpConfig {
   baseUrl: string;
@@ -17,16 +18,17 @@ export function parseUploadRoots(value: string | undefined, platform = process.p
     .filter(Boolean);
 }
 
-export function getDefaultManagedUploadRoot(
-  temporaryDirectory = tmpdir(),
-  platform = process.platform,
-  uid: number | null = typeof process.getuid === 'function' ? process.getuid() : null
-): string {
-  const paths = platform === 'win32' ? win32 : posix;
-  // Shared temp directories are world-writable, so scope the root to the user.
-  const name =
-    platform !== 'win32' && uid !== null ? `tododdle-mcp-uploads-${uid}` : 'tododdle-mcp-uploads';
-  return paths.resolve(temporaryDirectory, name);
+/**
+ * The managed upload root is the system temporary directory itself, resolved through symlinks
+ * (for example macOS /var/folders/.../T becomes /private/var/folders/.../T). No subfolder is
+ * created. Safety comes from the per-file checks in prepareUploadSource.
+ */
+export function getDefaultManagedUploadRoot(temporaryDirectory = tmpdir()): string {
+  try {
+    return realpathSync.native(temporaryDirectory);
+  } catch {
+    return resolve(temporaryDirectory);
+  }
 }
 
 function normalizeBaseUrl(value: string | undefined): string {
