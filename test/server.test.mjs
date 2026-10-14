@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises'
+import { mkdir, mkdtemp, readFile, realpath, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
@@ -105,10 +105,13 @@ test('discovers the bounded production tool surface', async () => {
     'get_project', 'create_project', 'update_project', 'archive_project', 'restore_project',
     'list_boards', 'get_board', 'create_board', 'update_board', 'move_board', 'archive_board', 'restore_board',
     'list_lanes', 'get_lane', 'create_lane', 'update_lane', 'move_lane', 'archive_lane', 'restore_lane',
-    'list_project_members', 'list_review_requests', 'get_review_request', 'create_review_request', 'update_review_request', 'respond_to_review_request', 'list_review_comments', 'add_review_comment', 'add_review_checklist_item', 'update_review_checklist_item', 'complete_review_request', 'cancel_review_request',
+    'list_project_members', 'list_security_events', 'list_review_requests', 'get_review_request', 'create_review_request', 'update_review_request', 'respond_to_review_request', 'list_review_comments', 'add_review_comment', 'add_review_checklist_item', 'update_review_checklist_item', 'complete_review_request', 'cancel_review_request',
     'list_project_documents', 'get_document_download_url', 'list_notes', 'get_note', 'create_note', 'update_note',
     'archive_note', 'list_artifact_revisions', 'link_project_artifacts',
   ]) assert.equal(names.includes(name), true, `${name} should be discoverable`)
+  const securityTool = result.tools.find(tool => tool.name === 'list_security_events')
+  assert.equal(securityTool?.annotations?.readOnlyHint, true)
+  assert.match(securityTool?.description ?? '', /security:read/)
   assert.equal(result.tools.find(tool => tool.name === 'move_ticket')?.annotations?.destructiveHint, true)
   assert.equal(result.tools.find(tool => tool.name === 'archive_project')?.annotations?.destructiveHint, true)
   assert.equal(result.tools.find(tool => tool.name === 'restore_project')?.annotations?.destructiveHint, false)
@@ -203,7 +206,7 @@ test('discovers the bounded production tool surface', async () => {
   await server.close()
 })
 
-test('requires only Agent Connection credentials', () => {
+test('requires only Agent Connection credentials', async () => {
   const config = loadMcpConfig({
       TODODDLE_CLIENT_ID: 'client-id',
       TODODDLE_CLIENT_SECRET: 'client-secret',
@@ -212,7 +215,7 @@ test('requires only Agent Connection credentials', () => {
   assert.equal(config.clientId, 'client-id')
   assert.equal(config.clientSecret, 'client-secret')
   assert.deepEqual(config.uploadRoots, [])
-  assert.equal(config.managedUploadRoot, join(tmpdir(), typeof process.getuid === 'function' ? `tododdle-mcp-uploads-${process.getuid()}` : 'tododdle-mcp-uploads'))
+  assert.equal(config.managedUploadRoot, await realpath(tmpdir()))
   assert.equal(config.maxUploadBytes, 1073741824)
 
   assert.throws(() => loadMcpConfig({}), /TODODDLE_CLIENT_ID and TODODDLE_CLIENT_SECRET/)
@@ -325,6 +328,7 @@ test('serializes project, plan, section, Note, and supporting tools', async () =
     await client.callTool({ name: 'create_ticket', arguments: { projectId: 'project-1', planId: 'plan-1', sectionId: 'section-1', title: 'Feature work', kind: 'FEATURE', idempotencyKey: 'task-key-1' } })
     await client.callTool({ name: 'move_lane', arguments: { projectId: 'project-1', planId: 'plan-1', sectionId: 'section-1', position: 0, expectedUpdatedAt } })
     await client.callTool({ name: 'list_project_members', arguments: { projectId: 'project-1', page: 1, limit: 20 } })
+    await client.callTool({ name: 'list_security_events', arguments: { eventType: 'ACCESS_DENIED', severity: 'HIGH', from: '2026-10-01T00:00:00Z', page: 2, limit: 10 } })
     await client.callTool({ name: 'list_notes', arguments: { projectId: 'project-1', parentId: 'note-parent', page: 2, limit: 10 } })
     await client.callTool({ name: 'get_note', arguments: { projectId: 'project-1', noteId: 'note-1' } })
     await client.callTool({ name: 'create_note', arguments: { projectId: 'project-1', title: 'Runbook', content: 'Project steps.', idempotencyKey: 'note-key-1' } })
@@ -341,6 +345,7 @@ test('serializes project, plan, section, Note, and supporting tools', async () =
       { method: 'POST', path: '/api/external/tasks', body: { projectId: 'project-1', planId: 'plan-1', sectionId: 'section-1', title: 'Feature work', kind: 'FEATURE' }, idempotencyKey: 'task-key-1' },
       { method: 'PUT', path: '/api/external/projects/project-1/plans/plan-1/sections/section-1', body: { position: 0, expectedUpdatedAt } },
       { method: 'GET', path: '/api/external/projects/project-1/members', query: { page: 1, limit: 20 } },
+      { method: 'GET', path: '/api/external/security-events', query: { eventType: 'ACCESS_DENIED', severity: 'HIGH', from: '2026-10-01T00:00:00Z', page: 2, limit: 10 } },
       { method: 'GET', path: '/api/external/notes', query: { projectId: 'project-1', page: 2, limit: 10, parentId: 'note-parent' } },
       { method: 'GET', path: '/api/external/notes/note-1', query: { projectId: 'project-1' } },
       { method: 'POST', path: '/api/external/notes', body: { projectId: 'project-1', title: 'Runbook', content: 'Project steps.' }, idempotencyKey: 'note-key-1' },

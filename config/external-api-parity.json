@@ -23,6 +23,7 @@
     "archive_lane": ["PUT /api/external/projects/[projectId]/plans/[planId]/sections/[sectionId]"],
     "restore_lane": ["PUT /api/external/projects/[projectId]/plans/[planId]/sections/[sectionId]"],
     "list_project_members": ["GET /api/external/projects/[projectId]/members"],
+    "list_security_events": ["GET /api/external/security-events"],
     "list_review_requests": ["GET /api/external/projects/[projectId]/review-requests"],
     "get_review_request": ["GET /api/external/projects/[projectId]/review-requests/[reviewRequestId]"],
     "create_review_request": ["POST /api/external/projects/[projectId]/review-requests"],
