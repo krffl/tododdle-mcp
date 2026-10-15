@@ -249,6 +249,25 @@ Durable agent-to-human handoffs use typed `HANDOFF` comments with a concise outc
 
 Ticket create/update accepts the stable kind values `TASK`, `FEATURE`, `EPIC`, `BUG`, `RESEARCH`, and `ACTION_ITEM`. Lane create/update supports `SET_KIND` alongside status, priority, assignee, review-request, and archive entry actions. `REQUEST_REVIEW` accepts one to 20 unique reviewer IDs and optional instructions. It cannot share a lane with `ARCHIVE_TASK`.
 
+### Manage Releases And Testbench Rounds
+
+- `list_releases`, `get_release`
+- `create_release`, `update_release`
+- `request_release_status_change`
+- `list_testbench_rounds`, `set_round_release`
+
+Release tools need the `releases:read` or `releases:write` scope and a project grant. Testbench tools need `testbench:read` or `testbench:write`. Writes need project owner or admin access. Testbench tools also need owner or admin access to read, and return `409 BETA_DISABLED` when Testbench is off.
+
+`list_releases` filters by `status` (`PENDING`, `PUBLISHED`, or `ABANDONED`), `search`, and `includeArchived`, and returns `page` and `hasMore`. `get_release` returns the release, up to 50 linked ticket summaries, the total `ticketCount`, and linked Testbench rounds. `tickets` and `ticketCount` are `null` unless the connection has `tasks:read`; `testbenchRounds` is `null` unless it has `testbench:read` and the user has Testbench operator access. `create_release` creates only `PENDING` releases. It accepts `version`, `title`, `build`, `environment`, an HTTPS `buildUrl`, text `metadata` (up to 100 fields, names up to 120 characters, values up to 20,000 characters), and an optional `idempotencyKey`. `update_release` edits the same fields and needs `expectedRevision` from the latest read. It cannot change status or archive state, and it cannot edit an archived release.
+
+`request_release_status_change` takes a `change` of `{ type: "SET_STATUS", status }`, `{ type: "ARCHIVE" }`, or `{ type: "RESTORE" }`, a short `reason`, and `expectedRevision`. It does not change the release. A person approves or rejects the request in AIr Traffic Control, and nothing changes until then. The tool returns `changed: false`, `result: "PENDING_APPROVAL"`, `approvalId`, `approvalStatus`, `uiUrl`, and an instruction. An identical repeat returns the same approval. Do not report the release as changed. Read it again with `get_release` to see the outcome.
+
+`list_testbench_rounds` returns bounded round summaries with `revision` and the linked release, plus `pagination`. `set_round_release` links a `DRAFT` round to a release, or removes the link when `releaseId` is `null`. Pass the round `revision` from the list as `expectedRevision`. It never publishes a round or sends email. Other round states return `409 ROUND_NOT_DRAFT`.
+
+`create_ticket` and `update_ticket` accept `releaseId`; `null` on update removes the release. Ticket reads include `releaseId` and a short `release` summary. `list_tickets` filters by `releaseId`, or by `none` for tickets without a release.
+
+These routes carry no Ticket ID. Agent Run headers are optional, but the server checks them when sent. When you hold a run, pass `runId` and the run's `taskId`: reads send `READ_PROJECT_DATA` and writes send `UPDATE_INTERNAL_WORKFLOW`. The tools send no run context unless both values are present.
+
 ### Manage Optional Reviews
 
 - `create_review_request`, `update_review_request`, `complete_review_request`, `cancel_review_request`
@@ -353,6 +372,8 @@ Common scopes include:
 - `context:read` and `context:write`
 - `time:read` and `time:write`
 - `documents:read` and `documents:write`
+- `releases:read` and `releases:write`
+- `testbench:read` and `testbench:write`
 
 Uploading a project document requires `projects:read` and `documents:write`. Attaching a new upload to a task also requires `tasks:write`.
 
@@ -436,3 +457,7 @@ The distributed workflow skill now uses the ticket creator, rather than the assi
 ### 3.7.0 release
 
 Adds bounded Support case, message, module, and attachment tools, plus a reply preview. Customer-visible replies require explicit confirmation and a stable idempotency key. The matching Support External API routes must be deployed before clients update. The hosted gateway must install this package and map its OAuth scopes before it advertises these tools.
+
+### 3.8.0 release
+
+Adds release tools (`list_releases`, `get_release`, `create_release`, `update_release`, and `request_release_status_change`) and Testbench tools (`list_testbench_rounds` and `set_round_release`). `create_ticket`, `update_ticket`, and `list_tickets` accept an optional `releaseId`. Release status, archive, and restore changes need human approval in AIr Traffic Control. Agent Connections need the new `releases:*` or `testbench:*` scopes to use these tools. Deploy the matching External API routes before clients update. The hosted gateway must install this package and map the new OAuth scopes before it advertises these tools. The compatibility level stays at 3 because every change is additive and optional.

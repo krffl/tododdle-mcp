@@ -1,5 +1,5 @@
 {
-  "source": "ToDoddle External API inventory, reviewed 2026-09-22",
+  "source": "ToDoddle External API inventory, reviewed 2026-10-15",
   "tools": {
     "get_document_image": ["GET /api/external/projects/[projectId]/documents/[documentId]/image"],
     "list_projects": ["GET /api/external/projects"],
@@ -22,6 +22,13 @@
     "move_lane": ["PUT /api/external/projects/[projectId]/plans/[planId]/sections/[sectionId]"],
     "archive_lane": ["PUT /api/external/projects/[projectId]/plans/[planId]/sections/[sectionId]"],
     "restore_lane": ["PUT /api/external/projects/[projectId]/plans/[planId]/sections/[sectionId]"],
+    "list_releases": ["GET /api/external/projects/[projectId]/releases"],
+    "get_release": ["GET /api/external/projects/[projectId]/releases/[releaseId]"],
+    "create_release": ["POST /api/external/projects/[projectId]/releases"],
+    "update_release": ["PATCH /api/external/projects/[projectId]/releases/[releaseId]"],
+    "request_release_status_change": ["POST /api/external/projects/[projectId]/releases/[releaseId]/status-requests"],
+    "list_testbench_rounds": ["GET /api/external/projects/[projectId]/testbench/rounds"],
+    "set_round_release": ["PATCH /api/external/projects/[projectId]/testbench/rounds/[roundId]/release"],
     "list_project_members": ["GET /api/external/projects/[projectId]/members"],
     "list_security_events": ["GET /api/external/security-events"],
     "list_review_requests": ["GET /api/external/projects/[projectId]/review-requests"],

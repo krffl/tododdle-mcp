@@ -84,6 +84,10 @@ test('workflow skill declares the MCP dependency and core safety rules', async (
     ),
     'utf8',
   );
+  const releases = await readFile(
+    new URL('../skills/tododdle-workflow/references/releases.md', import.meta.url),
+    'utf8',
+  );
   const metadata = await readFile(
     new URL('../skills/tododdle-workflow/agents/openai.yaml', import.meta.url),
     'utf8',
@@ -121,6 +125,11 @@ test('workflow skill declares the MCP dependency and core safety rules', async (
   assert.match(skill, /\[project-work\.md\]\(references\/project-work\.md\)/);
   assert.match(skill, /\[time-tracking\.md\]\(references\/time-tracking\.md\)/);
   assert.match(skill, /\[scheduled-workflows\.md\]\(references\/scheduled-workflows\.md\)/);
+  assert.match(skill, /\[releases\.md\]\(references\/releases\.md\)/);
+  assert.match(releases, /AIr Traffic Control\. Nothing changes until then/);
+  assert.match(releases, /Do not report the release as published, abandoned, archived, or restored/);
+  assert.match(releases, /`releases:write`/);
+  assert.match(releases, /`testbench:write`/);
   assert.match(files, /After confirmed success, the local MCP deletes the staged file/);
   assert.match(files, /For a clipboard image/);
   assert.match(files, /private directory with `mktemp -d`/);

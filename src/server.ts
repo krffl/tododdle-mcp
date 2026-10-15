@@ -106,6 +106,56 @@ const sectionEntryActionsSchema = z
     }
   });
 const artifactRelationTypeSchema = z.enum(['RELATED_TO', 'SUPERSEDES', 'IMPLEMENTS', 'SUPPORTS']);
+const releaseStatusSchema = z.enum(['PENDING', 'PUBLISHED', 'ABANDONED']);
+const testbenchRoundStatusSchema = z.enum(['DRAFT', 'ACTIVE', 'CLOSED']);
+const releaseIdSchema = z.string().trim().min(1).max(100);
+const releaseExpectedRevisionSchema = z
+  .number()
+  .int()
+  .min(1)
+  .max(2_147_483_646)
+  .describe('revision from the latest read of this release');
+const releaseMetadataSchema = z
+  .record(z.string().max(20_000))
+  .superRefine((metadata, context) => {
+    const keys = Object.keys(metadata);
+    if (keys.length > 100) {
+      context.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: 'Use no more than 100 metadata fields',
+      });
+    }
+    for (const key of keys) {
+      const trimmed = key.trim();
+      if (!trimmed || trimmed.length > 120) {
+        context.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: [key],
+          message: 'Use a metadata field name from 1 to 120 characters',
+        });
+      }
+    }
+  })
+  .describe('Text fields only. Up to 100 fields; names up to 120 characters.');
+const releaseFieldsSchema = {
+  title: z.string().trim().max(160).nullable().optional(),
+  build: z.string().trim().max(100).optional(),
+  environment: z.string().trim().max(160).optional(),
+  buildUrl: z
+    .string()
+    .trim()
+    .max(2_000)
+    .refine((value) => !value || value.startsWith('https://'), 'Use an HTTPS build link')
+    .optional()
+    .describe('HTTPS build link without credentials. Send an empty string to clear it.'),
+  metadata: releaseMetadataSchema.optional(),
+};
+// Release and Testbench routes carry no Ticket ID. Run headers are optional,
+// but an agent that holds a run sends them with the run's own Ticket ID.
+const projectRunFieldsSchema = {
+  taskId: z.string().min(1).optional().describe('Ticket ID of your active Agent Run'),
+  runId: z.string().min(1).max(200).optional(),
+};
 const expectedUpdatedAtSchema = z
   .string()
   .datetime({ offset: true })
@@ -221,6 +271,21 @@ function supportReplyResult(response: Record<string, unknown>) {
   };
 }
 
+// A release status, archive, or restore request always returns HTTP 202 with an
+// approval envelope. The release does not change until a human approves.
+function releaseStatusRequestResult(response: Record<string, unknown>) {
+  const approval = asRecord(response.approval);
+  return {
+    ...response,
+    changed: false,
+    result: response.action === 'approval_resolved' ? 'APPROVAL_RESOLVED' : 'PENDING_APPROVAL',
+    approvalId: approval?.id,
+    approvalStatus: typeof approval?.status === 'string' ? approval.status : 'PENDING',
+    instruction:
+      'The release change was recorded as a request and was NOT applied. A person must approve or reject it in AIr Traffic Control (see uiUrl). Do not report the release as changed. A repeated identical request returns the same approval. To check the outcome, read the release with get_release.',
+  };
+}
+
 function supportPreviewResult(response: Record<string, unknown>) {
   const approval = asRecord(asRecord(response.preview)?.approval);
   if (!approval) return response;
@@ -241,6 +306,15 @@ function runContext(
   action: RunAction
 ) {
   return runId && projectId ? { runId, projectId, taskId, action } : undefined;
+}
+
+function projectRunContext(
+  runId: string | undefined,
+  projectId: string,
+  taskId: string | undefined,
+  action: RunAction
+) {
+  return taskId ? runContext(runId, projectId, taskId, action) : undefined;
 }
 
 export interface ToDoddleMcpServerOptions {
@@ -873,6 +947,223 @@ export function createToDoddleMcpServer(
   }
 
   server.registerTool(
+    'list_releases',
+    {
+      description:
+        'List bounded release summaries in one project. Filter by status or a version and title search. Needs the `releases:read` scope.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        search: z.string().trim().max(100).optional(),
+        status: releaseStatusSchema.optional(),
+        includeArchived: z.boolean().default(false),
+        page: z.number().int().min(1).max(10000).default(1),
+        ...projectRunFieldsSchema,
+      }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, taskId, runId, ...query }) =>
+      toolResult(
+        await api.get(
+          `/api/external/projects/${projectId}/releases`,
+          query,
+          projectRunContext(runId, projectId, taskId, 'READ_PROJECT_DATA')
+        )
+      )
+  );
+
+  server.registerTool(
+    'get_release',
+    {
+      description:
+        'Get one release with up to 50 linked ticket summaries, the total ticket count, and linked Testbench rounds. Tickets and ticketCount are null without tasks:read; testbenchRounds is null without testbench:read and Testbench operator access. Use its revision for update_release and request_release_status_change.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        releaseId: releaseIdSchema,
+        ...projectRunFieldsSchema,
+      }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, releaseId, taskId, runId }) =>
+      toolResult(
+        await api.get(
+          `/api/external/projects/${projectId}/releases/${releaseId}`,
+          undefined,
+          projectRunContext(runId, projectId, taskId, 'READ_PROJECT_DATA')
+        )
+      )
+  );
+
+  server.registerTool(
+    'create_release',
+    {
+      description:
+        'Create a PENDING release in one project. Needs the `releases:write` scope and project owner or admin access. Publishing or abandoning a release needs request_release_status_change and human approval.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        version: z.string().trim().min(1).max(100),
+        ...releaseFieldsSchema,
+        idempotencyKey: z.string().min(8).max(200).optional(),
+        ...projectRunFieldsSchema,
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, idempotencyKey, taskId, runId, ...body }) =>
+      toolResult(
+        await api.post(
+          `/api/external/projects/${projectId}/releases`,
+          body,
+          idempotencyKey,
+          projectRunContext(runId, projectId, taskId, 'UPDATE_INTERNAL_WORKFLOW')
+        )
+      )
+  );
+
+  server.registerTool(
+    'update_release',
+    {
+      description:
+        'Update release details using expectedRevision from the latest read. This tool cannot change status or archive state; use request_release_status_change for those. Archived releases cannot be edited.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        releaseId: releaseIdSchema,
+        expectedRevision: releaseExpectedRevisionSchema,
+        version: z.string().trim().min(1).max(100).optional(),
+        ...releaseFieldsSchema,
+        ...projectRunFieldsSchema,
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, releaseId, taskId, runId, ...body }) =>
+      toolResult(
+        await api.patch(
+          `/api/external/projects/${projectId}/releases/${releaseId}`,
+          body,
+          projectRunContext(runId, projectId, taskId, 'UPDATE_INTERNAL_WORKFLOW')
+        )
+      )
+  );
+
+  server.registerTool(
+    'request_release_status_change',
+    {
+      description:
+        'Request a release status change, archive, or restore. This does not change the release. A person must approve the request in AIr Traffic Control, and nothing changes until then. Use change.type SET_STATUS with a status, ARCHIVE, or RESTORE. Give a short reason and expectedRevision from the latest read.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        releaseId: releaseIdSchema,
+        change: z.discriminatedUnion('type', [
+          z.object({ type: z.literal('SET_STATUS'), status: releaseStatusSchema }),
+          z.object({ type: z.literal('ARCHIVE') }),
+          z.object({ type: z.literal('RESTORE') }),
+        ]),
+        reason: z.string().trim().min(1).max(1000),
+        expectedRevision: releaseExpectedRevisionSchema,
+        ...projectRunFieldsSchema,
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, releaseId, change, reason, expectedRevision, taskId, runId }) =>
+      toolResult(
+        releaseStatusRequestResult(
+          await api.post(
+            `/api/external/projects/${projectId}/releases/${releaseId}/status-requests`,
+            change.type === 'SET_STATUS'
+              ? { status: change.status, reason, expectedRevision }
+              : { archive: change.type === 'ARCHIVE', reason, expectedRevision },
+            undefined,
+            projectRunContext(runId, projectId, taskId, 'UPDATE_INTERNAL_WORKFLOW')
+          )
+        )
+      )
+  );
+
+  server.registerTool(
+    'list_testbench_rounds',
+    {
+      description:
+        'List bounded Testbench round summaries in one project, with each linked release. Needs the `testbench:read` scope and project owner or admin access. Use a round revision for set_round_release.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        status: testbenchRoundStatusSchema.optional(),
+        page: z.number().int().min(1).max(10000).default(1),
+        limit: z.number().int().min(1).max(100).default(25),
+        ...projectRunFieldsSchema,
+      }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, taskId, runId, ...query }) =>
+      toolResult(
+        await api.get(
+          `/api/external/projects/${projectId}/testbench/rounds`,
+          query,
+          projectRunContext(runId, projectId, taskId, 'READ_PROJECT_DATA')
+        )
+      )
+  );
+
+  server.registerTool(
+    'set_round_release',
+    {
+      description:
+        'Link a draft Testbench round to a release, or set releaseId to null to remove the link. Only DRAFT rounds can change. This never publishes the round or sends email. Needs the `testbench:write` scope.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        roundId: z.string().min(1),
+        releaseId: releaseIdSchema.nullable(),
+        expectedRevision: z
+          .string()
+          .datetime()
+          .describe('revision from the latest list_testbench_rounds result for this round'),
+        ...projectRunFieldsSchema,
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, roundId, taskId, runId, ...body }) =>
+      toolResult(
+        await api.patch(
+          `/api/external/projects/${projectId}/testbench/rounds/${roundId}/release`,
+          body,
+          projectRunContext(runId, projectId, taskId, 'UPDATE_INTERNAL_WORKFLOW')
+        )
+      )
+  );
+
+  server.registerTool(
     'list_project_members',
     {
       description: 'List bounded project member summaries for assignee and owner selection.',
@@ -1438,7 +1729,7 @@ export function createToDoddleMcpServer(
         await api.get(
           `/api/external/projects/${projectId}/context`,
           undefined,
-          taskId ? runContext(runId, projectId, taskId, 'READ_PROJECT_DATA') : undefined
+          projectRunContext(runId, projectId, taskId, 'READ_PROJECT_DATA')
         )
       )
   );
@@ -1713,7 +2004,7 @@ export function createToDoddleMcpServer(
     'list_tickets',
     {
       description:
-        'List bounded ticket summaries with optional project, board, lane, assignee, status, priority, search, and archive filters. Use get_tickets for selected full records, or set detail to full only when the complete list payload is required.',
+        'List bounded ticket summaries with optional project, board, lane, assignee, status, priority, release, search, and archive filters. Use get_tickets for selected full records, or set detail to full only when the complete list payload is required.',
       inputSchema: z.object({
         projectId: z.string().min(1).optional(),
         planId: z.string().min(1).optional(),
@@ -1721,6 +2012,9 @@ export function createToDoddleMcpServer(
         assigneeId: z.string().min(1).optional(),
         status: statusSchema.optional(),
         priority: prioritySchema.optional(),
+        releaseId: releaseIdSchema
+          .optional()
+          .describe('A release ID, or none for tickets without a release'),
         search: z.string().optional(),
         includeArchived: z.boolean().default(false),
         page: z.number().int().min(1).default(1),
@@ -2382,6 +2676,7 @@ export function createToDoddleMcpServer(
         blockedByTaskId: z.string().optional(),
         kind: taskKindSchema.optional(),
         parentTaskId: z.string().optional(),
+        releaseId: releaseIdSchema.nullable().optional(),
         idempotencyKey: z.string().min(8).optional(),
       }),
       annotations: {
@@ -2412,6 +2707,10 @@ export function createToDoddleMcpServer(
         assigneeId: z.string().nullable().optional(),
         kind: taskKindSchema.optional(),
         parentTaskId: z.string().nullable().optional(),
+        releaseId: releaseIdSchema
+          .nullable()
+          .optional()
+          .describe('Release ID for this ticket. Set null to remove the release.'),
       }),
       annotations: {
         readOnlyHint: false,

@@ -69,6 +69,7 @@ When resuming, read the agent inbox, handle the reply, then reload the linked it
 - **Time tracking:** Read [time-tracking.md](references/time-tracking.md).
 - **Scheduled checks:** Read [scheduled-workflows.md](references/scheduled-workflows.md).
 - **Support cases:** Read [support-cases.md](references/support-cases.md).
+- **Releases or Testbench rounds:** Read [releases.md](references/releases.md).
 
 ## Missing Access
 

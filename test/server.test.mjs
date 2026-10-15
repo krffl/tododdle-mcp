@@ -1591,3 +1591,275 @@ test('reports pending approval for customer-visible Support replies instead of s
     await server.close()
   }
 })
+
+test('exposes release and Testbench tools with read, write, and approval annotations', async () => {
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer(api)
+  const client = new Client({ name: 'release-discovery-test', version: '1.0.0' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+
+  try {
+    const tools = (await client.listTools()).tools
+    const tool = name => tools.find(candidate => candidate.name === name)
+    for (const [name, readOnlyHint, idempotentHint] of [
+      ['list_releases', true, true],
+      ['get_release', true, true],
+      ['create_release', false, false],
+      ['update_release', false, true],
+      ['request_release_status_change', false, true],
+      ['list_testbench_rounds', true, true],
+      ['set_round_release', false, true],
+    ]) {
+      assert.deepEqual(tool(name)?.annotations, {
+        readOnlyHint,
+        destructiveHint: false,
+        idempotentHint,
+        openWorldHint: false,
+      }, name)
+    }
+    const statusTool = tool('request_release_status_change')
+    assert.match(statusTool?.description ?? '', /AIr Traffic Control/)
+    assert.match(statusTool?.description ?? '', /nothing changes until then/)
+    assert.match(JSON.stringify(statusTool?.inputSchema.properties?.change), /SET_STATUS.*ARCHIVE.*RESTORE/)
+    assert.match(tool('set_round_release')?.description ?? '', /never publishes/)
+    assert.match(tool('list_releases')?.description ?? '', /releases:read/)
+    assert.match(tool('list_testbench_rounds')?.description ?? '', /testbench:read/)
+    assert.equal(tool('list_testbench_rounds')?.inputSchema.properties?.limit?.default, 25)
+    assert.equal(tool('list_testbench_rounds')?.inputSchema.properties?.limit?.maximum, 100)
+    assert.equal(tool('list_releases')?.inputSchema.properties?.limit, undefined)
+    assert.equal(tool('create_release')?.inputSchema.properties?.status, undefined)
+    assert.equal(tool('update_release')?.inputSchema.properties?.status, undefined)
+    assert.deepEqual(tool('create_release')?.inputSchema.required, ['projectId', 'version'])
+    assert.match(JSON.stringify(tool('update_ticket')?.inputSchema.properties?.releaseId), /"null"/)
+    assert.match(JSON.stringify(tool('create_ticket')?.inputSchema.properties?.releaseId), /"null"/)
+    assert.match(JSON.stringify(tool('list_tickets')?.inputSchema.properties?.releaseId), /none/)
+  } finally {
+    await client.close()
+    await server.close()
+  }
+})
+
+test('serializes release, Testbench, and ticket release calls with parent-to-child routes', async () => {
+  const calls = []
+  const releaseApi = {
+    ...api,
+    get: async (path, query, runContext) => { calls.push({ method: 'GET', path, query, runContext }); return { releases: [] } },
+    post: async (path, body, idempotencyKey, runContext) => {
+      calls.push({ method: 'POST', path, body, idempotencyKey, runContext })
+      return { entity: {} }
+    },
+    put: async (path, body, runContext) => { calls.push({ method: 'PUT', path, body, runContext }); return { entity: {} } },
+    patch: async (path, body, runContext) => { calls.push({ method: 'PATCH', path, body, runContext }); return { entity: {} } },
+  }
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer(releaseApi)
+  const client = new Client({ name: 'release-serialization-test', version: '1.0.0' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  const expectedUpdatedAt = '2026-10-15T12:00:00.000Z'
+  const roundRevision = '2026-10-15T09:30:00.000Z'
+
+  try {
+    const call = async (name, args) => {
+      const result = await client.callTool({ name, arguments: args })
+      assert.notEqual(result.isError, true, `${name}: ${JSON.stringify(result.content)}`)
+      return result
+    }
+    await call('list_releases', { projectId: 'project-1', search: '3.8', status: 'PENDING', includeArchived: true, page: 2 })
+    await call('list_releases', { projectId: 'project-1' })
+    await call('get_release', { projectId: 'project-1', releaseId: 'release-1' })
+    await call('create_release', {
+      projectId: 'project-1', version: '3.8.0', title: 'Releases', build: '42', environment: 'staging',
+      buildUrl: 'https://ci.example/builds/42', metadata: { commit: 'abc123' }, idempotencyKey: 'release-key-1',
+    })
+    await call('update_release', { projectId: 'project-1', releaseId: 'release-1', expectedRevision: 3, title: null, buildUrl: '' })
+    await call('list_testbench_rounds', { projectId: 'project-1', status: 'DRAFT' })
+    await call('set_round_release', { projectId: 'project-1', roundId: 'round-1', releaseId: 'release-1', expectedRevision: roundRevision })
+    await call('set_round_release', { projectId: 'project-1', roundId: 'round-1', releaseId: null, expectedRevision: roundRevision })
+    await call('create_ticket', { projectId: 'project-1', planId: 'plan-1', sectionId: 'section-1', title: 'Ship', releaseId: 'release-1', idempotencyKey: 'task-key-1' })
+    await call('update_ticket', { taskId: 'task-1', expectedUpdatedAt, releaseId: null })
+    await call('list_tickets', { projectId: 'project-1', releaseId: 'none' })
+
+    assert.deepEqual(calls, [
+      { method: 'GET', path: '/api/external/projects/project-1/releases', query: { search: '3.8', status: 'PENDING', includeArchived: true, page: 2 }, runContext: undefined },
+      { method: 'GET', path: '/api/external/projects/project-1/releases', query: { includeArchived: false, page: 1 }, runContext: undefined },
+      { method: 'GET', path: '/api/external/projects/project-1/releases/release-1', query: undefined, runContext: undefined },
+      {
+        method: 'POST',
+        path: '/api/external/projects/project-1/releases',
+        body: { version: '3.8.0', title: 'Releases', build: '42', environment: 'staging', buildUrl: 'https://ci.example/builds/42', metadata: { commit: 'abc123' } },
+        idempotencyKey: 'release-key-1',
+        runContext: undefined,
+      },
+      { method: 'PATCH', path: '/api/external/projects/project-1/releases/release-1', body: { expectedRevision: 3, title: null, buildUrl: '' }, runContext: undefined },
+      { method: 'GET', path: '/api/external/projects/project-1/testbench/rounds', query: { status: 'DRAFT', page: 1, limit: 25 }, runContext: undefined },
+      { method: 'PATCH', path: '/api/external/projects/project-1/testbench/rounds/round-1/release', body: { releaseId: 'release-1', expectedRevision: roundRevision }, runContext: undefined },
+      { method: 'PATCH', path: '/api/external/projects/project-1/testbench/rounds/round-1/release', body: { releaseId: null, expectedRevision: roundRevision }, runContext: undefined },
+      { method: 'POST', path: '/api/external/tasks', body: { projectId: 'project-1', planId: 'plan-1', sectionId: 'section-1', title: 'Ship', releaseId: 'release-1' }, idempotencyKey: 'task-key-1', runContext: undefined },
+      { method: 'PUT', path: '/api/external/tasks/task-1', body: { expectedUpdatedAt, releaseId: null }, runContext: undefined },
+      { method: 'GET', path: '/api/external/tasks', query: { projectId: 'project-1', releaseId: 'none', includeArchived: false, page: 1, limit: 50, detail: 'summary' }, runContext: undefined },
+    ])
+  } finally {
+    await client.close()
+    await server.close()
+  }
+})
+
+test('requests release status, archive, and restore changes as pending human approvals', async () => {
+  const calls = []
+  let response = {
+    action: 'approval_required',
+    approval: { id: 'approval-1', action: 'TRANSITION_RELEASE', status: 'PENDING' },
+    requestId: 'request-1',
+    uiUrl: '/dashboard/everything?view=inflight&approvalId=approval-1',
+  }
+  const approvalApi = {
+    ...api,
+    post: async (path, body, idempotencyKey, runContext) => {
+      calls.push({ path, body, idempotencyKey, runContext })
+      return response
+    },
+  }
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer(approvalApi)
+  const client = new Client({ name: 'release-approval-test', version: '1.0.0' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  const base = { projectId: 'project-1', releaseId: 'release-1', reason: 'Build passed QA.', expectedRevision: 4 }
+  const path = '/api/external/projects/project-1/releases/release-1/status-requests'
+
+  try {
+    const pending = await client.callTool({
+      name: 'request_release_status_change',
+      arguments: { ...base, change: { type: 'SET_STATUS', status: 'PUBLISHED' } },
+    })
+    assert.equal(pending.isError, undefined)
+    assert.equal(pending.structuredContent?.changed, false)
+    assert.equal(pending.structuredContent?.result, 'PENDING_APPROVAL')
+    assert.equal(pending.structuredContent?.approvalId, 'approval-1')
+    assert.equal(pending.structuredContent?.approvalStatus, 'PENDING')
+    assert.equal(pending.structuredContent?.uiUrl, response.uiUrl)
+    assert.match(pending.structuredContent?.instruction, /NOT applied/)
+    assert.match(pending.structuredContent?.instruction, /AIr Traffic Control/)
+
+    response = { action: 'approval_resolved', approval: { id: 'approval-1', status: 'APPROVED' }, requestId: 'request-2' }
+    const resolved = await client.callTool({
+      name: 'request_release_status_change',
+      arguments: { ...base, change: { type: 'ARCHIVE' } },
+    })
+    assert.equal(resolved.structuredContent?.result, 'APPROVAL_RESOLVED')
+    assert.equal(resolved.structuredContent?.approvalStatus, 'APPROVED')
+
+    response = { action: 'approval_required', approval: null }
+    const malformed = await client.callTool({
+      name: 'request_release_status_change',
+      arguments: { ...base, change: { type: 'RESTORE' } },
+    })
+    assert.equal(malformed.structuredContent?.result, 'PENDING_APPROVAL')
+    assert.equal(malformed.structuredContent?.approvalId, undefined)
+    assert.equal(malformed.structuredContent?.approvalStatus, 'PENDING')
+
+    assert.deepEqual(calls, [
+      { path, body: { status: 'PUBLISHED', reason: 'Build passed QA.', expectedRevision: 4 }, idempotencyKey: undefined, runContext: undefined },
+      { path, body: { archive: true, reason: 'Build passed QA.', expectedRevision: 4 }, idempotencyKey: undefined, runContext: undefined },
+      { path, body: { archive: false, reason: 'Build passed QA.', expectedRevision: 4 }, idempotencyKey: undefined, runContext: undefined },
+    ])
+  } finally {
+    await client.close()
+    await server.close()
+  }
+})
+
+test('sends Agent Run context on release and Testbench tools only with runId and the run ticket', async () => {
+  const calls = []
+  const record = method => async (path, ...rest) => {
+    calls.push({ method, path, runContext: rest[rest.length - 1] })
+    return { entity: {} }
+  }
+  const runBoundApi = { ...api, get: record('GET'), post: record('POST'), patch: record('PATCH') }
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer(runBoundApi)
+  const client = new Client({ name: 'release-run-test', version: '1.0.0' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  const releasePath = '/api/external/projects/project-1/releases'
+  const cases = [
+    ['list_releases', {}, `GET ${releasePath}`, 'READ_PROJECT_DATA'],
+    ['get_release', { releaseId: 'release-1' }, `GET ${releasePath}/release-1`, 'READ_PROJECT_DATA'],
+    ['create_release', { version: '3.8.0' }, `POST ${releasePath}`, 'UPDATE_INTERNAL_WORKFLOW'],
+    ['update_release', { releaseId: 'release-1', expectedRevision: 2, version: '3.8.1' }, `PATCH ${releasePath}/release-1`, 'UPDATE_INTERNAL_WORKFLOW'],
+    ['request_release_status_change', { releaseId: 'release-1', change: { type: 'SET_STATUS', status: 'ABANDONED' }, reason: 'Superseded.', expectedRevision: 2 }, `POST ${releasePath}/release-1/status-requests`, 'UPDATE_INTERNAL_WORKFLOW'],
+    ['list_testbench_rounds', {}, 'GET /api/external/projects/project-1/testbench/rounds', 'READ_PROJECT_DATA'],
+    ['set_round_release', { roundId: 'round-1', releaseId: null, expectedRevision: '2026-10-15T09:30:00.000Z' }, 'PATCH /api/external/projects/project-1/testbench/rounds/round-1/release', 'UPDATE_INTERNAL_WORKFLOW'],
+  ]
+  try {
+    for (const [name, args, route, action] of cases) {
+      const [method, path] = route.split(' ')
+      for (const [extra, runContext] of [
+        [{ runId: 'run-1', taskId: 'task-1' }, { runId: 'run-1', projectId: 'project-1', taskId: 'task-1', action }],
+        [{ runId: 'run-1' }, undefined],
+        [{ taskId: 'task-1' }, undefined],
+        [{}, undefined],
+      ]) {
+        calls.length = 0
+        const result = await client.callTool({ name, arguments: { projectId: 'project-1', ...args, ...extra } })
+        assert.notEqual(result.isError, true, `${name}: ${JSON.stringify(result.content)}`)
+        assert.deepEqual(calls, [{ method, path, runContext }], `${name} ${JSON.stringify(extra)}`)
+      }
+    }
+  } finally {
+    await client.close()
+    await server.close()
+  }
+})
+
+test('rejects invalid release and Testbench input before calling the API', async () => {
+  let apiCalled = false
+  const flag = async () => { apiCalled = true; return {} }
+  const validationApi = { ...api, get: flag, post: flag, put: flag, patch: flag }
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer(validationApi)
+  const client = new Client({ name: 'release-validation-test', version: '1.0.0' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  const tooManyFields = Object.fromEntries(Array.from({ length: 101 }, (_, index) => [`field-${index}`, 'v']))
+  const statusBase = { projectId: 'project-1', releaseId: 'release-1', reason: 'Ready.', expectedRevision: 1 }
+
+  try {
+    for (const [name, args] of [
+      ['list_releases', { projectId: 'project-1', status: 'DRAFT' }],
+      ['list_releases', { projectId: 'project-1', search: 'x'.repeat(101) }],
+      ['get_release', { projectId: 'project-1', releaseId: '' }],
+      ['create_release', { projectId: 'project-1' }],
+      ['create_release', { projectId: 'project-1', version: ' ' }],
+      ['create_release', { projectId: 'project-1', version: 'v'.repeat(101) }],
+      ['create_release', { projectId: 'project-1', version: '1.0', title: 't'.repeat(161) }],
+      ['create_release', { projectId: 'project-1', version: '1.0', buildUrl: 'http://ci.example/1' }],
+      ['create_release', { projectId: 'project-1', version: '1.0', metadata: tooManyFields }],
+      ['create_release', { projectId: 'project-1', version: '1.0', metadata: { ['k'.repeat(121)]: 'v' } }],
+      ['create_release', { projectId: 'project-1', version: '1.0', metadata: { ' ': 'v' } }],
+      ['create_release', { projectId: 'project-1', version: '1.0', metadata: { key: 'v'.repeat(20_001) } }],
+      ['create_release', { projectId: 'project-1', version: '1.0', metadata: { key: 1 } }],
+      ['create_release', { projectId: 'project-1', version: '1.0', idempotencyKey: 'short' }],
+      ['update_release', { projectId: 'project-1', releaseId: 'release-1', title: 'No revision' }],
+      ['update_release', { projectId: 'project-1', releaseId: 'release-1', expectedRevision: 0 }],
+      ['update_release', { projectId: 'project-1', releaseId: 'release-1', expectedRevision: 1.5 }],
+      ['request_release_status_change', { ...statusBase, change: { type: 'SET_STATUS' } }],
+      ['request_release_status_change', { ...statusBase, change: { type: 'SET_STATUS', status: 'DRAFT' } }],
+      ['request_release_status_change', { ...statusBase, change: { type: 'DELETE' } }],
+      ['request_release_status_change', { ...statusBase, change: { type: 'ARCHIVE' }, reason: '' }],
+      ['request_release_status_change', { ...statusBase, change: { type: 'ARCHIVE' }, reason: 'r'.repeat(1001) }],
+      ['request_release_status_change', { projectId: 'project-1', releaseId: 'release-1', reason: 'Ready.', expectedRevision: 1 }],
+      ['list_testbench_rounds', { projectId: 'project-1', limit: 101 }],
+      ['list_testbench_rounds', { projectId: 'project-1', status: 'PUBLISHED' }],
+      ['set_round_release', { projectId: 'project-1', roundId: 'round-1', expectedRevision: '2026-10-15T09:30:00.000Z' }],
+      ['set_round_release', { projectId: 'project-1', roundId: 'round-1', releaseId: 'release-1', expectedRevision: 'not-a-date' }],
+      ['set_round_release', { projectId: 'project-1', roundId: 'round-1', releaseId: '', expectedRevision: '2026-10-15T09:30:00.000Z' }],
+      ['update_ticket', { taskId: 'task-1', expectedUpdatedAt: '2026-10-15T12:00:00.000Z', releaseId: '' }],
+      ['list_tickets', { releaseId: 'r'.repeat(101) }],
+    ]) {
+      const result = await client.callTool({ name, arguments: args })
+      assert.equal(result.isError, true, `${name} must reject ${JSON.stringify(args).slice(0, 120)}`)
+    }
+    assert.equal(apiCalled, false)
+  } finally {
+    await client.close()
+    await server.close()
+  }
+})
