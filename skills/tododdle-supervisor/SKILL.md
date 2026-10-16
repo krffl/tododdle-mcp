@@ -1,6 +1,6 @@
 ---
 name: tododdle-supervisor
-description: Use current ToDoddle supervision assessments to guide coding work at meaningful decision boundaries. Apply when supervised execution is requested and a compatible decision backend is available through ToDoddle; use tododdle-workflow alone when it is not.
+description: Use current ToDoddle supervision assessments to guide coding work at meaningful decision boundaries. Apply when supervised execution is requested and a compatible decision or supervision provider is available through ToDoddle; use tododdle-workflow alone when it is not.
 ---
 
 # ToDoddle Supervisor
@@ -9,9 +9,11 @@ Read [tododdle-workflow](../tododdle-workflow/SKILL.md) first. Follow its author
 
 ## Check Availability
 
-Use only the `tododdle` MCP. Never call Jev, OpenJev, or another evaluator directly, and never handle its credentials.
+Use only the `tododdle` MCP. Never call an external decision or supervision provider directly, and never handle its credentials.
 
-Treat supervision as available for a Ticket only when `get_supervisor_state` succeeds and returns a current assessment from the project’s configured decision evaluator. A current assessment must postdate the Ticket state and meaningful event it evaluates. Accept `external-system-one` or another evaluator type that project Context explicitly approves. Do not infer availability from an evaluator name.
+Treat supervision as available for a Ticket only when `get_supervisor_state` succeeds and returns a current assessment from the project’s configured decision evaluator. A current assessment must postdate the Ticket state and meaningful event it evaluates. Accept only evaluator types and assessment schemas that project Context explicitly approves. Apply the same checks to every provider. Do not infer availability from a provider name, evaluator type, or product announcement.
+
+Compatible systems can include decision APIs, supervision services, model reviewers, and deterministic rules. Provider adapters map their output to ToDoddle assessments. A System One adapter is one example, not a required wire format. Jev and OpenAI Decisions are candidate integrations; neither name proves that an adapter is configured or supported.
 
 Treat supervision as unavailable when the tool is missing, the call fails, no approved assessment exists, or the latest assessment is stale, incomplete, or conflicting. Do not call `record_assessment` to create your own guidance. Do not poll. Continue with `tododdle-workflow` when supervision is optional. If project rules require a supervised decision, preserve the current state and add an escalation instead of guessing.
 

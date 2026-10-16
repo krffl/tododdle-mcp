@@ -56,7 +56,7 @@ For detailed project structure and execution rules, read [project-work.md](refer
 1. Run appropriate verification.
 2. Add one typed `HANDOFF` comment with `## Outcome`, `## Verification`, and `## Remaining` when useful. Include stable links and immutable commit, release, document, or artifact IDs. Never store expiring URLs.
 3. Call `finish_agent_run` once with a short outcome and durable evidence. Use `SUCCEEDED`, `FAILED`, or `CANCELLED`. Reuse its idempotency key if delivery is uncertain.
-4. Compare the ticket creator with the authenticated Agent Connection user, not the assignee. If they match, set `COMPLETE` after the result is achieved and verified. If they differ, move the ticket to its existing `REVIEW` status and hand off to the creator or an explicitly named human reviewer. Keep it in `REVIEW` until that person records acceptance, then set `COMPLETE`. Do not add a ticket status.
+4. Compare the ticket creator with the authenticated Agent Connection user, not the assignee. If they match, set `COMPLETE` after the result is achieved and verified. If they differ, move the ticket to its existing `REVIEW` status and hand off to the creator or an explicitly named human reviewer. Keep it in `REVIEW` until that person records acceptance, then set `COMPLETE`. Do not add a ticket status. The server enforces this: an agent that sets `COMPLETE` on a ticket another user created gets `403 permission_denied`. Set `REVIEW` and call `create_review_request`. When a run is active, pass `runId` and `projectId` on `move_ticket`, `archive_ticket`, attribute tools, and time tools.
 5. Agent Run success and supervision assessment are evidence, not human acceptance. A run result never changes ticket status. A review request is separate from ticket status; archive is separate cleanup.
 6. Use `release_ticket` only when stopping without a terminal result. It records the run as cancelled.
 7. Keep incomplete work active and state what remains.
@@ -69,6 +69,7 @@ When resuming, read the agent inbox, handle the reply, then reload the linked it
 - **Time tracking:** Read [time-tracking.md](references/time-tracking.md).
 - **Scheduled checks:** Read [scheduled-workflows.md](references/scheduled-workflows.md).
 - **Support cases:** Read [support-cases.md](references/support-cases.md).
+- **Releases or Testbench rounds:** Read [releases.md](references/releases.md).
 
 ## Missing Access
 
