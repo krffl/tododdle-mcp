@@ -21,16 +21,47 @@ export interface AgentRunRequestContext {
     | 'TRACK_INTERNAL_TIME';
 }
 
+/** Scope names a denied request needed, when the API reports them. */
+export interface ToDoddleScopeDenial {
+  requiredScopes?: string[];
+  missingScopes?: string[];
+  grantedScopes?: string[];
+}
+
 export class ToDoddleApiError extends Error {
   constructor(
     readonly status: number,
     readonly code: string,
     message: string,
-    readonly details?: unknown
+    readonly details?: unknown,
+    readonly scopes?: ToDoddleScopeDenial
   ) {
     super(message);
     this.name = 'ToDoddleApiError';
   }
+}
+
+function stringList(value: unknown): string[] | undefined {
+  return Array.isArray(value) && value.every((item) => typeof item === 'string')
+    ? value
+    : undefined;
+}
+
+function scopeDenial(payload: Record<string, unknown>): ToDoddleScopeDenial | undefined {
+  // Some routes report the scopes inside `details` instead of at the top level.
+  const details =
+    payload.details && typeof payload.details === 'object'
+      ? (payload.details as Record<string, unknown>)
+      : {};
+  const requiredScopes = stringList(payload.required_scopes) ?? stringList(details.required_scopes);
+  const grantedScopes = stringList(payload.granted_scopes);
+  const missingScopes =
+    stringList(payload.missing_scopes) ??
+    (requiredScopes && grantedScopes
+      ? requiredScopes.filter((scope) => !grantedScopes.includes(scope))
+      : undefined);
+  if (!requiredScopes && !missingScopes) return undefined;
+  return { requiredScopes, missingScopes, grantedScopes };
 }
 
 export interface ToDoddleApi {
@@ -187,7 +218,8 @@ export class ToDoddleApiClient implements ToDoddleApi {
       code === 'MCP_UPDATE_REQUIRED'
         ? formatMcpUpdateRequiredMessage(message, payload.details)
         : message,
-      payload.details
+      payload.details,
+      scopeDenial(payload)
     );
   }
 

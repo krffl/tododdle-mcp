@@ -223,6 +223,7 @@ Ticket attributes hold small typed integration and handoff facts. Read them befo
 - `claim_next_ticket`
 - `renew_ticket_claim`
 - `finish_agent_run`
+- `log_completed_work`
 - `record_work_event`
 - `record_assessment`
 - `record_verification`
@@ -237,7 +238,7 @@ Ticket attributes hold small typed integration and handoff facts. Read them befo
 - `acknowledge_agent_reply`
 - `archive_ticket`
 
-`list_available_work` reads only unblocked, currently unclaimed work in one project. `claim_next_ticket` selects the highest-ranked eligible ticket. `claim_ticket` and `renew_ticket_claim` manage its agent lease without changing human assignment. `finish_agent_run` records the terminal result and releases the matching lease. `release_ticket` stops work without a result and records the run as cancelled. None of these tools changes ticket status. `preview_ticket_move` reports lane automation and hierarchy blockers before a board move. `move_ticket` and `archive_ticket` are destructive because a destination lane can archive the ticket. Ticket deletion is unavailable.
+`list_available_work` reads only unblocked, currently unclaimed work in one project. `claim_next_ticket` selects the highest-ranked eligible ticket. `claim_ticket` and `renew_ticket_claim` manage its agent lease without changing human assignment. `finish_agent_run` records the terminal result and releases the matching lease. `release_ticket` stops work without a result and records the run as cancelled. None of these tools changes ticket status. `log_completed_work` is the exception for ad-hoc work done in conversation: in one call it finds or creates the ticket, claims it, sets `COMPLETE` (or `REVIEW` when another user created the ticket, with a warning), and records a finished run with the outcome and evidence. It needs `tasks:write` and the matching ToDoddle API route. `preview_ticket_move` reports lane automation and hierarchy blockers before a board move. `move_ticket` and `archive_ticket` are destructive because a destination lane can archive the ticket. Ticket deletion is unavailable.
 
 Supported run-bound tools accept the stable `runId` and `projectId` needed to send the complete `X-ToDoddle-Run-*` header set. The API then binds the request to the stored workspace, project, Ticket, Agent Connection, allowed action, and expiry. Keep the same run ID from claim through completion. A run cannot approve itself or expand its own authority. Besides ticket updates, comments, and evidence, these tools also send run context when you pass `runId` and `projectId`: `move_ticket` and `archive_ticket` (`UPDATE_INTERNAL_WORKFLOW`), `set_ticket_attribute` and `delete_ticket_attribute` (`UPDATE_TICKET`), and `start_ticket_timer`, `log_ticket_time`, `stop_ticket_timer`, `update_time_entry`, and `archive_time_entry` (`TRACK_INTERNAL_TIME`). When the same connection has an active or waiting run on a ticket, the server returns `403` with `RUN_ENVELOPE_REQUIRED` for these calls without run context. `attach_file_to_ticket` uses the upload-session and finalize routes, which are not run-bound.
 
@@ -341,7 +342,7 @@ Omit `projectId` to work with workspace Notes. Supply `projectId` to work with N
 - `begin_upload`
 - `complete_upload`
 
-Each tool accepts either an approved local `filePath` or an HTTPS `sourceUrl`. Local files must be regular files in the system temporary directory (`os.tmpdir()`, resolved through symlinks) or in an optional `TODODDLE_UPLOAD_ROOTS` root, and the current user must own them. The MCP rejects symlinks, directories, devices, and files owned by another user. Files stream directly from this local MCP process to ToDoddle's short-lived Bunny upload URL; file bodies are never placed in MCP JSON messages.
+Each tool accepts either an approved local `filePath` or an HTTPS `sourceUrl`. A missing file, or a file outside the system temporary directory, returns a message that names that directory. ToDoddle stores SVG, HTML, and other active content as `application/octet-stream` so it can never run in a browser; when the stored type differs from the requested one, the upload result includes a `notice` that says so. Image uploads (PNG, JPEG, GIF, WebP, and SVG) also return `embedMarkdown`, such as `![map.png](/api/documents/<id>/embed)`, to paste into a Note or Context; an SVG embeds through its PNG rendering at `/thumbnail`. The image shows only to people who can open that document. Local files must be regular files in the system temporary directory (`os.tmpdir()`, resolved through symlinks), and the current user must own them. The MCP rejects symlinks, directories, devices, and files owned by another user. Files stream directly from this local MCP process to ToDoddle's short-lived Bunny upload URL; file bodies are never placed in MCP JSON messages.
 
 If an agent copies a source file into a dedicated ToDoddle upload directory only to satisfy the local path restriction, it should remove that temporary copy after the tool confirms success. It should retain the copy after a failed or uncertain upload so the upload can be retried. It must never remove the original source or a pre-existing file. Temporary files that the MCP creates for HTTPS sources are removed automatically.
 
@@ -384,10 +385,9 @@ Uploading a project document requires `projects:read` and `documents:write`. Att
 | `TODODDLE_CLIENT_ID` | Yes | None | Agent Connection identifier |
 | `TODODDLE_CLIENT_SECRET` | Yes | None | Agent Connection secret |
 | `TODODDLE_BASE_URL` | No | `https://app.tododdle.com` | Application API origin; HTTPS is required except for loopback development |
-| `TODODDLE_UPLOAD_ROOTS` | No | None | Optional platform path-delimited list of additional directories the MCP may read for uploads |
 | `TODODDLE_MAX_UPLOAD_BYTES` | No | `1073741824` | Local safety ceiling; the hosted API may enforce a lower limit |
 
-No upload-root configuration is needed for normal local use. Put temporary files in the system temporary directory; it is always an allowed root. On macOS and Linux, separate optional roots with `:`; on Windows, use `;`. The server resolves symlinks and rejects files outside the system temporary directory and approved roots, and files not owned by the current user. Add optional roots only for Docker, sandboxes, or directories whose contents you approve for upload. HTTPS sources reject embedded credentials, private-network destinations, unsafe redirects, oversized responses, and empty files.
+Local uploads come only from the system temporary directory; no upload configuration is needed. The server resolves symlinks and rejects files outside that directory and files not owned by the current user. `TODODDLE_UPLOAD_ROOTS` is no longer used; if it is still set, the server writes a notice to stderr and ignores it. HTTPS sources reject embedded credentials, private-network destinations, unsafe redirects, oversized responses, and empty files.
 
 Use the final application API origin directly. The public `tododdle.com` and `www.tododdle.com` hosts serve the marketing site and are rejected. Legacy `trackingti.me` hosts are also rejected because cross-origin redirects must not forward bearer credentials.
 
@@ -467,3 +467,18 @@ Adds release tools (`list_releases`, `get_release`, `create_release`, `update_re
 This release also includes changes made since 3.7.0: the read-only `list_security_events` tool (`security:read`); the system temporary directory as the default upload root, with per-file ownership checks and validated DNS answers pinned on HTTPS upload fetches; Agent Run context on move, archive, attribute, and time tools; a pending-approval result for customer-visible Support replies; and GitHub Actions pinned to commit SHAs.
 
 The release raises `@modelcontextprotocol/sdk` to `^1.32.1` to fix [GHSA-6qxp-vccf-f47h](https://github.com/advisories/GHSA-6qxp-vccf-f47h), where SDK versions before 1.31.0 could send OAuth client credentials to an authorization server chosen by the MCP server.
+
+### 3.9.0 release
+
+Deploy the matching ToDoddle API first: `log_completed_work` needs the new completed-work route, and `contentEdits` and slim artifact responses need the updated artifact route (an older server makes `update_project_artifact` with `contentEdits` fail clearly rather than silently). The compatibility level stays at 3 because every change is additive. The hosted gateway must install this package and map `log_completed_work` to `tasks:write` before it advertises the tool.
+
+- Tool results now carry absolute web links (`uiUrl`, `href`) on the configured app origin, so clients no longer guess `www.tododdle.com`, the marketing site.
+
+- API errors keep their details. A tool error is now JSON with `error`, `status`, `message`, and, for `scope_required`, `missingScopes`, `requiredScopes`, and a `hint` that says where to enable the scope. Before, agents saw only "Insufficient permissions".
+- New `log_completed_work` records finished ad-hoc work in one call (ticket, claim, status, and a finished Agent Run with evidence). It needs the matching ToDoddle API route.
+- `TODODDLE_UPLOAD_ROOTS` is removed: local uploads come only from the system temporary directory, and a leftover setting is ignored with a notice on stderr.
+- Local uploads explain a missing file or a file outside the temporary directory instead of a raw `ENOENT`, `.svg` files are sent as `image/svg+xml`, and the result includes a `notice` when the server stores a different type.
+- `search_project` describes the new `relevance` and `matchedTerms` result fields.
+- Image uploads and `complete_upload` return `embedMarkdown` for Notes and Context. `create_note` and `update_note` describe the embed syntax.
+- The server instructions say where project knowledge lives (brief, decision artifacts, Notes, ticket comments, repository docs) and tell agents to refresh the brief when `get_project_context` reports `briefFreshness.stale`.
+- `update_project_artifact` accepts `contentEdits` (`replace_section`, `append_section`, `find_replace`) and `baseVersion`, so agents change one section of a long brief without resending it. It returns a slim summary unless `verbose` is true. An older server that ignores `contentEdits` returns an error instead of a silent success.

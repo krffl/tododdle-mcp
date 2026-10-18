@@ -15,7 +15,6 @@ const config = {
   baseUrl: 'https://www.tododdle.com',
   clientId: 'client-id',
   clientSecret: 'client-secret',
-  uploadRoots: [],
   maxUploadBytes: 1024,
 }
 
@@ -52,6 +51,38 @@ test('refreshes once after 401 and preserves structured API errors', async () =>
     )
     assert.equal(tokenRequests, 2)
     assert.equal(apiRequests, 2)
+  } finally {
+    globalThis.fetch = originalFetch
+  }
+})
+
+test('keeps the scope names from a scope_required denial', async () => {
+  const originalFetch = globalThis.fetch
+  const responses = [
+    { error: 'scope_required', message: 'Missing notes:write', required_scopes: ['notes:read', 'notes:write'], missing_scopes: ['notes:write'], granted_scopes: ['notes:read'] },
+    // An older server sends only required and granted scopes.
+    { error: 'scope_required', message: 'Insufficient permissions', required_scopes: ['documents:write'], granted_scopes: ['documents:read'] },
+    { error: 'permission_denied', message: 'Project access denied', required_scopes: 'not-a-list' },
+    { error: 'scope_required', message: 'Task attachments require tasks:write', details: { required_scopes: ['tasks:write'] } },
+  ]
+  globalThis.fetch = async input => {
+    if (String(input).endsWith('/api/external/oauth/token')) {
+      return new Response(JSON.stringify({ access_token: 'token', expires_in: 3600 }), { status: 200, headers: { 'content-type': 'application/json' } })
+    }
+    return new Response(JSON.stringify(responses.shift()), { status: 403, headers: { 'content-type': 'application/json' } })
+  }
+  try {
+    const client = new ToDoddleApiClient(config)
+    await assert.rejects(() => client.get('/api/external/notes'), error =>
+      error instanceof ToDoddleApiError
+        && error.scopes?.missingScopes?.join() === 'notes:write'
+        && error.scopes?.requiredScopes?.join() === 'notes:read,notes:write')
+    await assert.rejects(() => client.get('/api/external/notes'), error =>
+      error instanceof ToDoddleApiError && error.scopes?.missingScopes?.join() === 'documents:write')
+    await assert.rejects(() => client.get('/api/external/notes'), error =>
+      error instanceof ToDoddleApiError && error.scopes === undefined)
+    await assert.rejects(() => client.get('/api/external/notes'), error =>
+      error instanceof ToDoddleApiError && error.scopes?.requiredScopes?.join() === 'tasks:write')
   } finally {
     globalThis.fetch = originalFetch
   }

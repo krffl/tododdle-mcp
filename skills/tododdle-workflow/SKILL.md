@@ -61,6 +61,8 @@ For detailed project structure and execution rules, read [project-work.md](refer
 6. Use `release_ticket` only when stopping without a terminal result. It records the run as cancelled.
 7. Keep incomplete work active and state what remains.
 
+For a quick request done in conversation without a claimed ticket (for example "fix this" or "change the mission board"), record it afterwards with one `log_completed_work` call instead of skipping the record. Pass `taskId` for an existing ticket, or `ticket` (`planId`, `sectionId`, `title`) to create one, plus the outcome, durable evidence, and a reusable idempotency key. ToDoddle claims the ticket, sets the status, and records a finished run. A ticket another user created goes to `REVIEW`; then call `create_review_request`. Use the claim and `finish_agent_run` flow for planned work.
+
 When resuming, read the agent inbox, handle the reply, then reload the linked item. Use a new run ID and refer to the prior handoff.
 
 ## Load Detailed Rules Only When Needed

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import type { AgentRunRequestContext, ToDoddleApi } from './api-client.js';
+import { ToDoddleApiError, type AgentRunRequestContext, type ToDoddleApi } from './api-client.js';
 import { prepareUploadSource } from './upload-source.js';
 import { TODODDLE_WORKFLOW_GUIDANCE } from './workflow-guidance.js';
 
@@ -237,6 +237,97 @@ const assessmentEvidenceSchema = z
     }
   });
 
+/**
+ * Turns a ToDoddle API failure into a tool error the agent can act on. The SDK
+ * default keeps only the message, which dropped the scope an owner must grant.
+ */
+export function apiErrorResult(error: ToDoddleApiError) {
+  const missing = error.scopes?.missingScopes ?? [];
+  const hint =
+    error.code === 'scope_required' && missing.length
+      ? `Ask a workspace owner or admin to enable ${missing.join(', ')} for this Agent Connection in Workspace Settings > Agent Connections, then retry.`
+      : error.code === 'scope_required'
+        ? 'Ask a workspace owner or admin to check the scopes on this Agent Connection in Workspace Settings > Agent Connections.'
+        : undefined;
+  const body: Record<string, unknown> = {
+    error: error.code,
+    status: error.status,
+    message: error.message,
+    ...(missing.length ? { missingScopes: missing } : {}),
+    ...(error.scopes?.requiredScopes ? { requiredScopes: error.scopes.requiredScopes } : {}),
+    ...(hint ? { hint } : {}),
+    ...(error.details !== undefined ? { details: error.details } : {}),
+  };
+  return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(body) }] };
+}
+
+type ToolCallback = (...args: never[]) => unknown;
+
+const LINK_KEYS = new Set(['uiUrl', 'href']);
+
+/**
+ * The API returns web links as paths such as /dashboard/project/x. Left
+ * relative, a client guesses the host and often picks www.tododdle.com, which
+ * is the marketing site. Turn them into absolute links on the app origin.
+ * In-app embed paths (/api/documents/...) are left alone.
+ */
+export function absolutizeLinks(value: unknown, appOrigin: string): unknown {
+  if (Array.isArray(value)) return value.map((item) => absolutizeLinks(item, appOrigin));
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+      key,
+      LINK_KEYS.has(key) &&
+      typeof item === 'string' &&
+      item.startsWith('/') &&
+      !item.startsWith('//')
+        ? new URL(item, appOrigin).toString()
+        : absolutizeLinks(item, appOrigin),
+    ])
+  );
+}
+
+type ToolCallResult = { structuredContent?: Record<string, unknown>; content?: unknown };
+
+function withAbsoluteLinks(result: unknown, appOrigin: string | undefined): unknown {
+  const typed = result as ToolCallResult | undefined;
+  if (!appOrigin || !typed?.structuredContent) return result;
+  const structuredContent = absolutizeLinks(typed.structuredContent, appOrigin) as Record<
+    string,
+    unknown
+  >;
+  return {
+    ...typed,
+    structuredContent,
+    content: [{ type: 'text', text: JSON.stringify(structuredContent) }],
+  };
+}
+
+/**
+ * Wraps every tool so API failures keep their code, scopes, and hint, and
+ * web links in results are absolute.
+ */
+function withApiErrorResults(server: McpServer, appOrigin: string | undefined): void {
+  const register = server.registerTool.bind(server) as (
+    name: string,
+    config: unknown,
+    callback: ToolCallback
+  ) => unknown;
+  (server as unknown as { registerTool: typeof register }).registerTool = (
+    name,
+    config,
+    callback
+  ) =>
+    register(name, config, (async (...args: never[]) => {
+      try {
+        return withAbsoluteLinks(await callback(...args), appOrigin);
+      } catch (error) {
+        if (error instanceof ToDoddleApiError) return apiErrorResult(error);
+        throw error;
+      }
+    }) as ToolCallback);
+}
+
 function toolResult(value: Record<string, unknown>) {
   return {
     // Keep text content for clients that do not consume structuredContent, but
@@ -318,14 +409,15 @@ function projectRunContext(
 }
 
 export interface ToDoddleMcpServerOptions {
-  uploadRoots?: string[];
   managedUploadRoot?: string;
+  /** Web app origin, such as https://app.tododdle.com, for absolute links in results. */
+  appOrigin?: string;
   maxUploadBytes?: number;
 }
 
 interface ResolvedToDoddleMcpServerOptions {
-  uploadRoots: string[];
   managedUploadRoot?: string;
+  appOrigin?: string;
   maxUploadBytes: number;
 }
 
@@ -391,6 +483,36 @@ const completeUploadInputSchema = z.object({
   idempotencyKey: z.string().min(8),
 });
 
+const EMBEDDABLE_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
+
+/** Escapes a file name for use as Markdown image alt text. */
+function markdownAlt(value: string): string {
+  return value.replace(/[\\[\]]/g, '\\$&');
+}
+
+/**
+ * Adds what an agent needs next: `embedMarkdown` to show an image inline in a
+ * Note or Context, and a `notice` when the stored type differs. ToDoddle stores
+ * SVG, HTML, and other active content as an opaque file so it never runs in a
+ * browser; an SVG previews and embeds through a PNG rendering instead.
+ */
+function withUploadHints(result: Record<string, unknown>, requestedType: string, fileName: string) {
+  const entity = asRecord(result.entity);
+  const storedType = entity?.mimeType;
+  const id = typeof entity?.id === 'string' ? entity.id : undefined;
+  const isSvg = /\.svg$/i.test(fileName);
+  const hints: Record<string, unknown> = {};
+  if (id && typeof storedType === 'string' && (EMBEDDABLE_IMAGE_TYPES.has(storedType) || isSvg)) {
+    hints.embedMarkdown = `![${markdownAlt(fileName)}](/api/documents/${id}/${isSvg ? 'thumbnail' : 'embed'})`;
+  }
+  if (typeof storedType === 'string' && storedType !== requestedType) {
+    hints.notice = isSvg
+      ? `Stored as ${storedType}: ToDoddle keeps SVG files as opaque downloads for safety. Previews and embeds use a PNG rendering of it, so embedMarkdown still shows the image.`
+      : `Stored as ${storedType}, not ${requestedType}. ToDoddle stores HTML and other active content as an opaque file for safety. It downloads normally but does not preview inline.`;
+  }
+  return { ...result, ...hints };
+}
+
 async function uploadDocument(
   api: ToDoddleApi,
   options: ResolvedToDoddleMcpServerOptions,
@@ -398,7 +520,6 @@ async function uploadDocument(
 ) {
   const prepared = await prepareUploadSource(
     input,
-    options.uploadRoots,
     options.maxUploadBytes,
     options.managedUploadRoot
   );
@@ -429,7 +550,7 @@ async function uploadDocument(
       `${idempotencyKey}-finalize`
     );
     uploadConfirmed = true;
-    return result;
+    return withUploadHints(result, prepared.contentType, prepared.fileName);
   } catch (error) {
     if (session && !bytesUploaded) {
       await api
@@ -505,14 +626,15 @@ export function createToDoddleMcpServer(
   serverOptions: ToDoddleMcpServerOptions = {}
 ): McpServer {
   const options: ResolvedToDoddleMcpServerOptions = {
-    uploadRoots: serverOptions.uploadRoots ?? [],
     managedUploadRoot: serverOptions.managedUploadRoot,
+    appOrigin: serverOptions.appOrigin,
     maxUploadBytes: serverOptions.maxUploadBytes ?? 1024 * 1024 * 1024,
   };
   const server = new McpServer(
     { name: 'tododdle', version: packageVersion.version },
     { instructions: TODODDLE_WORKFLOW_GUIDANCE }
   );
+  withApiErrorResults(server, options.appOrigin);
 
   server.registerTool(
     'list_projects',
@@ -1644,7 +1766,8 @@ export function createToDoddleMcpServer(
   server.registerTool(
     'create_note',
     {
-      description: 'Create a workspace or project Note. Supply projectId for a project Note.',
+      description:
+        'Create a workspace or project Note. Supply projectId for a project Note. To show an uploaded image inline, paste the embedMarkdown returned by upload_project_document or complete_upload, for example ![Map](/api/documents/<documentId>/embed); it shows only to people who can open that document.',
       inputSchema: z.object({
         projectId: z.string().min(1).optional(),
         title: z.string().min(1).max(500),
@@ -1666,7 +1789,8 @@ export function createToDoddleMcpServer(
   server.registerTool(
     'update_note',
     {
-      description: 'Update a workspace or project Note using optimistic concurrency.',
+      description:
+        'Update a workspace or project Note using optimistic concurrency. To show an uploaded image inline, paste the embedMarkdown returned by upload_project_document or complete_upload, for example ![Map](/api/documents/<documentId>/embed); it shows only to people who can open that document.',
       inputSchema: z.object({
         projectId: z.string().min(1).optional(),
         noteId: z.string().min(1),
@@ -1777,21 +1901,27 @@ export function createToDoddleMcpServer(
         openWorldHint: false,
       },
     },
-    async ({ projectId, documentId, idempotencyKey, ...body }) =>
-      toolResult(
-        await api.post(
-          `/api/external/projects/${projectId}/documents/${documentId}/finalize`,
-          body,
-          idempotencyKey
-        )
-      )
+    async ({ projectId, documentId, idempotencyKey, ...body }) => {
+      const result = await api.post(
+        `/api/external/projects/${projectId}/documents/${documentId}/finalize`,
+        body,
+        idempotencyKey
+      );
+      // The remote client sent the bytes, so the stored type is the only type to compare.
+      const entity = asRecord(result.entity);
+      const fileName = typeof entity?.fileName === 'string' ? entity.fileName : '';
+      const storedType = typeof entity?.mimeType === 'string' ? entity.mimeType : '';
+      return toolResult(
+        body.success === false ? result : withUploadHints(result, storedType, fileName)
+      );
+    }
   );
 
   server.registerTool(
     'upload_project_document',
     {
       description:
-        'Upload an approved local file or HTTPS URL to a project document library. Local paths must be regular files in the system temporary directory (or an optional approved upload root) and owned by the current user.',
+        'Upload an approved local file or HTTPS URL to a project document library. Local paths must be regular files in the system temporary directory, owned by the current user; copy a file there first if needed. SVG and HTML are stored as opaque files that download but do not preview.',
       inputSchema: uploadInputSchema,
       annotations: {
         readOnlyHint: false,
@@ -1807,7 +1937,7 @@ export function createToDoddleMcpServer(
     'attach_file_to_ticket',
     {
       description:
-        'Upload a local file or HTTPS URL and attach it to a ticket in the same project. Local paths must be regular files in the system temporary directory (or an optional approved upload root) and owned by the current user.',
+        'Upload a local file or HTTPS URL and attach it to a ticket in the same project. Local paths must be regular files in the system temporary directory, owned by the current user; copy a file there first if needed. SVG and HTML are stored as opaque files that download but do not preview.',
       inputSchema: taskUploadInputSchema,
       annotations: {
         readOnlyHint: false,
@@ -1972,7 +2102,7 @@ export function createToDoddleMcpServer(
     'search_project',
     {
       description:
-        'Find compact ticket, board, lane, Note, Context, and document matches within one known project. Use this for discovery before narrow get tools instead of scanning every board or lane.',
+        'Find compact ticket, board, lane, Note, Context, and document matches within one known project. Use this for discovery before narrow get tools instead of scanning every board or lane. Each result has relevance (0 to 1; 0.8 or more is an exact or phrase title match) and matchedTerms. Matching uses titles only; an empty result means no title matched well.',
       inputSchema: z.object({
         projectId: z.string().min(1),
         query: z.string().trim().min(2).max(200),
@@ -2522,6 +2652,57 @@ export function createToDoddleMcpServer(
           runContext(runId, projectId, taskId, 'RECORD_EVIDENCE')
         )
       )
+  );
+
+  server.registerTool(
+    'log_completed_work',
+    {
+      description:
+        'Record finished ad-hoc work in one call, for quick requests done in conversation without claiming a ticket first. ' +
+        'Pass taskId for an existing ticket, or ticket (planId, sectionId, title) to create one. ToDoddle claims it, sets the status, and records a finished Agent Run with your outcome and evidence (commits, tests, files, links), so it shows in run history like claimed work. ' +
+        'status defaults to COMPLETE. A ticket another person created goes to REVIEW instead; the response warns you, and you should then call create_review_request. ' +
+        'Use claim_ticket and finish_agent_run for planned work. Reuse the same idempotencyKey to retry safely.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        taskId: z.string().min(1).optional(),
+        ticket: z
+          .object({
+            planId: z.string().min(1),
+            sectionId: z.string().min(1),
+            title: z.string().trim().min(1).max(500),
+            description: z.string().trim().max(50_000).optional(),
+            kind: taskKindSchema.optional(),
+            priority: prioritySchema.optional(),
+          })
+          .optional(),
+        runId: z.string().min(1).max(200).optional(),
+        outcome: z.string().trim().min(1).max(2000),
+        evidence: z
+          .array(
+            z.object({
+              type: agentRunEvidenceTypeSchema,
+              reference: z.string().trim().min(1).max(2000),
+              label: z.string().trim().min(1).max(200).optional(),
+            })
+          )
+          .max(25)
+          .default([]),
+        status: z.enum(['COMPLETE', 'REVIEW']).default('COMPLETE'),
+        idempotencyKey: z.string().trim().min(8).max(180),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, ...body }) => {
+      if (Boolean(body.taskId) === Boolean(body.ticket)) {
+        throw new Error('Send taskId for an existing ticket or ticket to create one, not both.');
+      }
+      return toolResult(await api.post(`/api/external/projects/${projectId}/completed-work`, body));
+    }
   );
 
   server.registerTool(
@@ -3292,7 +3473,10 @@ export function createToDoddleMcpServer(
     'update_project_artifact',
     {
       description:
-        'Update artifact Markdown, its current short summary, or metadata using optimistic concurrency. Editing approved content returns it to draft.',
+        'Update artifact Markdown, its current short summary, or metadata using optimistic concurrency. Editing approved content returns it to draft. ' +
+        'To change part of a long document, send contentEdits instead of content: replace_section (by heading path, e.g. "Release Plan" or "Plan > Risks"; replaces the text under that heading and keeps its subsections), append_section (optionally inside a parent heading), or find_replace (exact text; expectedCount defaults to 1). ' +
+        'Pass baseVersion (the version you read) so an edit still applies when someone else changed a different section; the server rejects it if your section changed. ' +
+        'The response is a slim summary (id, version, updatedAt, changedFields) unless verbose is true. Embed an uploaded image with the embedMarkdown returned by the upload tools.',
       inputSchema: z.object({
         projectId: z.string().min(1),
         artifactId: z.string().min(1),
@@ -3300,10 +3484,38 @@ export function createToDoddleMcpServer(
         title: z.string().min(1).optional(),
         summary: z.string().trim().max(500).nullable().optional(),
         content: z.string().optional(),
+        contentEdits: z
+          .array(
+            z.discriminatedUnion('op', [
+              z.object({
+                op: z.literal('replace_section'),
+                heading: z.string().min(1).max(500),
+                content: z.string(),
+              }),
+              z.object({
+                op: z.literal('append_section'),
+                heading: z.string().min(1).max(200),
+                content: z.string(),
+                parent: z.string().min(1).max(500).optional(),
+                level: z.number().int().min(1).max(6).optional(),
+              }),
+              z.object({
+                op: z.literal('find_replace'),
+                find: z.string().min(1),
+                replace: z.string(),
+                expectedCount: z.number().int().min(1).max(1000).optional(),
+              }),
+            ])
+          )
+          .min(1)
+          .max(20)
+          .optional(),
+        baseVersion: z.number().int().min(1).optional(),
         parentArtifactId: z.string().min(1).nullable().optional(),
         ownerId: z.string().optional(),
         metadata: z.record(z.unknown()).optional(),
         changeNote: z.string().optional(),
+        verbose: z.boolean().default(false),
       }),
       annotations: {
         readOnlyHint: false,
@@ -3312,10 +3524,20 @@ export function createToDoddleMcpServer(
         openWorldHint: false,
       },
     },
-    async ({ projectId, artifactId, ...body }) =>
-      toolResult(
-        await api.patch(`/api/external/projects/${projectId}/artifacts/${artifactId}`, body)
-      )
+    async ({ projectId, artifactId, verbose, ...body }) => {
+      const result = await api.patch(
+        `/api/external/projects/${projectId}/artifacts/${artifactId}${verbose ? '' : '?detail=summary'}`,
+        body
+      );
+      // An older ToDoddle server strips contentEdits it does not know and reports success.
+      const changedFields = result.changedFields;
+      if (body.contentEdits && Array.isArray(changedFields) && !changedFields.includes('content')) {
+        throw new Error(
+          'This ToDoddle server does not support contentEdits yet. Send the full content instead.'
+        );
+      }
+      return toolResult(result);
+    }
   );
 
   server.registerTool(

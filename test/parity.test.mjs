@@ -117,7 +117,7 @@ test('every discovered tool validates and serializes only to documented External
     uploadFile: async () => undefined,
   }
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
-  const server = createToDoddleMcpServer(api, { uploadRoots: [directory] })
+  const server = createToDoddleMcpServer(api, { managedUploadRoot: directory })
   const client = new Client({ name: 'parity-serialization-test', version: '1.0.0' })
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
 
@@ -129,8 +129,11 @@ test('every discovered tool validates and serializes only to documented External
       if (tool.name === 'upload_project_document' || tool.name === 'attach_file_to_ticket') {
         argumentsValue.projectId = 'projectId-value'
         argumentsValue.filePath = filePath
+        // A confirmed upload removes the staged file, so stage it for each tool.
+        await writeFile(filePath, 'parity evidence')
         if (tool.name === 'attach_file_to_ticket') argumentsValue.taskId = 'taskId-value'
       }
+      if (tool.name === 'log_completed_work') argumentsValue.taskId = 'taskId-value'
       if (tool.name === 'begin_upload') {
         argumentsValue.projectId = 'projectId-value'
         argumentsValue.fileName = 'evidence.txt'

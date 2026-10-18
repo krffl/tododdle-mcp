@@ -39,6 +39,7 @@ const mimeTypes: Record<string, string> = {
   '.mp4': 'video/mp4',
   '.pdf': 'application/pdf',
   '.png': 'image/png',
+  '.svg': 'image/svg+xml',
   '.txt': 'text/plain',
   '.webp': 'image/webp',
   '.zip': 'application/zip',
@@ -61,34 +62,32 @@ function sanitizeFileName(value: string): string {
   return name.slice(0, 255);
 }
 
+/**
+ * Local uploads come only from the system temporary directory (the managed
+ * root). The old TODODDLE_UPLOAD_ROOTS allow-list is gone.
+ */
 async function prepareLocalSource(
   input: UploadSourceInput,
-  roots: string[],
   managedRoot: string | undefined,
   maxBytes: number
 ): Promise<PreparedUpload> {
   if (!input.filePath) throw new Error('filePath is required');
+  if (!managedRoot)
+    throw new Error('Local file uploads are not available here; pass an HTTPS sourceUrl instead');
   const requestedPath = resolve(input.filePath);
+  const allowedLocations = `the system temporary directory (${managedRoot})`;
   // Reject a symlink as the final path component before following it.
-  const requestedStats = await lstat(requestedPath);
+  const requestedStats = await lstat(requestedPath).catch((error: NodeJS.ErrnoException) => {
+    if (error.code !== 'ENOENT') throw error;
+    throw new Error(
+      `Local file not found: ${requestedPath}. Save or copy the file into ${allowedLocations}, then pass that path.`
+    );
+  });
   if (!requestedStats.isFile()) throw new Error('Local upload source must be a regular file');
   const resolvedFile = await realpath(requestedPath);
-  const resolvedRoots = await Promise.all(
-    roots.map((root) => realpath(resolve(root)).catch(() => null))
-  );
-  const resolvedManagedRoot = managedRoot
-    ? await realpath(resolve(managedRoot)).catch(() => null)
-    : null;
-  const isManagedFile = Boolean(
-    resolvedManagedRoot && isInsideRoot(resolvedFile, resolvedManagedRoot)
-  );
-  if (
-    !isManagedFile &&
-    !resolvedRoots.some((root) => root !== null && isInsideRoot(resolvedFile, root))
-  ) {
-    throw new Error(
-      'Local file must be in the system temporary directory or an approved upload root'
-    );
+  const resolvedManagedRoot = await realpath(resolve(managedRoot)).catch(() => null);
+  if (!resolvedManagedRoot || !isInsideRoot(resolvedFile, resolvedManagedRoot)) {
+    throw new Error(`Local file must be inside ${allowedLocations}. Copy it there, then retry.`);
   }
   const stats = await lstat(resolvedFile);
   if (!stats.isFile()) throw new Error('Local upload source must be a regular file');
@@ -105,7 +104,7 @@ async function prepareLocalSource(
     fileSize: stats.size,
     contentType: input.contentType || inferContentType(fileName),
     cleanup: async (uploadConfirmed = false) => {
-      if (!uploadConfirmed || !isManagedFile || !resolvedManagedRoot) return;
+      if (!uploadConfirmed) return;
       await rm(resolvedFile, { force: true });
       const stagingDirectory = dirname(resolvedFile);
       if (stagingDirectory !== resolvedManagedRoot) {
@@ -288,7 +287,6 @@ async function prepareUrlSource(
 
 export async function prepareUploadSource(
   input: UploadSourceInput,
-  roots: string[],
   maxBytes: number,
   managedRoot?: string
 ): Promise<PreparedUpload> {
@@ -296,6 +294,6 @@ export async function prepareUploadSource(
     throw new Error('Provide exactly one of filePath or sourceUrl');
   }
   return input.filePath
-    ? prepareLocalSource(input, roots, managedRoot, maxBytes)
+    ? prepareLocalSource(input, managedRoot, maxBytes)
     : prepareUrlSource(input, maxBytes);
 }

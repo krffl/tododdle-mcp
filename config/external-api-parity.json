@@ -88,6 +88,7 @@
     "list_agent_runs": ["GET /api/external/tasks/[taskId]/agent-runs"],
     "get_agent_run": ["GET /api/external/tasks/[taskId]/agent-runs/[runId]"],
     "finish_agent_run": ["POST /api/external/tasks/[taskId]/agent-runs/[runId]"],
+    "log_completed_work": ["POST /api/external/projects/[projectId]/completed-work"],
     "get_supervisor_state": ["GET /api/external/tasks/[taskId]/supervisor-state"],
     "record_work_event": ["POST /api/external/tasks/[taskId]/work-events"],
     "record_assessment": ["POST /api/external/tasks/[taskId]/assessments"],
