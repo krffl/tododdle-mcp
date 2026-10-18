@@ -474,4 +474,5 @@ The release raises `@modelcontextprotocol/sdk` to `^1.32.1` to fix [GHSA-6qxp-vc
 - Local uploads explain a missing file or a missing approved root instead of a raw `ENOENT`, `.svg` files are sent as `image/svg+xml`, and the result includes a `notice` when the server stores a different type.
 - `search_project` describes the new `relevance` and `matchedTerms` result fields.
 - Image uploads and `complete_upload` return `embedMarkdown` for Notes and Context. `create_note` and `update_note` describe the embed syntax.
+- The server instructions say where project knowledge lives (brief, decision artifacts, Notes, ticket comments, repository docs) and tell agents to refresh the brief when `get_project_context` reports `briefFreshness.stale`.
 - `update_project_artifact` accepts `contentEdits` (`replace_section`, `append_section`, `find_replace`) and `baseVersion`, so agents change one section of a long brief without resending it. It returns a slim summary unless `verbose` is true. An older server that ignores `contentEdits` returns an error instead of a silent success.
