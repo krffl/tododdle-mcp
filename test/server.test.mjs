@@ -1327,7 +1327,9 @@ test('says when the server stores an upload as a safer type', async () => {
   const pngPath = join(directory, 'galaxy-map.png')
   await writeFile(svgPath, '<svg xmlns="http://www.w3.org/2000/svg"/>')
   await writeFile(pngPath, 'png-bytes')
-  const stored = { 'galaxy-map.svg': 'application/octet-stream', 'galaxy-map.png': 'image/png' }
+  const htmlPath = join(directory, 'notes[1].html')
+  await writeFile(htmlPath, '<p>hi</p>')
+  const stored = { 'galaxy-map.svg': 'application/octet-stream', 'galaxy-map.png': 'image/png', 'notes[1].html': 'application/octet-stream' }
   let current = ''
   const uploadApi = {
     ...api,
@@ -1345,14 +1347,39 @@ test('says when the server stores an upload as a safer type', async () => {
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
   try {
     const svg = await client.callTool({ name: 'upload_project_document', arguments: { projectId: 'project-1', filePath: svgPath } })
-    assert.match(svg.structuredContent.notice, /^Stored as application\/octet-stream, not image\/svg\+xml\./)
+    assert.match(svg.structuredContent.notice, /^Stored as application\/octet-stream: ToDoddle keeps SVG files as opaque downloads/)
+    // The SVG embeds through its PNG rendering, never as SVG.
+    assert.equal(svg.structuredContent.embedMarkdown, '![galaxy-map.svg](/api/documents/document-1/thumbnail)')
     const png = await client.callTool({ name: 'upload_project_document', arguments: { projectId: 'project-1', filePath: pngPath } })
     assert.equal(png.structuredContent.notice, undefined)
+    assert.equal(png.structuredContent.embedMarkdown, '![galaxy-map.png](/api/documents/document-1/embed)')
+    const html = await client.callTool({ name: 'upload_project_document', arguments: { projectId: 'project-1', filePath: htmlPath, contentType: 'text/html' } })
+    assert.match(html.structuredContent.notice, /^Stored as application\/octet-stream, not text\/html\./)
+    assert.equal(html.structuredContent.embedMarkdown, undefined)
   } finally {
     await client.close()
     await server.close()
     await rm(directory, { recursive: true, force: true })
   }
+})
+
+test('adds embed Markdown after a remote complete_upload', async () => {
+  const entities = [
+    { id: 'doc-svg', fileName: 'map [v2].svg', mimeType: 'application/octet-stream' },
+    { id: 'doc-zip', fileName: 'bundle.zip', mimeType: 'application/zip' },
+  ]
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer({ ...api, post: async () => ({ entity: entities.shift() }) })
+  const client = new Client({ name: 'complete-upload-test', version: '1' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  try {
+    const args = { projectId: 'project-1', documentId: 'doc', idempotencyKey: 'finalize-key-1' }
+    const svg = await client.callTool({ name: 'complete_upload', arguments: args })
+    assert.equal(svg.structuredContent.embedMarkdown, '![map \\[v2\\].svg](/api/documents/doc-svg/thumbnail)')
+    assert.equal(svg.structuredContent.notice, undefined)
+    const zip = await client.callTool({ name: 'complete_upload', arguments: args })
+    assert.equal(zip.structuredContent.embedMarkdown, undefined)
+  } finally { await client.close(); await server.close() }
 })
 
 test('retains a managed local file when upload finalization is uncertain', async () => {

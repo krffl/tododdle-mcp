@@ -439,19 +439,34 @@ const completeUploadInputSchema = z.object({
   idempotencyKey: z.string().min(8),
 });
 
+const EMBEDDABLE_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
+
+/** Escapes a file name for use as Markdown image alt text. */
+function markdownAlt(value: string): string {
+  return value.replace(/[\\[\]]/g, '\\$&');
+}
+
 /**
- * The server stores active content such as SVG and HTML as an opaque file so it
- * can never run in the browser. Say so, rather than leave a silent type change.
+ * Adds what an agent needs next: `embedMarkdown` to show an image inline in a
+ * Note or Context, and a `notice` when the stored type differs. ToDoddle stores
+ * SVG, HTML, and other active content as an opaque file so it never runs in a
+ * browser; an SVG previews and embeds through a PNG rendering instead.
  */
-function withStoredTypeNotice(result: Record<string, unknown>, requestedType: string) {
-  const storedType = asRecord(result.entity)?.mimeType;
-  if (typeof storedType !== 'string' || storedType === requestedType) return result;
-  return {
-    ...result,
-    notice:
-      `Stored as ${storedType}, not ${requestedType}. ToDoddle stores SVG, HTML, and other active content as an opaque file for safety. ` +
-      'It downloads normally but does not preview inline. Upload a PNG or JPEG for an inline image.',
-  };
+function withUploadHints(result: Record<string, unknown>, requestedType: string, fileName: string) {
+  const entity = asRecord(result.entity);
+  const storedType = entity?.mimeType;
+  const id = typeof entity?.id === 'string' ? entity.id : undefined;
+  const isSvg = /\.svg$/i.test(fileName);
+  const hints: Record<string, unknown> = {};
+  if (id && typeof storedType === 'string' && (EMBEDDABLE_IMAGE_TYPES.has(storedType) || isSvg)) {
+    hints.embedMarkdown = `![${markdownAlt(fileName)}](/api/documents/${id}/${isSvg ? 'thumbnail' : 'embed'})`;
+  }
+  if (typeof storedType === 'string' && storedType !== requestedType) {
+    hints.notice = isSvg
+      ? `Stored as ${storedType}: ToDoddle keeps SVG files as opaque downloads for safety. Previews and embeds use a PNG rendering of it, so embedMarkdown still shows the image.`
+      : `Stored as ${storedType}, not ${requestedType}. ToDoddle stores HTML and other active content as an opaque file for safety. It downloads normally but does not preview inline.`;
+  }
+  return { ...result, ...hints };
 }
 
 async function uploadDocument(
@@ -492,7 +507,7 @@ async function uploadDocument(
       `${idempotencyKey}-finalize`
     );
     uploadConfirmed = true;
-    return withStoredTypeNotice(result, prepared.contentType);
+    return withUploadHints(result, prepared.contentType, prepared.fileName);
   } catch (error) {
     if (session && !bytesUploaded) {
       await api
@@ -1708,7 +1723,8 @@ export function createToDoddleMcpServer(
   server.registerTool(
     'create_note',
     {
-      description: 'Create a workspace or project Note. Supply projectId for a project Note.',
+      description:
+        'Create a workspace or project Note. Supply projectId for a project Note. To show an uploaded image inline, paste the embedMarkdown returned by upload_project_document or complete_upload, for example ![Map](/api/documents/<documentId>/embed); it shows only to people who can open that document.',
       inputSchema: z.object({
         projectId: z.string().min(1).optional(),
         title: z.string().min(1).max(500),
@@ -1730,7 +1746,8 @@ export function createToDoddleMcpServer(
   server.registerTool(
     'update_note',
     {
-      description: 'Update a workspace or project Note using optimistic concurrency.',
+      description:
+        'Update a workspace or project Note using optimistic concurrency. To show an uploaded image inline, paste the embedMarkdown returned by upload_project_document or complete_upload, for example ![Map](/api/documents/<documentId>/embed); it shows only to people who can open that document.',
       inputSchema: z.object({
         projectId: z.string().min(1).optional(),
         noteId: z.string().min(1),
@@ -1841,14 +1858,20 @@ export function createToDoddleMcpServer(
         openWorldHint: false,
       },
     },
-    async ({ projectId, documentId, idempotencyKey, ...body }) =>
-      toolResult(
-        await api.post(
-          `/api/external/projects/${projectId}/documents/${documentId}/finalize`,
-          body,
-          idempotencyKey
-        )
-      )
+    async ({ projectId, documentId, idempotencyKey, ...body }) => {
+      const result = await api.post(
+        `/api/external/projects/${projectId}/documents/${documentId}/finalize`,
+        body,
+        idempotencyKey
+      );
+      // The remote client sent the bytes, so the stored type is the only type to compare.
+      const entity = asRecord(result.entity);
+      const fileName = typeof entity?.fileName === 'string' ? entity.fileName : '';
+      const storedType = typeof entity?.mimeType === 'string' ? entity.mimeType : '';
+      return toolResult(
+        body.success === false ? result : withUploadHints(result, storedType, fileName)
+      );
+    }
   );
 
   server.registerTool(
@@ -3359,7 +3382,7 @@ export function createToDoddleMcpServer(
         'Update artifact Markdown, its current short summary, or metadata using optimistic concurrency. Editing approved content returns it to draft. ' +
         'To change part of a long document, send contentEdits instead of content: replace_section (by heading path, e.g. "Release Plan" or "Plan > Risks"; replaces the text under that heading and keeps its subsections), append_section (optionally inside a parent heading), or find_replace (exact text; expectedCount defaults to 1). ' +
         'Pass baseVersion (the version you read) so an edit still applies when someone else changed a different section; the server rejects it if your section changed. ' +
-        'The response is a slim summary (id, version, updatedAt, changedFields) unless verbose is true.',
+        'The response is a slim summary (id, version, updatedAt, changedFields) unless verbose is true. Embed an uploaded image with the embedMarkdown returned by the upload tools.',
       inputSchema: z.object({
         projectId: z.string().min(1),
         artifactId: z.string().min(1),
