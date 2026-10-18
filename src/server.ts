@@ -3356,7 +3356,10 @@ export function createToDoddleMcpServer(
     'update_project_artifact',
     {
       description:
-        'Update artifact Markdown, its current short summary, or metadata using optimistic concurrency. Editing approved content returns it to draft.',
+        'Update artifact Markdown, its current short summary, or metadata using optimistic concurrency. Editing approved content returns it to draft. ' +
+        'To change part of a long document, send contentEdits instead of content: replace_section (by heading path, e.g. "Release Plan" or "Plan > Risks"; replaces the text under that heading and keeps its subsections), append_section (optionally inside a parent heading), or find_replace (exact text; expectedCount defaults to 1). ' +
+        'Pass baseVersion (the version you read) so an edit still applies when someone else changed a different section; the server rejects it if your section changed. ' +
+        'The response is a slim summary (id, version, updatedAt, changedFields) unless verbose is true.',
       inputSchema: z.object({
         projectId: z.string().min(1),
         artifactId: z.string().min(1),
@@ -3364,10 +3367,38 @@ export function createToDoddleMcpServer(
         title: z.string().min(1).optional(),
         summary: z.string().trim().max(500).nullable().optional(),
         content: z.string().optional(),
+        contentEdits: z
+          .array(
+            z.discriminatedUnion('op', [
+              z.object({
+                op: z.literal('replace_section'),
+                heading: z.string().min(1).max(500),
+                content: z.string(),
+              }),
+              z.object({
+                op: z.literal('append_section'),
+                heading: z.string().min(1).max(200),
+                content: z.string(),
+                parent: z.string().min(1).max(500).optional(),
+                level: z.number().int().min(1).max(6).optional(),
+              }),
+              z.object({
+                op: z.literal('find_replace'),
+                find: z.string().min(1),
+                replace: z.string(),
+                expectedCount: z.number().int().min(1).max(1000).optional(),
+              }),
+            ])
+          )
+          .min(1)
+          .max(20)
+          .optional(),
+        baseVersion: z.number().int().min(1).optional(),
         parentArtifactId: z.string().min(1).nullable().optional(),
         ownerId: z.string().optional(),
         metadata: z.record(z.unknown()).optional(),
         changeNote: z.string().optional(),
+        verbose: z.boolean().default(false),
       }),
       annotations: {
         readOnlyHint: false,
@@ -3376,10 +3407,20 @@ export function createToDoddleMcpServer(
         openWorldHint: false,
       },
     },
-    async ({ projectId, artifactId, ...body }) =>
-      toolResult(
-        await api.patch(`/api/external/projects/${projectId}/artifacts/${artifactId}`, body)
-      )
+    async ({ projectId, artifactId, verbose, ...body }) => {
+      const result = await api.patch(
+        `/api/external/projects/${projectId}/artifacts/${artifactId}${verbose ? '' : '?detail=summary'}`,
+        body
+      );
+      // An older ToDoddle server strips contentEdits it does not know and reports success.
+      const changedFields = result.changedFields;
+      if (body.contentEdits && Array.isArray(changedFields) && !changedFields.includes('content')) {
+        throw new Error(
+          'This ToDoddle server does not support contentEdits yet. Send the full content instead.'
+        );
+      }
+      return toolResult(result);
+    }
   );
 
   server.registerTool(

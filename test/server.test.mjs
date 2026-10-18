@@ -352,7 +352,7 @@ test('serializes project, plan, section, Note, and supporting tools', async () =
       { method: 'PUT', path: '/api/external/notes/note-1', body: { projectId: 'project-1', expectedUpdatedAt, title: 'Updated runbook' } },
       { method: 'DELETE', path: '/api/external/notes/note-1', body: { projectId: 'project-1', expectedUpdatedAt } },
       { method: 'POST', path: '/api/external/projects/project-1/artifacts', body: { type: 'SPEC', title: 'Child spec', summary: 'A nested project specification.', parentArtifactId: 'artifact-parent' }, idempotencyKey: 'artifact-key-1' },
-      { method: 'PATCH', path: '/api/external/projects/project-1/artifacts/artifact-1', body: { expectedUpdatedAt, parentArtifactId: null, changeNote: 'Move the artifact to the top level.' } },
+      { method: 'PATCH', path: '/api/external/projects/project-1/artifacts/artifact-1?detail=summary', body: { expectedUpdatedAt, parentArtifactId: null, changeNote: 'Move the artifact to the top level.' } },
       { method: 'GET', path: '/api/external/projects/project-1/artifacts/artifact-1/revisions', query: undefined },
     ])
   } finally {
@@ -1512,6 +1512,43 @@ test('returns API denials with the error code, missing scope, and a hint', async
     assert.deepEqual(await call(), {
       error: 'permission_denied', status: 403, message: 'Project access denied', details: { projectId: 'project-1' },
     })
+  } finally { await client.close(); await server.close() }
+})
+
+test('sends artifact section edits and asks for a slim response unless verbose', async () => {
+  const calls = []
+  let changedFields = ['content']
+  const artifactApi = {
+    ...api,
+    patch: async (path, body) => {
+      calls.push({ path, body })
+      return { entity: { id: 'brief-1', version: 6 }, changedFields }
+    },
+  }
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer(artifactApi)
+  const client = new Client({ name: 'artifact-edit-test', version: '1' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  const contentEdits = [{ op: 'replace_section', heading: 'Release Plan', content: 'December.' }]
+  const base = { projectId: 'project-1', artifactId: 'brief-1', expectedUpdatedAt: '2026-10-17T18:00:00.000Z' }
+  try {
+    const slim = await client.callTool({ name: 'update_project_artifact', arguments: { ...base, contentEdits, baseVersion: 5 } })
+    assert.equal(slim.isError, undefined)
+    assert.equal(calls[0].path, '/api/external/projects/project-1/artifacts/brief-1?detail=summary')
+    assert.deepEqual(calls[0].body, { expectedUpdatedAt: base.expectedUpdatedAt, contentEdits, baseVersion: 5 })
+
+    await client.callTool({ name: 'update_project_artifact', arguments: { ...base, title: 'Brief', verbose: true } })
+    assert.equal(calls[1].path, '/api/external/projects/project-1/artifacts/brief-1')
+    assert.equal('verbose' in calls[1].body, false)
+
+    // An older server drops contentEdits it does not know and reports success.
+    changedFields = []
+    const old = await client.callTool({ name: 'update_project_artifact', arguments: { ...base, contentEdits } })
+    assert.equal(old.isError, true)
+    assert.match(old.content[0].text, /does not support contentEdits yet/)
+
+    const invalid = await client.callTool({ name: 'update_project_artifact', arguments: { ...base, contentEdits: [{ op: 'delete_all' }] } })
+    assert.equal(invalid.isError, true)
   } finally { await client.close(); await server.close() }
 })
 

@@ -473,3 +473,4 @@ The release raises `@modelcontextprotocol/sdk` to `^1.32.1` to fix [GHSA-6qxp-vc
 - API errors keep their details. A tool error is now JSON with `error`, `status`, `message`, and, for `scope_required`, `missingScopes`, `requiredScopes`, and a `hint` that says where to enable the scope. Before, agents saw only "Insufficient permissions".
 - Local uploads explain a missing file or a missing approved root instead of a raw `ENOENT`, `.svg` files are sent as `image/svg+xml`, and the result includes a `notice` when the server stores a different type.
 - `search_project` describes the new `relevance` and `matchedTerms` result fields.
+- `update_project_artifact` accepts `contentEdits` (`replace_section`, `append_section`, `find_replace`) and `baseVersion`, so agents change one section of a long brief without resending it. It returns a slim summary unless `verbose` is true. An older server that ignores `contentEdits` returns an error instead of a silent success.
