@@ -8,6 +8,7 @@ async function main() {
   const config = loadMcpConfig();
   const server = createToDoddleMcpServer(new ToDoddleApiClient(config), {
     managedUploadRoot: config.managedUploadRoot,
+    appOrigin: config.baseUrl,
     maxUploadBytes: config.maxUploadBytes,
   });
   await server.connect(new StdioServerTransport());

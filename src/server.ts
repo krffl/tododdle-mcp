@@ -263,8 +263,51 @@ export function apiErrorResult(error: ToDoddleApiError) {
 
 type ToolCallback = (...args: never[]) => unknown;
 
-/** Wraps every tool so API failures keep their code, scopes, and hint. */
-function withApiErrorResults(server: McpServer): void {
+const LINK_KEYS = new Set(['uiUrl', 'href']);
+
+/**
+ * The API returns web links as paths such as /dashboard/project/x. Left
+ * relative, a client guesses the host and often picks www.tododdle.com, which
+ * is the marketing site. Turn them into absolute links on the app origin.
+ * In-app embed paths (/api/documents/...) are left alone.
+ */
+export function absolutizeLinks(value: unknown, appOrigin: string): unknown {
+  if (Array.isArray(value)) return value.map((item) => absolutizeLinks(item, appOrigin));
+  if (!value || typeof value !== 'object') return value;
+  return Object.fromEntries(
+    Object.entries(value as Record<string, unknown>).map(([key, item]) => [
+      key,
+      LINK_KEYS.has(key) &&
+      typeof item === 'string' &&
+      item.startsWith('/') &&
+      !item.startsWith('//')
+        ? new URL(item, appOrigin).toString()
+        : absolutizeLinks(item, appOrigin),
+    ])
+  );
+}
+
+type ToolCallResult = { structuredContent?: Record<string, unknown>; content?: unknown };
+
+function withAbsoluteLinks(result: unknown, appOrigin: string | undefined): unknown {
+  const typed = result as ToolCallResult | undefined;
+  if (!appOrigin || !typed?.structuredContent) return result;
+  const structuredContent = absolutizeLinks(typed.structuredContent, appOrigin) as Record<
+    string,
+    unknown
+  >;
+  return {
+    ...typed,
+    structuredContent,
+    content: [{ type: 'text', text: JSON.stringify(structuredContent) }],
+  };
+}
+
+/**
+ * Wraps every tool so API failures keep their code, scopes, and hint, and
+ * web links in results are absolute.
+ */
+function withApiErrorResults(server: McpServer, appOrigin: string | undefined): void {
   const register = server.registerTool.bind(server) as (
     name: string,
     config: unknown,
@@ -277,7 +320,7 @@ function withApiErrorResults(server: McpServer): void {
   ) =>
     register(name, config, (async (...args: never[]) => {
       try {
-        return await callback(...args);
+        return withAbsoluteLinks(await callback(...args), appOrigin);
       } catch (error) {
         if (error instanceof ToDoddleApiError) return apiErrorResult(error);
         throw error;
@@ -367,11 +410,14 @@ function projectRunContext(
 
 export interface ToDoddleMcpServerOptions {
   managedUploadRoot?: string;
+  /** Web app origin, such as https://app.tododdle.com, for absolute links in results. */
+  appOrigin?: string;
   maxUploadBytes?: number;
 }
 
 interface ResolvedToDoddleMcpServerOptions {
   managedUploadRoot?: string;
+  appOrigin?: string;
   maxUploadBytes: number;
 }
 
@@ -581,13 +627,14 @@ export function createToDoddleMcpServer(
 ): McpServer {
   const options: ResolvedToDoddleMcpServerOptions = {
     managedUploadRoot: serverOptions.managedUploadRoot,
+    appOrigin: serverOptions.appOrigin,
     maxUploadBytes: serverOptions.maxUploadBytes ?? 1024 * 1024 * 1024,
   };
   const server = new McpServer(
     { name: 'tododdle', version: packageVersion.version },
     { instructions: TODODDLE_WORKFLOW_GUIDANCE }
   );
-  withApiErrorResults(server);
+  withApiErrorResults(server, options.appOrigin);
 
   server.registerTool(
     'list_projects',

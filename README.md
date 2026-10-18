@@ -468,7 +468,11 @@ This release also includes changes made since 3.7.0: the read-only `list_securit
 
 The release raises `@modelcontextprotocol/sdk` to `^1.32.1` to fix [GHSA-6qxp-vccf-f47h](https://github.com/advisories/GHSA-6qxp-vccf-f47h), where SDK versions before 1.31.0 could send OAuth client credentials to an authorization server chosen by the MCP server.
 
-### Unreleased
+### 3.9.0 release
+
+Deploy the matching ToDoddle API first: `log_completed_work` needs the new completed-work route, and `contentEdits` and slim artifact responses need the updated artifact route (an older server makes `update_project_artifact` with `contentEdits` fail clearly rather than silently). The compatibility level stays at 3 because every change is additive. The hosted gateway must install this package and map `log_completed_work` to `tasks:write` before it advertises the tool.
+
+- Tool results now carry absolute web links (`uiUrl`, `href`) on the configured app origin, so clients no longer guess `www.tododdle.com`, the marketing site.
 
 - API errors keep their details. A tool error is now JSON with `error`, `status`, `message`, and, for `scope_required`, `missingScopes`, `requiredScopes`, and a `hint` that says where to enable the scope. Before, agents saw only "Insufficient permissions".
 - New `log_completed_work` records finished ad-hoc work in one call (ticket, claim, status, and a finished Agent Run with evidence). It needs the matching ToDoddle API route.

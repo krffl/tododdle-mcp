@@ -55,6 +55,7 @@ test('discovers the bounded production tool surface', async () => {
   assert.match(client.getInstructions() || '', /active Agent Run envelope/)
   assert.match(client.getInstructions() || '', /Brief: settled direction, priorities, and current state/)
   assert.match(client.getInstructions() || '', /briefFreshness\.stale/)
+  assert.match(client.getInstructions() || '', /never build links on www\.tododdle\.com/)
   assert.equal(result.tools.length, Object.keys(parity.tools).length)
   assert.equal(names.includes('delete_task'), false)
   assert.equal(names.includes('archive_task'), false)
@@ -1613,6 +1614,32 @@ test('ignores a leftover TODODDLE_UPLOAD_ROOTS with a notice on stderr', () => {
     assert.equal(messages.length, 0)
   } finally {
     console.error = original
+  }
+})
+
+test('returns absolute app links so clients do not guess www.tododdle.com', async () => {
+  // Regression: relative uiUrl paths were turned into www.tododdle.com links.
+  const result = {
+    uiUrl: '/dashboard/project/p1/tasks/t1',
+    results: [{ id: 't1', href: '/dashboard/project/p1/tasks/t1' }],
+    entity: { url: '/api/documents/d1/download', note: { href: 'https://example.com/x' } },
+    embedMarkdown: '![m](/api/documents/d1/embed)',
+  }
+  const linkApi = { ...api, get: async () => structuredClone(result) }
+  for (const [appOrigin, expected] of [['https://app.tododdle.com', 'https://app.tododdle.com/dashboard/project/p1/tasks/t1'], [undefined, '/dashboard/project/p1/tasks/t1']]) {
+    const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+    const server = createToDoddleMcpServer(linkApi, appOrigin ? { appOrigin } : {})
+    const client = new Client({ name: 'link-test', version: '1' })
+    await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+    try {
+      const response = await client.callTool({ name: 'list_projects', arguments: {} })
+      assert.equal(response.structuredContent.uiUrl, expected)
+      assert.equal(response.structuredContent.results[0].href, expected)
+      assert.equal(response.structuredContent.entity.url, '/api/documents/d1/download')
+      assert.equal(response.structuredContent.entity.note.href, 'https://example.com/x')
+      assert.equal(response.structuredContent.embedMarkdown, '![m](/api/documents/d1/embed)')
+      assert.deepEqual(JSON.parse(response.content[0].text), response.structuredContent)
+    } finally { await client.close(); await server.close() }
   }
 })
 
