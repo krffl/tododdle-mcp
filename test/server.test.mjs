@@ -216,7 +216,6 @@ test('requires only Agent Connection credentials', async () => {
   assert.equal(config.baseUrl, 'https://app.tododdle.com')
   assert.equal(config.clientId, 'client-id')
   assert.equal(config.clientSecret, 'client-secret')
-  assert.deepEqual(config.uploadRoots, [])
   assert.equal(config.managedUploadRoot, await realpath(tmpdir()))
   assert.equal(config.maxUploadBytes, 1073741824)
 
@@ -270,7 +269,6 @@ test('uses the configured base URL for tokens and API requests', async () => {
       baseUrl: 'http://localhost:3000',
       clientId: 'client-id',
       clientSecret: 'client-secret',
-      uploadRoots: [],
       maxUploadBytes: 1024,
     })
     await client.get('/api/external/projects', { page: 2 })
@@ -295,7 +293,6 @@ test('reports base URL redirects as configuration errors before credentials are 
       baseUrl: 'https://legacy.example',
       clientId: 'client-id',
       clientSecret: 'client-secret',
-      uploadRoots: [],
       maxUploadBytes: 1024,
     })
     await assert.rejects(
@@ -1579,6 +1576,44 @@ test('sends artifact section edits and asks for a slim response unless verbose',
     const invalid = await client.callTool({ name: 'update_project_artifact', arguments: { ...base, contentEdits: [{ op: 'delete_all' }] } })
     assert.equal(invalid.isError, true)
   } finally { await client.close(); await server.close() }
+})
+
+test('logs completed work in one call and needs exactly one of taskId or ticket', async () => {
+  const calls = []
+  const workApi = { ...api, post: async (path, body) => { calls.push({ path, body }); return { entity: { task: { id: 'task-1' } } } } }
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer(workApi)
+  const client = new Client({ name: 'log-work-test', version: '1' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  try {
+    const ticket = { planId: 'plan-1', sectionId: 'lane-1', title: 'Change the mission board' }
+    const evidence = [{ type: 'COMMIT', reference: 'abc1234' }]
+    const result = await client.callTool({ name: 'log_completed_work', arguments: { projectId: 'project-1', ticket, outcome: 'Done', evidence, idempotencyKey: 'work-key-1' } })
+    assert.equal(result.isError, undefined)
+    assert.deepEqual(calls, [{ path: '/api/external/projects/project-1/completed-work', body: { ticket, outcome: 'Done', evidence, status: 'COMPLETE', idempotencyKey: 'work-key-1' } }])
+
+    for (const pick of [{}, { taskId: 'task-1', ticket }]) {
+      const invalid = await client.callTool({ name: 'log_completed_work', arguments: { projectId: 'project-1', outcome: 'Done', idempotencyKey: 'work-key-2', ...pick } })
+      assert.equal(invalid.isError, true)
+    }
+    assert.equal(calls.length, 1)
+  } finally { await client.close(); await server.close() }
+})
+
+test('ignores a leftover TODODDLE_UPLOAD_ROOTS with a notice on stderr', () => {
+  const original = console.error
+  const messages = []
+  console.error = message => messages.push(message)
+  try {
+    const config = loadMcpConfig({ TODODDLE_CLIENT_ID: 'id', TODODDLE_CLIENT_SECRET: 'secret', TODODDLE_UPLOAD_ROOTS: '/Users/paul/TododdleUploads' })
+    assert.equal('uploadRoots' in config, false)
+    assert.match(messages[0], /TODODDLE_UPLOAD_ROOTS is no longer used/)
+    messages.length = 0
+    loadMcpConfig({ TODODDLE_CLIENT_ID: 'id', TODODDLE_CLIENT_SECRET: 'secret' })
+    assert.equal(messages.length, 0)
+  } finally {
+    console.error = original
+  }
 })
 
 test('rejects malformed image payloads and preserves API failures', async () => {

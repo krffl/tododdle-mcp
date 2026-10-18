@@ -366,13 +366,11 @@ function projectRunContext(
 }
 
 export interface ToDoddleMcpServerOptions {
-  uploadRoots?: string[];
   managedUploadRoot?: string;
   maxUploadBytes?: number;
 }
 
 interface ResolvedToDoddleMcpServerOptions {
-  uploadRoots: string[];
   managedUploadRoot?: string;
   maxUploadBytes: number;
 }
@@ -476,7 +474,6 @@ async function uploadDocument(
 ) {
   const prepared = await prepareUploadSource(
     input,
-    options.uploadRoots,
     options.maxUploadBytes,
     options.managedUploadRoot
   );
@@ -583,7 +580,6 @@ export function createToDoddleMcpServer(
   serverOptions: ToDoddleMcpServerOptions = {}
 ): McpServer {
   const options: ResolvedToDoddleMcpServerOptions = {
-    uploadRoots: serverOptions.uploadRoots ?? [],
     managedUploadRoot: serverOptions.managedUploadRoot,
     maxUploadBytes: serverOptions.maxUploadBytes ?? 1024 * 1024 * 1024,
   };
@@ -1878,7 +1874,7 @@ export function createToDoddleMcpServer(
     'upload_project_document',
     {
       description:
-        'Upload an approved local file or HTTPS URL to a project document library. Local paths must be regular files in the system temporary directory (or an optional approved upload root from TODODDLE_UPLOAD_ROOTS) and owned by the current user; copy a file there first if needed. SVG and HTML are stored as opaque files that download but do not preview.',
+        'Upload an approved local file or HTTPS URL to a project document library. Local paths must be regular files in the system temporary directory, owned by the current user; copy a file there first if needed. SVG and HTML are stored as opaque files that download but do not preview.',
       inputSchema: uploadInputSchema,
       annotations: {
         readOnlyHint: false,
@@ -1894,7 +1890,7 @@ export function createToDoddleMcpServer(
     'attach_file_to_ticket',
     {
       description:
-        'Upload a local file or HTTPS URL and attach it to a ticket in the same project. Local paths must be regular files in the system temporary directory (or an optional approved upload root from TODODDLE_UPLOAD_ROOTS) and owned by the current user; copy a file there first if needed. SVG and HTML are stored as opaque files that download but do not preview.',
+        'Upload a local file or HTTPS URL and attach it to a ticket in the same project. Local paths must be regular files in the system temporary directory, owned by the current user; copy a file there first if needed. SVG and HTML are stored as opaque files that download but do not preview.',
       inputSchema: taskUploadInputSchema,
       annotations: {
         readOnlyHint: false,
@@ -2609,6 +2605,57 @@ export function createToDoddleMcpServer(
           runContext(runId, projectId, taskId, 'RECORD_EVIDENCE')
         )
       )
+  );
+
+  server.registerTool(
+    'log_completed_work',
+    {
+      description:
+        'Record finished ad-hoc work in one call, for quick requests done in conversation without claiming a ticket first. ' +
+        'Pass taskId for an existing ticket, or ticket (planId, sectionId, title) to create one. ToDoddle claims it, sets the status, and records a finished Agent Run with your outcome and evidence (commits, tests, files, links), so it shows in run history like claimed work. ' +
+        'status defaults to COMPLETE. A ticket another person created goes to REVIEW instead; the response warns you, and you should then call create_review_request. ' +
+        'Use claim_ticket and finish_agent_run for planned work. Reuse the same idempotencyKey to retry safely.',
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        taskId: z.string().min(1).optional(),
+        ticket: z
+          .object({
+            planId: z.string().min(1),
+            sectionId: z.string().min(1),
+            title: z.string().trim().min(1).max(500),
+            description: z.string().trim().max(50_000).optional(),
+            kind: taskKindSchema.optional(),
+            priority: prioritySchema.optional(),
+          })
+          .optional(),
+        runId: z.string().min(1).max(200).optional(),
+        outcome: z.string().trim().min(1).max(2000),
+        evidence: z
+          .array(
+            z.object({
+              type: agentRunEvidenceTypeSchema,
+              reference: z.string().trim().min(1).max(2000),
+              label: z.string().trim().min(1).max(200).optional(),
+            })
+          )
+          .max(25)
+          .default([]),
+        status: z.enum(['COMPLETE', 'REVIEW']).default('COMPLETE'),
+        idempotencyKey: z.string().trim().min(8).max(180),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, ...body }) => {
+      if (Boolean(body.taskId) === Boolean(body.ticket)) {
+        throw new Error('Send taskId for an existing ticket or ticket to create one, not both.');
+      }
+      return toolResult(await api.post(`/api/external/projects/${projectId}/completed-work`, body));
+    }
   );
 
   server.registerTool(

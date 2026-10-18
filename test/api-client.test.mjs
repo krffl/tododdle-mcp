@@ -15,7 +15,6 @@ const config = {
   baseUrl: 'https://www.tododdle.com',
   clientId: 'client-id',
   clientSecret: 'client-secret',
-  uploadRoots: [],
   maxUploadBytes: 1024,
 }
 

@@ -6,16 +6,8 @@ export interface McpConfig {
   baseUrl: string;
   clientId: string;
   clientSecret: string;
-  uploadRoots: string[];
   managedUploadRoot: string;
   maxUploadBytes: number;
-}
-
-export function parseUploadRoots(value: string | undefined, platform = process.platform): string[] {
-  return (value || '')
-    .split(platform === 'win32' ? ';' : ':')
-    .map((root) => root.trim())
-    .filter(Boolean);
 }
 
 /**
@@ -71,7 +63,6 @@ export function loadMcpConfig(environment: NodeJS.ProcessEnv = process.env): Mcp
   const baseUrl = normalizeBaseUrl(environment.TODODDLE_BASE_URL);
   const clientId = environment.TODODDLE_CLIENT_ID;
   const clientSecret = environment.TODODDLE_CLIENT_SECRET;
-  const uploadRoots = parseUploadRoots(environment.TODODDLE_UPLOAD_ROOTS);
   const managedUploadRoot = getDefaultManagedUploadRoot();
   const configuredMax = Number(environment.TODODDLE_MAX_UPLOAD_BYTES || 1024 * 1024 * 1024);
 
@@ -83,11 +74,17 @@ export function loadMcpConfig(environment: NodeJS.ProcessEnv = process.env): Mcp
     throw new Error('TODODDLE_MAX_UPLOAD_BYTES must be a positive integer');
   }
 
+  if (environment.TODODDLE_UPLOAD_ROOTS) {
+    // stderr is safe for a stdio MCP server; stdout carries the protocol.
+    console.error(
+      'TODODDLE_UPLOAD_ROOTS is no longer used and can be removed. Local uploads come from the system temporary directory.'
+    );
+  }
+
   return {
     baseUrl,
     clientId,
     clientSecret,
-    uploadRoots,
     managedUploadRoot,
     maxUploadBytes: configuredMax,
   };
