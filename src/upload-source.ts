@@ -39,6 +39,7 @@ const mimeTypes: Record<string, string> = {
   '.mp4': 'video/mp4',
   '.pdf': 'application/pdf',
   '.png': 'image/png',
+  '.svg': 'image/svg+xml',
   '.txt': 'text/plain',
   '.webp': 'image/webp',
   '.zip': 'application/zip',
@@ -46,6 +47,15 @@ const mimeTypes: Record<string, string> = {
 
 function inferContentType(fileName: string): string {
   return mimeTypes[extname(fileName).toLowerCase()] || 'application/octet-stream';
+}
+
+/** Where local uploads may come from, for actionable error messages. */
+function describeUploadLocations(roots: string[], managedRoot: string | undefined): string {
+  const locations = [
+    ...(managedRoot ? [`the system temporary directory (${managedRoot})`] : []),
+    ...roots.map((root) => `the approved upload root ${root}`),
+  ];
+  return locations.length ? locations.join(' or ') : 'an approved upload root';
 }
 
 function isInsideRoot(filePath: string, root: string): boolean {
@@ -69,8 +79,14 @@ async function prepareLocalSource(
 ): Promise<PreparedUpload> {
   if (!input.filePath) throw new Error('filePath is required');
   const requestedPath = resolve(input.filePath);
+  const allowedLocations = describeUploadLocations(roots, managedRoot);
   // Reject a symlink as the final path component before following it.
-  const requestedStats = await lstat(requestedPath);
+  const requestedStats = await lstat(requestedPath).catch((error: NodeJS.ErrnoException) => {
+    if (error.code !== 'ENOENT') throw error;
+    throw new Error(
+      `Local file not found: ${requestedPath}. Save or copy the file into ${allowedLocations}, then pass that path.`
+    );
+  });
   if (!requestedStats.isFile()) throw new Error('Local upload source must be a regular file');
   const resolvedFile = await realpath(requestedPath);
   const resolvedRoots = await Promise.all(
@@ -86,8 +102,12 @@ async function prepareLocalSource(
     !isManagedFile &&
     !resolvedRoots.some((root) => root !== null && isInsideRoot(resolvedFile, root))
   ) {
+    const missingRoots = roots.filter((_, index) => resolvedRoots[index] === null);
     throw new Error(
-      'Local file must be in the system temporary directory or an approved upload root'
+      `Local file must be inside ${allowedLocations}. Copy it there, then retry.` +
+        (missingRoots.length
+          ? ` These approved upload roots do not exist yet: ${missingRoots.join(', ')}. Create them or update TODODDLE_UPLOAD_ROOTS.`
+          : '')
     );
   }
   const stats = await lstat(resolvedFile);

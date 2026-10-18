@@ -341,7 +341,7 @@ Omit `projectId` to work with workspace Notes. Supply `projectId` to work with N
 - `begin_upload`
 - `complete_upload`
 
-Each tool accepts either an approved local `filePath` or an HTTPS `sourceUrl`. Local files must be regular files in the system temporary directory (`os.tmpdir()`, resolved through symlinks) or in an optional `TODODDLE_UPLOAD_ROOTS` root, and the current user must own them. The MCP rejects symlinks, directories, devices, and files owned by another user. Files stream directly from this local MCP process to ToDoddle's short-lived Bunny upload URL; file bodies are never placed in MCP JSON messages.
+Each tool accepts either an approved local `filePath` or an HTTPS `sourceUrl`. A missing file, or a file outside the allowed folders, returns a message that names the system temporary directory and each approved root, and lists any configured root that does not exist yet. ToDoddle stores SVG, HTML, and other active content as `application/octet-stream` so it can never run in a browser; when the stored type differs from the requested one, the upload result includes a `notice` that says so. Local files must be regular files in the system temporary directory (`os.tmpdir()`, resolved through symlinks) or in an optional `TODODDLE_UPLOAD_ROOTS` root, and the current user must own them. The MCP rejects symlinks, directories, devices, and files owned by another user. Files stream directly from this local MCP process to ToDoddle's short-lived Bunny upload URL; file bodies are never placed in MCP JSON messages.
 
 If an agent copies a source file into a dedicated ToDoddle upload directory only to satisfy the local path restriction, it should remove that temporary copy after the tool confirms success. It should retain the copy after a failed or uncertain upload so the upload can be retried. It must never remove the original source or a pre-existing file. Temporary files that the MCP creates for HTTPS sources are removed automatically.
 
@@ -467,3 +467,9 @@ Adds release tools (`list_releases`, `get_release`, `create_release`, `update_re
 This release also includes changes made since 3.7.0: the read-only `list_security_events` tool (`security:read`); the system temporary directory as the default upload root, with per-file ownership checks and validated DNS answers pinned on HTTPS upload fetches; Agent Run context on move, archive, attribute, and time tools; a pending-approval result for customer-visible Support replies; and GitHub Actions pinned to commit SHAs.
 
 The release raises `@modelcontextprotocol/sdk` to `^1.32.1` to fix [GHSA-6qxp-vccf-f47h](https://github.com/advisories/GHSA-6qxp-vccf-f47h), where SDK versions before 1.31.0 could send OAuth client credentials to an authorization server chosen by the MCP server.
+
+### Unreleased
+
+- API errors keep their details. A tool error is now JSON with `error`, `status`, `message`, and, for `scope_required`, `missingScopes`, `requiredScopes`, and a `hint` that says where to enable the scope. Before, agents saw only "Insufficient permissions".
+- Local uploads explain a missing file or a missing approved root instead of a raw `ENOENT`, `.svg` files are sent as `image/svg+xml`, and the result includes a `notice` when the server stores a different type.
+- `search_project` describes the new `relevance` and `matchedTerms` result fields.

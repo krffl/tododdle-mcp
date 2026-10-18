@@ -6,7 +6,7 @@ import { join } from 'node:path'
 import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { loadMcpConfig } from '../dist/config.js'
-import { ToDoddleApiClient } from '../dist/api-client.js'
+import { ToDoddleApiClient, ToDoddleApiError } from '../dist/api-client.js'
 import { createToDoddleMcpServer } from '../dist/server.js'
 
 const parity = JSON.parse(
@@ -1321,6 +1321,40 @@ test('uploads a local file and attaches it to a task through the hosted API', as
   }
 })
 
+test('says when the server stores an upload as a safer type', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'tododdle-mcp-svg-upload-test-'))
+  const svgPath = join(directory, 'galaxy-map.svg')
+  const pngPath = join(directory, 'galaxy-map.png')
+  await writeFile(svgPath, '<svg xmlns="http://www.w3.org/2000/svg"/>')
+  await writeFile(pngPath, 'png-bytes')
+  const stored = { 'galaxy-map.svg': 'application/octet-stream', 'galaxy-map.png': 'image/png' }
+  let current = ''
+  const uploadApi = {
+    ...api,
+    post: async (path, body) => {
+      if (path.endsWith('/upload-sessions')) {
+        current = body.fileName
+        return { session: { documentId: 'document-1', uploadUrl: 'https://storage.example/upload', headers: {} } }
+      }
+      return { entity: { id: 'document-1', mimeType: stored[current] } }
+    },
+  }
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer(uploadApi, { managedUploadRoot: directory })
+  const client = new Client({ name: 'svg-upload-test', version: '1.0.0' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  try {
+    const svg = await client.callTool({ name: 'upload_project_document', arguments: { projectId: 'project-1', filePath: svgPath } })
+    assert.match(svg.structuredContent.notice, /^Stored as application\/octet-stream, not image\/svg\+xml\./)
+    const png = await client.callTool({ name: 'upload_project_document', arguments: { projectId: 'project-1', filePath: pngPath } })
+    assert.equal(png.structuredContent.notice, undefined)
+  } finally {
+    await client.close()
+    await server.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})
+
 test('retains a managed local file when upload finalization is uncertain', async () => {
   const directory = await mkdtemp(join(tmpdir(), 'tododdle-mcp-failed-upload-test-'))
   const operationDirectory = join(directory, 'operation-1')
@@ -1448,6 +1482,36 @@ test('returns private image content once, with metadata and no URL', async () =>
     const invalid = await client.callTool({ name: 'get_document_image', arguments: { projectId: 'project', documentId: 'doc', size: 'huge' } })
     assert.equal(invalid.isError, true)
     assert.equal(calls.length, 2)
+  } finally { await client.close(); await server.close() }
+})
+
+test('returns API denials with the error code, missing scope, and a hint', async () => {
+  // Regression: tools surfaced only "Insufficient permissions", so the agent
+  // could not tell the owner which grant to enable.
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const errors = [
+    new ToDoddleApiError(403, 'scope_required', 'Insufficient permissions', undefined, { requiredScopes: ['notes:write'], missingScopes: ['notes:write'], grantedScopes: ['notes:read'] }),
+    new ToDoddleApiError(403, 'scope_required', 'Insufficient permissions'),
+    new ToDoddleApiError(403, 'permission_denied', 'Project access denied', { projectId: 'project-1' }),
+  ]
+  const server = createToDoddleMcpServer({ ...api, get: async () => { throw errors.shift() } })
+  const client = new Client({ name: 'test', version: '1' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  try {
+    const call = async () => {
+      const result = await client.callTool({ name: 'list_projects', arguments: {} })
+      assert.equal(result.isError, true)
+      return JSON.parse(result.content[0].text)
+    }
+    assert.deepEqual(await call(), {
+      error: 'scope_required', status: 403, message: 'Insufficient permissions',
+      missingScopes: ['notes:write'], requiredScopes: ['notes:write'],
+      hint: 'Ask a workspace owner or admin to enable notes:write for this Agent Connection in Workspace Settings > Agent Connections, then retry.',
+    })
+    assert.match((await call()).hint, /check the scopes on this Agent Connection/)
+    assert.deepEqual(await call(), {
+      error: 'permission_denied', status: 403, message: 'Project access denied', details: { projectId: 'project-1' },
+    })
   } finally { await client.close(); await server.close() }
 })
 

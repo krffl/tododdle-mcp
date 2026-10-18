@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { McpServer, ResourceTemplate } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
-import type { AgentRunRequestContext, ToDoddleApi } from './api-client.js';
+import { ToDoddleApiError, type AgentRunRequestContext, type ToDoddleApi } from './api-client.js';
 import { prepareUploadSource } from './upload-source.js';
 import { TODODDLE_WORKFLOW_GUIDANCE } from './workflow-guidance.js';
 
@@ -237,6 +237,54 @@ const assessmentEvidenceSchema = z
     }
   });
 
+/**
+ * Turns a ToDoddle API failure into a tool error the agent can act on. The SDK
+ * default keeps only the message, which dropped the scope an owner must grant.
+ */
+export function apiErrorResult(error: ToDoddleApiError) {
+  const missing = error.scopes?.missingScopes ?? [];
+  const hint =
+    error.code === 'scope_required' && missing.length
+      ? `Ask a workspace owner or admin to enable ${missing.join(', ')} for this Agent Connection in Workspace Settings > Agent Connections, then retry.`
+      : error.code === 'scope_required'
+        ? 'Ask a workspace owner or admin to check the scopes on this Agent Connection in Workspace Settings > Agent Connections.'
+        : undefined;
+  const body: Record<string, unknown> = {
+    error: error.code,
+    status: error.status,
+    message: error.message,
+    ...(missing.length ? { missingScopes: missing } : {}),
+    ...(error.scopes?.requiredScopes ? { requiredScopes: error.scopes.requiredScopes } : {}),
+    ...(hint ? { hint } : {}),
+    ...(error.details !== undefined ? { details: error.details } : {}),
+  };
+  return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(body) }] };
+}
+
+type ToolCallback = (...args: never[]) => unknown;
+
+/** Wraps every tool so API failures keep their code, scopes, and hint. */
+function withApiErrorResults(server: McpServer): void {
+  const register = server.registerTool.bind(server) as (
+    name: string,
+    config: unknown,
+    callback: ToolCallback
+  ) => unknown;
+  (server as unknown as { registerTool: typeof register }).registerTool = (
+    name,
+    config,
+    callback
+  ) =>
+    register(name, config, (async (...args: never[]) => {
+      try {
+        return await callback(...args);
+      } catch (error) {
+        if (error instanceof ToDoddleApiError) return apiErrorResult(error);
+        throw error;
+      }
+    }) as ToolCallback);
+}
+
 function toolResult(value: Record<string, unknown>) {
   return {
     // Keep text content for clients that do not consume structuredContent, but
@@ -391,6 +439,21 @@ const completeUploadInputSchema = z.object({
   idempotencyKey: z.string().min(8),
 });
 
+/**
+ * The server stores active content such as SVG and HTML as an opaque file so it
+ * can never run in the browser. Say so, rather than leave a silent type change.
+ */
+function withStoredTypeNotice(result: Record<string, unknown>, requestedType: string) {
+  const storedType = asRecord(result.entity)?.mimeType;
+  if (typeof storedType !== 'string' || storedType === requestedType) return result;
+  return {
+    ...result,
+    notice:
+      `Stored as ${storedType}, not ${requestedType}. ToDoddle stores SVG, HTML, and other active content as an opaque file for safety. ` +
+      'It downloads normally but does not preview inline. Upload a PNG or JPEG for an inline image.',
+  };
+}
+
 async function uploadDocument(
   api: ToDoddleApi,
   options: ResolvedToDoddleMcpServerOptions,
@@ -429,7 +492,7 @@ async function uploadDocument(
       `${idempotencyKey}-finalize`
     );
     uploadConfirmed = true;
-    return result;
+    return withStoredTypeNotice(result, prepared.contentType);
   } catch (error) {
     if (session && !bytesUploaded) {
       await api
@@ -513,6 +576,7 @@ export function createToDoddleMcpServer(
     { name: 'tododdle', version: packageVersion.version },
     { instructions: TODODDLE_WORKFLOW_GUIDANCE }
   );
+  withApiErrorResults(server);
 
   server.registerTool(
     'list_projects',
@@ -1791,7 +1855,7 @@ export function createToDoddleMcpServer(
     'upload_project_document',
     {
       description:
-        'Upload an approved local file or HTTPS URL to a project document library. Local paths must be regular files in the system temporary directory (or an optional approved upload root) and owned by the current user.',
+        'Upload an approved local file or HTTPS URL to a project document library. Local paths must be regular files in the system temporary directory (or an optional approved upload root from TODODDLE_UPLOAD_ROOTS) and owned by the current user; copy a file there first if needed. SVG and HTML are stored as opaque files that download but do not preview.',
       inputSchema: uploadInputSchema,
       annotations: {
         readOnlyHint: false,
@@ -1807,7 +1871,7 @@ export function createToDoddleMcpServer(
     'attach_file_to_ticket',
     {
       description:
-        'Upload a local file or HTTPS URL and attach it to a ticket in the same project. Local paths must be regular files in the system temporary directory (or an optional approved upload root) and owned by the current user.',
+        'Upload a local file or HTTPS URL and attach it to a ticket in the same project. Local paths must be regular files in the system temporary directory (or an optional approved upload root from TODODDLE_UPLOAD_ROOTS) and owned by the current user; copy a file there first if needed. SVG and HTML are stored as opaque files that download but do not preview.',
       inputSchema: taskUploadInputSchema,
       annotations: {
         readOnlyHint: false,
@@ -1972,7 +2036,7 @@ export function createToDoddleMcpServer(
     'search_project',
     {
       description:
-        'Find compact ticket, board, lane, Note, Context, and document matches within one known project. Use this for discovery before narrow get tools instead of scanning every board or lane.',
+        'Find compact ticket, board, lane, Note, Context, and document matches within one known project. Use this for discovery before narrow get tools instead of scanning every board or lane. Each result has relevance (0 to 1; 0.8 or more is an exact or phrase title match) and matchedTerms. Matching uses titles only; an empty result means no title matched well.',
       inputSchema: z.object({
         projectId: z.string().min(1),
         query: z.string().trim().min(2).max(200),

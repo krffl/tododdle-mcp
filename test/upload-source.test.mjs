@@ -84,15 +84,48 @@ test('rejects files outside the temp directory and approved roots', async () => 
   const filePath = join(outside, 'file.txt')
   try {
     await writeFile(filePath, 'hello')
+    const managedRoot = getDefaultManagedUploadRoot()
     await assert.rejects(
-      prepareUploadSource({ filePath }, [allowed], 100, getDefaultManagedUploadRoot()),
-      /system temporary directory or an approved upload root/
+      prepareUploadSource({ filePath }, [allowed], 100, managedRoot),
+      error => error.message.includes(`the system temporary directory (${managedRoot})`)
+        && error.message.includes(`the approved upload root ${allowed}`)
+        && !error.message.includes('do not exist yet')
+    )
+    // Regression: a configured root that does not exist was only reported as a raw ENOENT.
+    const missingRoot = join(allowed, 'not-created-yet')
+    await assert.rejects(
+      prepareUploadSource({ filePath }, [missingRoot], 100, managedRoot),
+      error => error.message.includes(`These approved upload roots do not exist yet: ${missingRoot}`)
+        && error.message.includes('TODODDLE_UPLOAD_ROOTS')
     )
     const source = await prepareUploadSource({ filePath }, [outside], 100, getDefaultManagedUploadRoot())
     assert.equal(source.fileSize, 5)
   } finally {
     await rm(allowed, { recursive: true, force: true })
     await rm(outside, { recursive: true, force: true })
+  }
+})
+
+test('explains a missing local file instead of a raw ENOENT', async () => {
+  const managedRoot = getDefaultManagedUploadRoot()
+  const filePath = join(tmpdir(), `tododdle-missing-${Date.now()}.png`)
+  await assert.rejects(
+    prepareUploadSource({ filePath }, [], 100, managedRoot),
+    error => error.message.startsWith(`Local file not found: ${filePath}.`)
+      && error.message.includes(managedRoot)
+      && !error.message.includes('ENOENT')
+  )
+})
+
+test('infers the SVG content type from the extension', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'tododdle-svg-test-'))
+  const filePath = join(directory, 'galaxy-map.svg')
+  await writeFile(filePath, '<svg xmlns="http://www.w3.org/2000/svg"/>')
+  try {
+    const source = await prepareUploadSource({ filePath }, [], 1000, getDefaultManagedUploadRoot())
+    assert.equal(source.contentType, 'image/svg+xml')
+  } finally {
+    await rm(directory, { recursive: true, force: true })
   }
 })
 
