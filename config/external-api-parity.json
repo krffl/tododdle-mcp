@@ -24,6 +24,7 @@
     "restore_lane": ["PUT /api/external/projects/[projectId]/plans/[planId]/sections/[sectionId]"],
     "list_releases": ["GET /api/external/projects/[projectId]/releases"],
     "get_release": ["GET /api/external/projects/[projectId]/releases/[releaseId]"],
+    "get_release_metadata_templates": ["GET /api/external/release-metadata-templates"],
     "create_release": ["POST /api/external/projects/[projectId]/releases"],
     "update_release": ["PATCH /api/external/projects/[projectId]/releases/[releaseId]"],
     "request_release_status_change": ["POST /api/external/projects/[projectId]/releases/[releaseId]/status-requests"],

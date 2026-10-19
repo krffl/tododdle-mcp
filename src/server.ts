@@ -248,7 +248,9 @@ export function apiErrorResult(error: ToDoddleApiError) {
       ? `Ask a workspace owner or admin to enable ${missing.join(', ')} for this Agent Connection in Workspace Settings > Agent Connections, then retry.`
       : error.code === 'scope_required'
         ? 'Ask a workspace owner or admin to check the scopes on this Agent Connection in Workspace Settings > Agent Connections.'
-        : undefined;
+        : runEnvelopeRequired(error.details)
+          ? 'This ticket has an active Agent Run for this connection. Pass the runId and projectId of that run with this call, then retry.'
+          : undefined;
   const body: Record<string, unknown> = {
     error: error.code,
     status: error.status,
@@ -259,6 +261,14 @@ export function apiErrorResult(error: ToDoddleApiError) {
     ...(error.details !== undefined ? { details: error.details } : {}),
   };
   return { isError: true, content: [{ type: 'text' as const, text: JSON.stringify(body) }] };
+}
+
+function runEnvelopeRequired(details: unknown): boolean {
+  return (
+    typeof details === 'object' &&
+    details !== null &&
+    (details as { reason?: unknown }).reason === 'RUN_ENVELOPE_REQUIRED'
+  );
 }
 
 type ToolCallback = (...args: never[]) => unknown;
@@ -1072,7 +1082,7 @@ export function createToDoddleMcpServer(
     'list_releases',
     {
       description:
-        'List bounded release summaries in one project. Filter by status or a version and title search. Needs the `releases:read` scope.',
+        'List bounded release summaries in one project. Filter by status or a version and title search. The result has total (releases that match) and archivedHidden (archived releases left out; set includeArchived to see them), so an empty list is not ambiguous. Needs the `releases:read` scope.',
       inputSchema: z.object({
         projectId: z.string().min(1),
         search: z.string().trim().max(100).optional(),
@@ -1126,10 +1136,26 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
+    'get_release_metadata_templates',
+    {
+      description:
+        'Get the release metadata templates (App Store, Google Play). Each field has the key to use in release metadata, the store character limit (maxLength), the format (text or url), and a hint. Needs the `releases:read` scope.',
+      inputSchema: z.object({}),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async () => toolResult(await api.get('/api/external/release-metadata-templates'))
+  );
+
+  server.registerTool(
     'create_release',
     {
       description:
-        'Create a PENDING release in one project. Needs the `releases:write` scope and project owner or admin access. Publishing or abandoning a release needs request_release_status_change and human approval.',
+        'Create a PENDING release in one project. Needs the `releases:write` scope and project owner or admin access. For store metadata, use the field keys from get_release_metadata_templates (for example "What\'s New" or "Promotional text"). The response has warnings when a value is over a store limit or a URL field is not a link; the release still saves. Publishing or abandoning a release needs request_release_status_change and human approval.',
       inputSchema: z.object({
         projectId: z.string().min(1),
         version: z.string().trim().min(1).max(100),
@@ -1159,7 +1185,7 @@ export function createToDoddleMcpServer(
     'update_release',
     {
       description:
-        'Update release details using expectedRevision from the latest read. This tool cannot change status or archive state; use request_release_status_change for those. Archived releases cannot be edited.',
+        'Update release details using expectedRevision from the latest read. The response has warnings when a metadata value breaks a store limit from get_release_metadata_templates. This tool cannot change status or archive state; use request_release_status_change for those. Archived releases cannot be edited.',
       inputSchema: z.object({
         projectId: z.string().min(1),
         releaseId: releaseIdSchema,
@@ -2102,14 +2128,14 @@ export function createToDoddleMcpServer(
     'search_project',
     {
       description:
-        'Find compact ticket, board, lane, Note, Context, and document matches within one known project. Use this for discovery before narrow get tools instead of scanning every board or lane. Each result has relevance (0 to 1; 0.8 or more is an exact or phrase title match) and matchedTerms. Matching uses titles only; an empty result means no title matched well.',
+        'Find compact ticket, board, lane, Note, Context, document, and release matches within one known project. Release matches need the `releases:read` scope and match the version, title, or build. Use this for discovery before narrow get tools instead of scanning every board or lane. Each result has relevance (0 to 1; 0.8 or more is an exact or phrase title match) and matchedTerms. Matching uses titles only; an empty result means no title matched well.',
       inputSchema: z.object({
         projectId: z.string().min(1),
         query: z.string().trim().min(2).max(200),
         types: z
-          .array(z.enum(['TICKET', 'BOARD', 'LANE', 'NOTE', 'CONTEXT', 'DOCUMENT']))
+          .array(z.enum(['TICKET', 'BOARD', 'LANE', 'NOTE', 'CONTEXT', 'DOCUMENT', 'RELEASE']))
           .min(1)
-          .max(6)
+          .max(7)
           .optional(),
         limit: z.number().int().min(1).max(50).default(20),
       }),

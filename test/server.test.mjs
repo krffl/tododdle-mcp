@@ -1520,6 +1520,7 @@ test('returns API denials with the error code, missing scope, and a hint', async
     new ToDoddleApiError(403, 'scope_required', 'Insufficient permissions', undefined, { requiredScopes: ['notes:write'], missingScopes: ['notes:write'], grantedScopes: ['notes:read'] }),
     new ToDoddleApiError(403, 'scope_required', 'Insufficient permissions'),
     new ToDoddleApiError(403, 'permission_denied', 'Project access denied', { projectId: 'project-1' }),
+    new ToDoddleApiError(403, 'permission_denied', 'Run context missing', { reason: 'RUN_ENVELOPE_REQUIRED', ticketId: 'task-1' }),
   ]
   const server = createToDoddleMcpServer({ ...api, get: async () => { throw errors.shift() } })
   const client = new Client({ name: 'test', version: '1' })
@@ -1539,6 +1540,10 @@ test('returns API denials with the error code, missing scope, and a hint', async
     assert.deepEqual(await call(), {
       error: 'permission_denied', status: 403, message: 'Project access denied', details: { projectId: 'project-1' },
     })
+    // Regression: a claimed ticket refused the call without saying runId was needed.
+    const runDenied = await call()
+    assert.match(runDenied.hint, /Pass the runId and projectId/)
+    assert.deepEqual(runDenied.details, { reason: 'RUN_ENVELOPE_REQUIRED', ticketId: 'task-1' })
   } finally { await client.close(); await server.close() }
 })
 
@@ -1815,6 +1820,10 @@ test('exposes release and Testbench tools with read, write, and approval annotat
     assert.match(JSON.stringify(statusTool?.inputSchema.properties?.change), /SET_STATUS.*ARCHIVE.*RESTORE/)
     assert.match(tool('set_round_release')?.description ?? '', /never publishes/)
     assert.match(tool('list_releases')?.description ?? '', /releases:read/)
+    assert.match(tool('list_releases')?.description ?? '', /archivedHidden/)
+    assert.match(tool('create_release')?.description ?? '', /get_release_metadata_templates.*warnings/)
+    assert.deepEqual(tool('get_release_metadata_templates')?.annotations?.readOnlyHint, true)
+    assert.match(JSON.stringify(tool('search_project')?.inputSchema.properties?.types), /RELEASE/)
     assert.match(tool('list_testbench_rounds')?.description ?? '', /testbench:read/)
     assert.equal(tool('list_testbench_rounds')?.inputSchema.properties?.limit?.default, 25)
     assert.equal(tool('list_testbench_rounds')?.inputSchema.properties?.limit?.maximum, 100)
@@ -1859,6 +1868,7 @@ test('serializes release, Testbench, and ticket release calls with parent-to-chi
     await call('list_releases', { projectId: 'project-1', search: '3.8', status: 'PENDING', includeArchived: true, page: 2 })
     await call('list_releases', { projectId: 'project-1' })
     await call('get_release', { projectId: 'project-1', releaseId: 'release-1' })
+    await call('get_release_metadata_templates', {})
     await call('create_release', {
       projectId: 'project-1', version: '3.8.0', title: 'Releases', build: '42', environment: 'staging',
       buildUrl: 'https://ci.example/builds/42', metadata: { commit: 'abc123' }, idempotencyKey: 'release-key-1',
@@ -1875,6 +1885,7 @@ test('serializes release, Testbench, and ticket release calls with parent-to-chi
       { method: 'GET', path: '/api/external/projects/project-1/releases', query: { search: '3.8', status: 'PENDING', includeArchived: true, page: 2 }, runContext: undefined },
       { method: 'GET', path: '/api/external/projects/project-1/releases', query: { includeArchived: false, page: 1 }, runContext: undefined },
       { method: 'GET', path: '/api/external/projects/project-1/releases/release-1', query: undefined, runContext: undefined },
+      { method: 'GET', path: '/api/external/release-metadata-templates', query: undefined, runContext: undefined },
       {
         method: 'POST',
         path: '/api/external/projects/project-1/releases',
