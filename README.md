@@ -468,6 +468,15 @@ This release also includes changes made since 3.7.0: the read-only `list_securit
 
 The release raises `@modelcontextprotocol/sdk` to `^1.32.1` to fix [GHSA-6qxp-vccf-f47h](https://github.com/advisories/GHSA-6qxp-vccf-f47h), where SDK versions before 1.31.0 could send OAuth client credentials to an authorization server chosen by the MCP server.
 
+### 3.9.1 release
+
+Deploy the matching ToDoddle API first: `get_release_metadata_templates` needs the new templates route, and `RELEASE` search needs the updated search route. The compatibility level stays at 3 because every change is additive. The hosted gateway must install this package and map `get_release_metadata_templates` to `releases:read` before it advertises the tool.
+
+- New `get_release_metadata_templates` lists App Store and Google Play field keys, store character limits, and formats. `create_release` and `update_release` return `warnings` when a value breaks a limit; the release still saves.
+- `search_project` accepts `RELEASE` and matches version, title, and build.
+- `list_releases` returns `total` and `archivedHidden`, so an empty list shows whether archived releases exist.
+- A `RUN_ENVELOPE_REQUIRED` error now has a `hint` to pass the `runId` and `projectId` of the active run.
+
 ### 3.9.0 release
 
 Deploy the matching ToDoddle API first: `log_completed_work` needs the new completed-work route, and `contentEdits` and slim artifact responses need the updated artifact route (an older server makes `update_project_artifact` with `contentEdits` fail clearly rather than silently). The compatibility level stays at 3 because every change is additive. The hosted gateway must install this package and map `log_completed_work` to `tasks:write` before it advertises the tool.
