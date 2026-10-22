@@ -115,6 +115,10 @@ test('discovers the bounded production tool surface', async () => {
   const securityTool = result.tools.find(tool => tool.name === 'list_security_events')
   assert.equal(securityTool?.annotations?.readOnlyHint, true)
   assert.match(securityTool?.description ?? '', /security:read/)
+  // Regression: the filter lagged the app, so new deletion and export events could not be filtered.
+  for (const type of ['WORKSPACE_DELETION_REQUESTED', 'WORKSPACE_DELETED', 'ACCOUNT_DELETED', 'ACCOUNT_DATA_EXPORTED']) {
+    assert.ok(securityTool?.inputSchema.properties?.eventType?.enum?.includes(type), type)
+  }
   assert.equal(result.tools.find(tool => tool.name === 'move_ticket')?.annotations?.destructiveHint, true)
   assert.equal(result.tools.find(tool => tool.name === 'archive_project')?.annotations?.destructiveHint, true)
   assert.equal(result.tools.find(tool => tool.name === 'restore_project')?.annotations?.destructiveHint, false)
