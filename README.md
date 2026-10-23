@@ -409,6 +409,8 @@ npm audit --audit-level=low
 npm pack --dry-run
 ```
 
+`.github/workflows/dependency-audit.yml` runs `npm audit --audit-level=low` every day at 14:17 UTC and can be run by hand. The publish workflow fails on any advisory, so a failed daily run means the next release needs `npm audit fix` first.
+
 `config/external-api-parity.json` is the checked contract between the model-callable tool registry and ToDoddle's External API inventory. Every discovered tool must appear in the manifest, every tool is invoked with schema-valid input in tests, and every resulting API method/path must match its declared mapping. External methods that are transport-only, compatibility-only, aggregated by another tool, or superseded have an explicit reviewed exception instead of disappearing from the audit.
 
 When the application External API changes, compare its generated `src/config/api-route-inventory.json` with this manifest before releasing either side. The current reviewed surface accounts for every External API method with no missing or extra entries; tool totals are derived from the registry and manifest rather than a historical hard-coded count.
