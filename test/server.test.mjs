@@ -88,6 +88,10 @@ test('discovers the bounded production tool surface', async () => {
   assert.equal(names.includes('list_ticket_attributes'), true)
   assert.equal(names.includes('set_ticket_attribute'), true)
   assert.equal(names.includes('delete_ticket_attribute'), true)
+  assert.equal(names.includes('list_ticket_checklist'), true)
+  assert.equal(names.includes('add_ticket_checklist_items'), true)
+  assert.equal(names.includes('update_ticket_checklist_item'), true)
+  assert.equal(names.includes('delete_ticket_checklist_item'), true)
   assert.equal(names.includes('claim_ticket'), true)
   assert.equal(names.includes('claim_next_ticket'), true)
   assert.equal(names.includes('renew_ticket_claim'), true)
@@ -791,6 +795,43 @@ test('reads, sets, and deletes typed ticket attributes', async () => {
       { method: 'PUT', path: '/api/external/tasks/task-1/attributes', body: { key: 'source.branch', type: 'STRING', value: 'main', expectedUpdatedAt } },
       { method: 'DELETE', path: '/api/external/tasks/task-1/attributes', body: { key: 'source.branch', expectedUpdatedAt } },
     ])
+  } finally {
+    await client.close()
+    await server.close()
+  }
+})
+
+test('reads, adds, updates, and deletes ticket checklist items', async () => {
+  const calls = []
+  const checklistApi = {
+    ...api,
+    get: async (path, query) => { calls.push({ method: 'GET', path, query }); return { items: [] } },
+    post: async (path, body) => { calls.push({ method: 'POST', path, body }); return { entities: [] } },
+    patch: async (path, body) => { calls.push({ method: 'PATCH', path, body }); return { entity: {} } },
+    delete: async (path, body) => { calls.push({ method: 'DELETE', path, body }); return { entity: {} } },
+  }
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer(checklistApi)
+  const client = new Client({ name: 'task-checklist-test', version: '1.0.0' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  const expectedUpdatedAt = '2026-10-23T12:00:00.000Z'
+
+  try {
+    await client.callTool({ name: 'list_ticket_checklist', arguments: { taskId: 'task-1' } })
+    await client.callTool({ name: 'add_ticket_checklist_items', arguments: { taskId: 'task-1', titles: ['Set SIGNUP_ENABLED', 'Redeploy'] } })
+    await client.callTool({ name: 'update_ticket_checklist_item', arguments: { taskId: 'task-1', id: 'item-1', completed: true, expectedUpdatedAt } })
+    await client.callTool({ name: 'delete_ticket_checklist_item', arguments: { taskId: 'task-1', id: 'item-1', expectedUpdatedAt } })
+    assert.deepEqual(calls, [
+      { method: 'GET', path: '/api/external/tasks/task-1/checklist', query: undefined },
+      { method: 'POST', path: '/api/external/tasks/task-1/checklist', body: { titles: ['Set SIGNUP_ENABLED', 'Redeploy'] } },
+      { method: 'PATCH', path: '/api/external/tasks/task-1/checklist', body: { id: 'item-1', completed: true, expectedUpdatedAt } },
+      { method: 'DELETE', path: '/api/external/tasks/task-1/checklist', body: { id: 'item-1', expectedUpdatedAt } },
+    ])
+
+    calls.length = 0
+    const tooMany = await client.callTool({ name: 'add_ticket_checklist_items', arguments: { taskId: 'task-1', titles: Array.from({ length: 51 }, (_, i) => `Item ${i}`) } })
+    assert.equal(tooMany.isError, true)
+    assert.deepEqual(calls, [])
   } finally {
     await client.close()
     await server.close()
@@ -1671,7 +1712,7 @@ test('rejects malformed image payloads and preserves API failures', async () => 
   } finally { await client.close(); await server.close() }
 })
 
-test('sends Agent Run context on move, archive, attribute, and time tools only when runId is given', async () => {
+test('sends Agent Run context on move, archive, attribute, checklist, and time tools only when runId is given', async () => {
   const calls = []
   const record = method => async (path, ...rest) => {
     calls.push({ method, path, runContext: rest[rest.length - 1] })
@@ -1698,6 +1739,9 @@ test('sends Agent Run context on move, archive, attribute, and time tools only w
     ['archive_ticket', { expectedUpdatedAt }, 'PATCH /api/external/tasks/task-1/archive', 'UPDATE_INTERNAL_WORKFLOW'],
     ['set_ticket_attribute', { key: 'k', type: 'STRING', value: 'v' }, 'PUT /api/external/tasks/task-1/attributes', 'UPDATE_TICKET'],
     ['delete_ticket_attribute', { key: 'k', expectedUpdatedAt }, 'DELETE /api/external/tasks/task-1/attributes', 'UPDATE_TICKET'],
+    ['add_ticket_checklist_items', { titles: ['a'] }, 'POST /api/external/tasks/task-1/checklist', 'UPDATE_TICKET'],
+    ['update_ticket_checklist_item', { id: 'item-1', completed: true, expectedUpdatedAt }, 'PATCH /api/external/tasks/task-1/checklist', 'UPDATE_TICKET'],
+    ['delete_ticket_checklist_item', { id: 'item-1', expectedUpdatedAt }, 'DELETE /api/external/tasks/task-1/checklist', 'UPDATE_TICKET'],
     ['start_ticket_timer', {}, 'POST /api/external/projects/project-1/tasks/task-1/time-entries', 'TRACK_INTERNAL_TIME'],
     ['log_ticket_time', { startedAt, endedAt }, 'POST /api/external/projects/project-1/tasks/task-1/time-entries', 'TRACK_INTERNAL_TIME'],
     ['stop_ticket_timer', { timeEntryId: 'entry-1', expectedUpdatedAt }, 'POST /api/external/projects/project-1/tasks/task-1/time-entries/entry-1/stop', 'TRACK_INTERNAL_TIME'],

@@ -2540,6 +2540,110 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
+    'list_ticket_checklist',
+    {
+      description:
+        'List the checklist items on a ticket in order. Ticket checklists are separate from review request checklists.',
+      inputSchema: z.object({ taskId: z.string().min(1) }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ taskId }) => toolResult(await api.get(`/api/external/tasks/${taskId}/checklist`))
+  );
+
+  server.registerTool(
+    'add_ticket_checklist_items',
+    {
+      description:
+        'Add 1 to 50 checklist items to the end of a ticket checklist. A ticket holds at most 100 items.',
+      inputSchema: z.object({
+        taskId: z.string().min(1),
+        projectId: z.string().min(1).optional(),
+        runId: z.string().min(1).max(200).optional(),
+        titles: z.array(z.string().trim().min(1).max(300)).min(1).max(50),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: false,
+      },
+    },
+    async ({ taskId, projectId, runId, ...body }) =>
+      toolResult(
+        await api.post(
+          `/api/external/tasks/${taskId}/checklist`,
+          body,
+          undefined,
+          runContext(runId, projectId, taskId, 'UPDATE_TICKET')
+        )
+      )
+  );
+
+  server.registerTool(
+    'update_ticket_checklist_item',
+    {
+      description:
+        "Rename a ticket checklist item or mark it done or not done. Requires the item's latest updatedAt value.",
+      inputSchema: z.object({
+        taskId: z.string().min(1),
+        projectId: z.string().min(1).optional(),
+        runId: z.string().min(1).max(200).optional(),
+        id: z.string().min(1),
+        title: z.string().trim().min(1).max(300).optional(),
+        completed: z.boolean().optional(),
+        expectedUpdatedAt: expectedUpdatedAtSchema,
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ taskId, projectId, runId, ...body }) =>
+      toolResult(
+        await api.patch(
+          `/api/external/tasks/${taskId}/checklist`,
+          body,
+          runContext(runId, projectId, taskId, 'UPDATE_TICKET')
+        )
+      )
+  );
+
+  server.registerTool(
+    'delete_ticket_checklist_item',
+    {
+      description: 'Delete one ticket checklist item using its id and latest updatedAt value.',
+      inputSchema: z.object({
+        taskId: z.string().min(1),
+        projectId: z.string().min(1).optional(),
+        runId: z.string().min(1).max(200).optional(),
+        id: z.string().min(1),
+        expectedUpdatedAt: expectedUpdatedAtSchema,
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ taskId, projectId, runId, ...body }) =>
+      toolResult(
+        await api.delete(
+          `/api/external/tasks/${taskId}/checklist`,
+          body,
+          runContext(runId, projectId, taskId, 'UPDATE_TICKET')
+        )
+      )
+  );
+
+  server.registerTool(
     'claim_ticket',
     {
       description:
