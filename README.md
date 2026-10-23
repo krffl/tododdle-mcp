@@ -472,6 +472,10 @@ This release also includes changes made since 3.7.0: the read-only `list_securit
 
 The release raises `@modelcontextprotocol/sdk` to `^1.32.1` to fix [GHSA-6qxp-vccf-f47h](https://github.com/advisories/GHSA-6qxp-vccf-f47h), where SDK versions before 1.31.0 could send OAuth client credentials to an authorization server chosen by the MCP server.
 
+### 3.10.0 release
+
+- New ticket checklist tools: `list_ticket_checklist`, `add_ticket_checklist_items`, `update_ticket_checklist_item`, and `delete_ticket_checklist_item`. Ticket checklists are separate from review request checklists. Deploy the matching ToDoddle API first: the tools need `/api/external/tasks/{taskId}/checklist`. The compatibility level stays at 3 because the change is additive. The hosted gateway must map the read tool to `tasks:read` and the write tools to `tasks:write` before it advertises them.
+
 ### 3.9.2 release
 
 - `list_security_events` can filter by the new workspace deletion events (`WORKSPACE_DELETION_REQUESTED`, `WORKSPACE_DELETION_CANCELLED`, `WORKSPACE_DELETION_STARTED`, `WORKSPACE_DELETED`) and account events (`ACCOUNT_DELETION_REQUESTED`, `ACCOUNT_DELETION_CANCELLED`, `ACCOUNT_DELETION_STOPPED`, `ACCOUNT_DELETED`, `ACCOUNT_DATA_EXPORTED`). The tool lists workspace events, so account events appear only when they carry the workspace. `check:api-parity` now fails when the tool's event types drift from the app.
