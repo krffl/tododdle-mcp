@@ -172,7 +172,7 @@ const ticketAttributeValueSchema = z.union([
   z.string(),
   z.number(),
   z.boolean(),
-  z.array(z.string()),
+  z.array(z.string()).max(50),
 ]);
 const workEventCategorySchema = z.enum([
   'PROGRESS',
