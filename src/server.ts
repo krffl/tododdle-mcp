@@ -116,7 +116,7 @@ const releaseExpectedRevisionSchema = z
   .max(2_147_483_646)
   .describe('revision from the latest read of this release');
 const releaseMetadataSchema = z
-  .record(z.string().max(20_000))
+  .record(z.string(), z.string().max(20_000))
   .superRefine((metadata, context) => {
     const keys = Object.keys(metadata);
     if (keys.length > 100) {
@@ -172,7 +172,7 @@ const ticketAttributeValueSchema = z.union([
   z.string(),
   z.number(),
   z.boolean(),
-  z.array(z.string()),
+  z.array(z.string()).max(50),
 ]);
 const workEventCategorySchema = z.enum([
   'PROGRESS',
@@ -203,7 +203,7 @@ const jsonValueSchema: z.ZodType<unknown> = z.lazy(() =>
     z.boolean(),
     z.null(),
     z.array(jsonValueSchema).max(100),
-    z.record(jsonValueSchema),
+    z.record(z.string(), jsonValueSchema),
   ])
 );
 const assessmentDimensionSchema = z.object({
@@ -2887,7 +2887,7 @@ export function createToDoddleMcpServer(
         category: workEventCategorySchema,
         summary: z.string().trim().min(1).max(200),
         body: z.string().trim().min(1).max(5_000).optional(),
-        metadata: z.record(jsonValueSchema).optional(),
+        metadata: z.record(z.string(), jsonValueSchema).optional(),
         idempotencyKey: z.string().trim().min(8).max(200),
       }),
       annotations: {
@@ -2926,7 +2926,7 @@ export function createToDoddleMcpServer(
           .record(z.string().regex(/^[a-zA-Z][a-zA-Z0-9._-]*$/), assessmentDimensionSchema)
           .refine((value) => Object.keys(value).length > 0, 'At least one dimension is required')
           .refine((value) => Object.keys(value).length <= 50, 'Too many dimensions'),
-        metadata: z.record(jsonValueSchema).optional(),
+        metadata: z.record(z.string(), jsonValueSchema).optional(),
         correctsAssessmentId: z.string().trim().min(1).max(200).optional(),
         evidence: z.array(assessmentEvidenceSchema).max(50).optional(),
         idempotencyKey: z.string().trim().min(8).max(200),
@@ -2960,7 +2960,7 @@ export function createToDoddleMcpServer(
         runId: z.string().min(1).max(200),
         summary: z.string().trim().min(1).max(200),
         body: z.string().trim().min(1).max(5_000).optional(),
-        metadata: z.record(jsonValueSchema).optional(),
+        metadata: z.record(z.string(), jsonValueSchema).optional(),
         idempotencyKey: z.string().trim().min(8).max(200),
       }),
       annotations: {
@@ -3543,7 +3543,7 @@ export function createToDoddleMcpServer(
         content: z.string().optional(),
         parentArtifactId: z.string().min(1).nullable().optional(),
         ownerId: z.string().optional(),
-        metadata: z.record(z.unknown()).optional(),
+        metadata: z.record(z.string(), z.unknown()).optional(),
         changeNote: z.string().optional(),
         idempotencyKey: z.string().min(8).optional(),
       }),
@@ -3654,7 +3654,7 @@ export function createToDoddleMcpServer(
         baseVersion: z.number().int().min(1).optional(),
         parentArtifactId: z.string().min(1).nullable().optional(),
         ownerId: z.string().optional(),
-        metadata: z.record(z.unknown()).optional(),
+        metadata: z.record(z.string(), z.unknown()).optional(),
         changeNote: z.string().optional(),
         verbose: z.boolean().default(false),
       }),
