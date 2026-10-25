@@ -474,6 +474,10 @@ This release also includes changes made since 3.7.0: the read-only `list_securit
 
 The release raises `@modelcontextprotocol/sdk` to `^1.32.1` to fix [GHSA-6qxp-vccf-f47h](https://github.com/advisories/GHSA-6qxp-vccf-f47h), where SDK versions before 1.31.0 could send OAuth client credentials to an authorization server chosen by the MCP server.
 
+### 3.10.1 release
+
+- Security: zod moves to 4.6.7 (GHSA-mrhx-c7xc-m3w5, memory exhaustion on large invalid arrays). body-parser moves to 2.4.0 and fast-uri to 3.1.9 through `npm audit fix`. Ticket attribute list values now accept at most 50 items, the same limit as the API. No tool names or inputs change otherwise.
+
 ### 3.10.0 release
 
 - New ticket checklist tools: `list_ticket_checklist`, `add_ticket_checklist_items`, `update_ticket_checklist_item`, and `delete_ticket_checklist_item`. Ticket checklists are separate from review request checklists. Deploy the matching ToDoddle API first: the tools need `/api/external/tasks/{taskId}/checklist`. The compatibility level stays at 3 because the change is additive. The hosted gateway must map the read tool to `tasks:read` and the write tools to `tasks:write` before it advertises them.
