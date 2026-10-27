@@ -741,6 +741,30 @@ export function createToDoddleMcpServer(
       toolResult(await api.put(`/api/external/projects/${projectId}`, body))
   );
 
+  server.registerTool(
+    'set_project_status_line',
+    {
+      description:
+        "Set the project's whiteboard status line: one short line, up to 80 characters, that says what is happening now, such as \"Release 1.2.0 is in review\". It shows on the workspace overview card with this connection's name. Pass null to clear it.",
+      inputSchema: z.object({
+        projectId: z.string().min(1),
+        text: z.string().trim().min(1).max(80).nullable(),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, text }) =>
+      toolResult(
+        text === null
+          ? await api.delete(`/api/external/projects/${projectId}/status-line`, undefined)
+          : await api.put(`/api/external/projects/${projectId}/status-line`, { text })
+      )
+  );
+
   for (const [name, archived, description, destructiveHint] of [
     [
       'archive_project',

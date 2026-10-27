@@ -301,6 +301,7 @@ Read the latest case revision before a change. Use `preview_support_reply` befor
 ### Manage Project Structure
 
 - `create_project`, `update_project`, `archive_project`, `restore_project`
+- `set_project_status_line`: the project's whiteboard line, up to 80 characters, shown on the workspace overview card with the connection name. Pass `null` to clear it. `get_project` and `get_project_context` return it as `statusLine`.
 - `create_board`, `update_board`, `move_board`, `archive_board`, `restore_board`
 - `create_lane`, `update_lane`, `move_lane`, `archive_lane`, `restore_lane`
 
@@ -473,6 +474,10 @@ Adds release tools (`list_releases`, `get_release`, `create_release`, `update_re
 This release also includes changes made since 3.7.0: the read-only `list_security_events` tool (`security:read`); the system temporary directory as the default upload root, with per-file ownership checks and validated DNS answers pinned on HTTPS upload fetches; Agent Run context on move, archive, attribute, and time tools; a pending-approval result for customer-visible Support replies; and GitHub Actions pinned to commit SHAs.
 
 The release raises `@modelcontextprotocol/sdk` to `^1.32.1` to fix [GHSA-6qxp-vccf-f47h](https://github.com/advisories/GHSA-6qxp-vccf-f47h), where SDK versions before 1.31.0 could send OAuth client credentials to an authorization server chosen by the MCP server.
+
+### 3.11.0 release
+
+- New `set_project_status_line` tool. It sets or clears the project's whiteboard status line, for example "Release 1.2.0 is in review". The line shows on the workspace overview card with the connection name. `get_project` and `get_project_context` now include `statusLine`. Deploy the matching ToDoddle API first: the tool needs `/api/external/projects/{projectId}/status-line`. The compatibility level stays at 3 because the change is additive. The hosted gateway must map the tool to `projects:write` before it advertises it.
 
 ### 3.10.1 release
 

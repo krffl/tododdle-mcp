@@ -8,6 +8,7 @@
     "update_project": ["PUT /api/external/projects/[projectId]"],
     "archive_project": ["PUT /api/external/projects/[projectId]"],
     "restore_project": ["PUT /api/external/projects/[projectId]"],
+    "set_project_status_line": ["PUT /api/external/projects/[projectId]/status-line", "DELETE /api/external/projects/[projectId]/status-line"],
     "list_boards": ["GET /api/external/projects/[projectId]/plans"],
     "get_board": ["GET /api/external/projects/[projectId]/plans/[planId]"],
     "create_board": ["POST /api/external/projects/[projectId]/plans"],
