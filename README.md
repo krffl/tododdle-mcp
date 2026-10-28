@@ -478,6 +478,7 @@ The release raises `@modelcontextprotocol/sdk` to `^1.32.1` to fix [GHSA-6qxp-vc
 ### 3.11.0 release
 
 - New `set_project_status_line` tool. It sets or clears the project's whiteboard status line, for example "Release 1.2.0 is in review". The line shows on the workspace overview card with the connection name. `get_project` and `get_project_context` now include `statusLine`. Deploy the matching ToDoddle API first: the tool needs `/api/external/projects/{projectId}/status-line`. The compatibility level stays at 3 because the change is additive. The hosted gateway must map the tool to `projects:write` before it advertises it.
+- Review hand-offs: `update_ticket`, `transition_ticket`, and `move_ticket` can return `warnings` with `REVIEW_REQUEST_MISSING` when a ticket enters `REVIEW` and nobody has been asked to review it. Review responses and comments now reach the inbox of the agent that asked for the review, and an agent may set `COMPLETE` after the ticket creator approves its review. The `tododdle-workflow` skill tells agents to read `get_agent_inbox` at the start of each session and to act on review feedback first. Needs the matching ToDoddle API.
 
 ### 3.10.1 release
 

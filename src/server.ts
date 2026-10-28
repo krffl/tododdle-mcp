@@ -3040,7 +3040,7 @@ export function createToDoddleMcpServer(
     'update_ticket',
     {
       description:
-        'Update editable ticket fields. Requires the latest updatedAt value to prevent overwriting newer changes. Pass runId and projectId when you hold an active run on this ticket. Completion policy: an agent cannot set COMPLETE on a ticket that another user created. The server returns 403 permission_denied. Set REVIEW and call create_review_request instead.',
+        'Update editable ticket fields. Requires the latest updatedAt value to prevent overwriting newer changes. Pass runId and projectId when you hold an active run on this ticket. Completion policy: an agent cannot set COMPLETE on a ticket that another user created until the creator approves its review. The server returns 403 permission_denied. Set REVIEW and call create_review_request; a REVIEW_REQUEST_MISSING warning in the response means nobody was asked yet.',
       inputSchema: z.object({
         taskId: z.string().min(1),
         projectId: z.string().min(1).optional(),
@@ -3079,7 +3079,7 @@ export function createToDoddleMcpServer(
     'transition_ticket',
     {
       description:
-        'Transition a ticket to a canonical status. Pass runId and projectId when you hold an active run on this ticket. Completion policy: an agent cannot set COMPLETE on a ticket that another user created. The server returns 403 permission_denied. Set REVIEW and call create_review_request instead.',
+        'Transition a ticket to a canonical status. Pass runId and projectId when you hold an active run on this ticket. Completion policy: an agent cannot set COMPLETE on a ticket that another user created until the creator approves its review. The server returns 403 permission_denied. Set REVIEW and call create_review_request; a REVIEW_REQUEST_MISSING warning in the response means nobody was asked yet.',
       inputSchema: z.object({
         taskId: z.string().min(1),
         projectId: z.string().min(1).optional(),
@@ -3108,7 +3108,7 @@ export function createToDoddleMcpServer(
     'move_ticket',
     {
       description:
-        'Move a ticket to an active lane, optionally on another board in the same project. Preview first because lane actions may archive the ticket. Pass runId and projectId when you hold an active run on this ticket. Completion policy: a lane that sets COMPLETE follows the same rule as transition_ticket. For a ticket another user created, the server returns 403 permission_denied. Move it to a REVIEW lane and call create_review_request instead.',
+        'Move a ticket to an active lane, optionally on another board in the same project. Preview first because lane actions may archive the ticket. Pass runId and projectId when you hold an active run on this ticket. Completion policy: a lane that sets COMPLETE follows the same rule as transition_ticket. For a ticket another user created, the server returns 403 permission_denied until the creator approves its review. Move it to a REVIEW lane and call create_review_request; a REVIEW_REQUEST_MISSING warning in the response means nobody was asked yet.',
       inputSchema: z.object({
         taskId: z.string().min(1),
         projectId: z.string().min(1).optional(),
