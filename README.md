@@ -478,7 +478,7 @@ This release also includes changes made since 3.7.0: the read-only `list_securit
 
 The release raises `@modelcontextprotocol/sdk` to `^1.32.1` to fix [GHSA-6qxp-vccf-f47h](https://github.com/advisories/GHSA-6qxp-vccf-f47h), where SDK versions before 1.31.0 could send OAuth client credentials to an authorization server chosen by the MCP server.
 
-### Unreleased
+### 3.12.0 release
 
 - New read-only `get_workspace_setup` tool (`context:read`, workspace owner or admin). It returns the same Getting started checklist that the app shows. Needs the matching ToDoddle API.
 - The `tododdle-bootstrap` skill now checks the workspace setup, suggests the open steps with links, and ends with a short orientation. It never changes workspace settings.
