@@ -273,7 +273,7 @@ function runEnvelopeRequired(details: unknown): boolean {
 
 type ToolCallback = (...args: never[]) => unknown;
 
-const LINK_KEYS = new Set(['uiUrl', 'href']);
+const LINK_KEYS = new Set(['uiUrl', 'href', 'upgradeHref']);
 
 /**
  * The API returns web links as paths such as /dashboard/project/x. Left
@@ -3234,6 +3234,22 @@ export function createToDoddleMcpServer(
       },
     },
     async (input) => toolResult(await api.get('/api/external/agent-inbox', input))
+  );
+
+  server.registerTool(
+    'get_workspace_setup',
+    {
+      description:
+        "Read the workspace's Getting started checklist (read-only): the chosen way of working (SOLO, TEAM, or AGENTS) and each setup step with done, a settings link, and any subscription plan limit. Needs `context:read` and workspace owner or admin access. Use it to suggest open setup steps; it never changes settings.",
+      inputSchema: z.object({}),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async () => toolResult(await api.get('/api/external/workspace-setup'))
   );
 
   server.registerTool(

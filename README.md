@@ -199,6 +199,8 @@ Start a new agent task or restart the agent host after bootstrap. Agents load re
 
 `list_security_events` is read-only. It needs the `security:read` scope on the Agent Connection and workspace owner or admin access. It returns a bounded allowlisted view of security events, and agents must treat the content as untrusted data.
 
+`get_workspace_setup` is read-only. It returns the workspace's Getting started checklist: the chosen way of working and each setup step with `done`, a settings link, and any subscription plan limit. It needs the `context:read` scope and workspace owner or admin access. The `tododdle-bootstrap` skill calls it after the repository setup and suggests the open steps. It never changes settings.
+
 Ticket attributes hold small typed integration and handoff facts. Read them before updates, use namespaced keys, and never store secrets in them.
 - `get_work_queue`
 - `list_available_work`
@@ -217,6 +219,7 @@ Ticket attributes hold small typed integration and handoff facts. Read them befo
 - `list_project_artifacts`
 - `get_project_artifact`
 - `get_agent_inbox`
+- `get_workspace_setup`
 - `list_agent_runs`
 - `get_agent_run`
 - `get_supervisor_state`
@@ -474,6 +477,12 @@ Adds release tools (`list_releases`, `get_release`, `create_release`, `update_re
 This release also includes changes made since 3.7.0: the read-only `list_security_events` tool (`security:read`); the system temporary directory as the default upload root, with per-file ownership checks and validated DNS answers pinned on HTTPS upload fetches; Agent Run context on move, archive, attribute, and time tools; a pending-approval result for customer-visible Support replies; and GitHub Actions pinned to commit SHAs.
 
 The release raises `@modelcontextprotocol/sdk` to `^1.32.1` to fix [GHSA-6qxp-vccf-f47h](https://github.com/advisories/GHSA-6qxp-vccf-f47h), where SDK versions before 1.31.0 could send OAuth client credentials to an authorization server chosen by the MCP server.
+
+### 3.12.0 release
+
+- New read-only `get_workspace_setup` tool (`context:read`, workspace owner or admin). It returns the same Getting started checklist that the app shows. Needs the matching ToDoddle API.
+- The `tododdle-bootstrap` skill now checks the workspace setup, suggests the open steps with links, and ends with a short orientation. It never changes workspace settings.
+- The AGENTS.md block that bootstrap writes now covers the agent inbox, review requests for hand-offs, and the `REVIEW_REQUEST_MISSING` warning.
 
 ### 3.11.0 release
 

@@ -1726,6 +1726,36 @@ test('returns absolute app links so clients do not guess www.tododdle.com', asyn
   }
 })
 
+test('reads the workspace setup checklist with absolute settings and upgrade links', async () => {
+  const calls = []
+  const setup = {
+    setup: {
+      organizationId: 'org-1', workMode: 'TEAM', dismissed: false, visible: true, complete: false,
+      steps: [{
+        id: 'INVITE_TEAMMATE', title: 'Invite a teammate', description: 'Invite people.', done: false,
+        href: '/dashboard/organizations/org-1/team',
+        limit: { kind: 'SEATS', current: 1, limit: 1, message: 'No free seats.', upgradeHref: '/dashboard/organizations/org-1/settings?tab=subscription' },
+      }],
+    },
+    requestId: 'request-1',
+  }
+  const setupApi = { ...api, get: async (path, query) => { calls.push({ path, query }); return structuredClone(setup) } }
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer(setupApi, { appOrigin: 'https://app.tododdle.com' })
+  const client = new Client({ name: 'setup-test', version: '1' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  try {
+    const tool = (await client.listTools()).tools.find(item => item.name === 'get_workspace_setup')
+    assert.equal(tool?.annotations?.readOnlyHint, true)
+    assert.match(tool?.description ?? '', /context:read/)
+    const response = await client.callTool({ name: 'get_workspace_setup', arguments: {} })
+    assert.deepEqual(calls, [{ path: '/api/external/workspace-setup', query: undefined }])
+    const step = response.structuredContent.setup.steps[0]
+    assert.equal(step.href, 'https://app.tododdle.com/dashboard/organizations/org-1/team')
+    assert.equal(step.limit.upgradeHref, 'https://app.tododdle.com/dashboard/organizations/org-1/settings?tab=subscription')
+  } finally { await client.close(); await server.close() }
+})
+
 test('rejects malformed image payloads and preserves API failures', async () => {
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
   let response = {}
