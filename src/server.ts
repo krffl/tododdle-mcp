@@ -745,7 +745,7 @@ export function createToDoddleMcpServer(
     'set_project_status_line',
     {
       description:
-        "Set the project's whiteboard status line: one short line, up to 80 characters, that says what is happening now, such as \"Release 1.2.0 is in review\". It shows on the workspace overview card with this connection's name. Pass null to clear it.",
+        'Set the project\'s whiteboard status line: one short line, up to 80 characters, that says what is happening now, such as "Release 1.2.0 is in review". It shows on the workspace overview card with this connection\'s name. Pass null to clear it.',
       inputSchema: z.object({
         projectId: z.string().min(1),
         text: z.string().trim().min(1).max(80).nullable(),
