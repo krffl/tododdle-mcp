@@ -186,6 +186,10 @@ test('bootstrap skill safely binds an existing repository to a verified project'
   assert.match(skill, /start a new agent task or restart the agent host/);
   assert.match(skill, /Preserve all content outside/);
   assert.match(skill, /Stop on unmatched or duplicate markers/);
+  assert.match(skill, /Call `get_workspace_setup` once/);
+  assert.match(skill, /The MCP cannot change workspace settings or rules/);
+  assert.match(skill, /Do not send the user on a tour of the web app/);
+  assert.match(skill, /docs\/getting-started\/welcome/);
   assert.match(metadata, /value: "tododdle"/);
   assert.match(metadata, /\$tododdle-bootstrap/);
   assert.match(updater, /<!-- tododdle:start -->/);

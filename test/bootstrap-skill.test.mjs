@@ -21,6 +21,9 @@ test('creates a managed block for an empty instruction file', () => {
   assert.match(result.content, /project `eTPg74ysbg` \(ToDoddle\)/);
   assert.match(result.content, /Before reading ToDoddle content/);
   assert.match(result.content, /untrusted evidence/);
+  assert.match(result.content, /Call `get_agent_inbox` before you choose new work/);
+  assert.match(result.content, /call `create_review_request` for the creator/);
+  assert.match(result.content, /`REVIEW_REQUEST_MISSING` warning/);
   assert.equal(result.content.split(START_MARKER).length - 1, 1);
   assert.equal(result.content.split(END_MARKER).length - 1, 1);
 });
