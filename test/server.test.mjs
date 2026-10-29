@@ -92,6 +92,7 @@ test('discovers the bounded production tool surface', async () => {
   assert.equal(names.includes('add_ticket_checklist_items'), true)
   assert.equal(names.includes('update_ticket_checklist_item'), true)
   assert.equal(names.includes('delete_ticket_checklist_item'), true)
+  assert.equal(names.includes('set_project_status_line'), true)
   assert.equal(names.includes('claim_ticket'), true)
   assert.equal(names.includes('claim_next_ticket'), true)
   assert.equal(names.includes('renew_ticket_claim'), true)
@@ -795,6 +796,38 @@ test('reads, sets, and deletes typed ticket attributes', async () => {
       { method: 'PUT', path: '/api/external/tasks/task-1/attributes', body: { key: 'source.branch', type: 'STRING', value: 'main', expectedUpdatedAt } },
       { method: 'DELETE', path: '/api/external/tasks/task-1/attributes', body: { key: 'source.branch', expectedUpdatedAt } },
     ])
+  } finally {
+    await client.close()
+    await server.close()
+  }
+})
+
+test('sets and clears the project status line', async () => {
+  const calls = []
+  const statusLineApi = {
+    ...api,
+    put: async (path, body) => { calls.push({ method: 'PUT', path, body }); return { statusLine: { text: body.text } } },
+    delete: async (path, body) => { calls.push({ method: 'DELETE', path, body }); return { statusLine: null } },
+  }
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer(statusLineApi)
+  const client = new Client({ name: 'status-line-test', version: '1.0.0' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+
+  try {
+    await client.callTool({ name: 'set_project_status_line', arguments: { projectId: 'project-1', text: ' Release 1.2.0 is in review ' } })
+    await client.callTool({ name: 'set_project_status_line', arguments: { projectId: 'project-1', text: null } })
+    assert.deepEqual(calls, [
+      { method: 'PUT', path: '/api/external/projects/project-1/status-line', body: { text: 'Release 1.2.0 is in review' } },
+      { method: 'DELETE', path: '/api/external/projects/project-1/status-line', body: undefined },
+    ])
+
+    calls.length = 0
+    const tooLong = await client.callTool({ name: 'set_project_status_line', arguments: { projectId: 'project-1', text: 'x'.repeat(81) } })
+    const blank = await client.callTool({ name: 'set_project_status_line', arguments: { projectId: 'project-1', text: '   ' } })
+    assert.equal(tooLong.isError, true)
+    assert.equal(blank.isError, true)
+    assert.deepEqual(calls, [])
   } finally {
     await client.close()
     await server.close()
