@@ -1944,6 +1944,8 @@ test('exposes release and Testbench tools with read, write, and approval annotat
     assert.deepEqual(tool('create_release')?.inputSchema.required, ['projectId', 'version'])
     assert.match(JSON.stringify(tool('update_ticket')?.inputSchema.properties?.releaseId), /"null"/)
     assert.match(JSON.stringify(tool('create_ticket')?.inputSchema.properties?.releaseId), /"null"/)
+    assert.match(tool('create_ticket')?.inputSchema.properties?.agentAssigneeApiClientId?.description ?? '', /"self"/)
+    assert.match(JSON.stringify(tool('update_ticket')?.inputSchema.properties?.agentAssigneeApiClientId), /"null"/)
     assert.match(JSON.stringify(tool('list_tickets')?.inputSchema.properties?.releaseId), /none/)
   } finally {
     await client.close()
@@ -1990,6 +1992,8 @@ test('serializes release, Testbench, and ticket release calls with parent-to-chi
     await call('set_round_release', { projectId: 'project-1', roundId: 'round-1', releaseId: null, expectedRevision: roundRevision })
     await call('create_ticket', { projectId: 'project-1', planId: 'plan-1', sectionId: 'section-1', title: 'Ship', releaseId: 'release-1', idempotencyKey: 'task-key-1' })
     await call('update_ticket', { taskId: 'task-1', expectedUpdatedAt, releaseId: null })
+    await call('create_ticket', { projectId: 'project-1', planId: 'plan-1', sectionId: 'section-1', title: 'Mine', agentAssigneeApiClientId: 'self', idempotencyKey: 'task-key-2' })
+    await call('update_ticket', { taskId: 'task-1', expectedUpdatedAt, agentAssigneeApiClientId: null })
     await call('list_tickets', { projectId: 'project-1', releaseId: 'none' })
 
     assert.deepEqual(calls, [
@@ -2010,6 +2014,8 @@ test('serializes release, Testbench, and ticket release calls with parent-to-chi
       { method: 'PATCH', path: '/api/external/projects/project-1/testbench/rounds/round-1/release', body: { releaseId: null, expectedRevision: roundRevision }, runContext: undefined },
       { method: 'POST', path: '/api/external/tasks', body: { projectId: 'project-1', planId: 'plan-1', sectionId: 'section-1', title: 'Ship', releaseId: 'release-1' }, idempotencyKey: 'task-key-1', runContext: undefined },
       { method: 'PUT', path: '/api/external/tasks/task-1', body: { expectedUpdatedAt, releaseId: null }, runContext: undefined },
+      { method: 'POST', path: '/api/external/tasks', body: { projectId: 'project-1', planId: 'plan-1', sectionId: 'section-1', title: 'Mine', agentAssigneeApiClientId: 'self' }, idempotencyKey: 'task-key-2', runContext: undefined },
+      { method: 'PUT', path: '/api/external/tasks/task-1', body: { expectedUpdatedAt, agentAssigneeApiClientId: null }, runContext: undefined },
       { method: 'GET', path: '/api/external/tasks', query: { projectId: 'project-1', releaseId: 'none', includeArchived: false, page: 1, limit: 50, detail: 'summary' }, runContext: undefined },
     ])
   } finally {
