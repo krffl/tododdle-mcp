@@ -478,6 +478,10 @@ This release also includes changes made since 3.7.0: the read-only `list_securit
 
 The release raises `@modelcontextprotocol/sdk` to `^1.32.1` to fix [GHSA-6qxp-vccf-f47h](https://github.com/advisories/GHSA-6qxp-vccf-f47h), where SDK versions before 1.31.0 could send OAuth client credentials to an authorization server chosen by the MCP server.
 
+### Unreleased
+
+- `create_ticket` and `update_ticket` accept `agentAssigneeApiClientId`, the ticket's assigned Agent Connection. Pass `"self"` to assign the calling connection, or `null` on update to clear it. It is separate from the human `assigneeId` and from a work claim. The API checks that the connection can read tasks in the project. Needs the matching ToDoddle API for `"self"`.
+
 ### 3.12.0 release
 
 - New read-only `get_workspace_setup` tool (`context:read`, workspace owner or admin). It returns the same Getting started checklist that the app shows. Needs the matching ToDoddle API.

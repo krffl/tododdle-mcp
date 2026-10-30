@@ -109,6 +109,7 @@ const artifactRelationTypeSchema = z.enum(['RELATED_TO', 'SUPERSEDES', 'IMPLEMEN
 const releaseStatusSchema = z.enum(['PENDING', 'PUBLISHED', 'ABANDONED']);
 const testbenchRoundStatusSchema = z.enum(['DRAFT', 'ACTIVE', 'CLOSED']);
 const releaseIdSchema = z.string().trim().min(1).max(100);
+const agentAssigneeSchema = z.string().trim().min(1).max(200);
 const releaseExpectedRevisionSchema = z
   .number()
   .int()
@@ -3019,6 +3020,11 @@ export function createToDoddleMcpServer(
         priority: prioritySchema.optional(),
         dueDate: z.string().datetime({ offset: true }).optional(),
         assigneeId: z.string().optional(),
+        agentAssigneeApiClientId: agentAssigneeSchema
+          .optional()
+          .describe(
+            'Assigned Agent Connection (its apiClientId), or "self" for this connection. Separate from the human assigneeId and from a claim. The connection must be able to read tasks in the project.'
+          ),
         blockedByTaskId: z.string().optional(),
         kind: taskKindSchema.optional(),
         parentTaskId: z.string().optional(),
@@ -3051,6 +3057,12 @@ export function createToDoddleMcpServer(
         priority: prioritySchema.optional(),
         dueDate: z.string().datetime({ offset: true }).nullable().optional(),
         assigneeId: z.string().nullable().optional(),
+        agentAssigneeApiClientId: agentAssigneeSchema
+          .nullable()
+          .optional()
+          .describe(
+            'Assigned Agent Connection (its apiClientId), or "self" for this connection. Separate from the human assigneeId and from a claim. The connection must be able to read tasks in the project. Set null to clear.'
+          ),
         kind: taskKindSchema.optional(),
         parentTaskId: z.string().nullable().optional(),
         releaseId: releaseIdSchema
