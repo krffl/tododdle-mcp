@@ -478,6 +478,11 @@ This release also includes changes made since 3.7.0: the read-only `list_securit
 
 The release raises `@modelcontextprotocol/sdk` to `^1.32.1` to fix [GHSA-6qxp-vccf-f47h](https://github.com/advisories/GHSA-6qxp-vccf-f47h), where SDK versions before 1.31.0 could send OAuth client credentials to an authorization server chosen by the MCP server.
 
+### 3.14.0 release
+
+- New `send_feedback` tool (`tasks:read`). An agent reports a problem with ToDoddle itself, after the user approves the exact report. It opens a support case that the user can see. Repeats on the same day return the existing case, and a connection can open 5 new cases a day. Needs the matching ToDoddle API.
+- Lane `entryActions` in `update_lane` and `create_lane` accept `SET_AGENT_ASSIGNEE` with `apiClientId` (an Agent Connection ID, or `null`). A ticket that enters the lane gets that agent assignee. Needs the matching ToDoddle API.
+
 ### 3.13.0 release
 
 - `create_ticket` and `update_ticket` accept `agentAssigneeApiClientId`, the ticket's assigned Agent Connection. Pass `"self"` to assign the calling connection, or `null` on update to clear it. It is separate from the human `assigneeId` and from a work claim. The API checks that the connection can read tasks in the project. Needs the matching ToDoddle API for `"self"`.

@@ -185,6 +185,7 @@ test('discovers the bounded production tool surface', async () => {
   assert.equal(listTicketsTool?.inputSchema.properties?.limit?.maximum, 100)
   assert.equal(createLaneTool?.inputSchema.properties?.entryActions?.maxItems, 6)
   assert.match(JSON.stringify(createLaneTool?.inputSchema.properties?.entryActions), /REQUEST_REVIEW/)
+  assert.match(JSON.stringify(createLaneTool?.inputSchema.properties?.entryActions), /SET_AGENT_ASSIGNEE/)
   assert.equal(listReviewsTool?.inputSchema.properties?.limit?.maximum, 50)
   assert.match(createReviewTool?.description || '', /do not change ticket status/)
   assert.deepEqual(Object.keys(uploadDocumentTool?.inputSchema.properties || {}), [
@@ -333,7 +334,7 @@ test('serializes project, plan, section, Note, and supporting tools', async () =
     const expectedUpdatedAt = '2026-07-29T12:00:00.000Z'
     await client.callTool({ name: 'create_board', arguments: { projectId: 'project-1', name: 'Delivery', idempotencyKey: 'plan-key-1' } })
     await client.callTool({ name: 'create_lane', arguments: { projectId: 'project-1', planId: 'plan-1', name: 'Review', entryActions: [{ type: 'SET_STATUS', status: 'REVIEW' }, { type: 'SET_KIND', kind: 'FEATURE' }, { type: 'REQUEST_REVIEW', reviewerIds: ['user-2', 'user-3'], instructions: 'Check the release.' }], idempotencyKey: 'section-key-1' } })
-    await client.callTool({ name: 'update_lane', arguments: { projectId: 'project-1', planId: 'plan-1', sectionId: 'section-1', expectedUpdatedAt, entryActions: [{ type: 'REQUEST_REVIEW', reviewerIds: ['user-2'] }] } })
+    await client.callTool({ name: 'update_lane', arguments: { projectId: 'project-1', planId: 'plan-1', sectionId: 'section-1', expectedUpdatedAt, entryActions: [{ type: 'REQUEST_REVIEW', reviewerIds: ['user-2'] }, { type: 'SET_AGENT_ASSIGNEE', apiClientId: 'client-1' }] } })
     await client.callTool({ name: 'create_ticket', arguments: { projectId: 'project-1', planId: 'plan-1', sectionId: 'section-1', title: 'Feature work', kind: 'FEATURE', idempotencyKey: 'task-key-1' } })
     await client.callTool({ name: 'move_lane', arguments: { projectId: 'project-1', planId: 'plan-1', sectionId: 'section-1', position: 0, expectedUpdatedAt } })
     await client.callTool({ name: 'list_project_members', arguments: { projectId: 'project-1', page: 1, limit: 20 } })
@@ -350,7 +351,7 @@ test('serializes project, plan, section, Note, and supporting tools', async () =
     assert.deepEqual(calls, [
       { method: 'POST', path: '/api/external/projects/project-1/plans', body: { name: 'Delivery' }, idempotencyKey: 'plan-key-1' },
       { method: 'POST', path: '/api/external/projects/project-1/plans/plan-1/sections', body: { name: 'Review', entryActions: [{ type: 'SET_STATUS', status: 'REVIEW' }, { type: 'SET_KIND', kind: 'FEATURE' }, { type: 'REQUEST_REVIEW', reviewerIds: ['user-2', 'user-3'], instructions: 'Check the release.' }] }, idempotencyKey: 'section-key-1' },
-      { method: 'PUT', path: '/api/external/projects/project-1/plans/plan-1/sections/section-1', body: { expectedUpdatedAt, entryActions: [{ type: 'REQUEST_REVIEW', reviewerIds: ['user-2'] }] } },
+      { method: 'PUT', path: '/api/external/projects/project-1/plans/plan-1/sections/section-1', body: { expectedUpdatedAt, entryActions: [{ type: 'REQUEST_REVIEW', reviewerIds: ['user-2'] }, { type: 'SET_AGENT_ASSIGNEE', apiClientId: 'client-1' }] } },
       { method: 'POST', path: '/api/external/tasks', body: { projectId: 'project-1', planId: 'plan-1', sectionId: 'section-1', title: 'Feature work', kind: 'FEATURE' }, idempotencyKey: 'task-key-1' },
       { method: 'PUT', path: '/api/external/projects/project-1/plans/plan-1/sections/section-1', body: { position: 0, expectedUpdatedAt } },
       { method: 'GET', path: '/api/external/projects/project-1/members', query: { page: 1, limit: 20 } },
@@ -1753,6 +1754,28 @@ test('reads the workspace setup checklist with absolute settings and upgrade lin
     const step = response.structuredContent.setup.steps[0]
     assert.equal(step.href, 'https://app.tododdle.com/dashboard/organizations/org-1/team')
     assert.equal(step.limit.upgradeHref, 'https://app.tododdle.com/dashboard/organizations/org-1/settings?tab=subscription')
+  } finally { await client.close(); await server.close() }
+})
+
+test('sends agent feedback only with user approval', async () => {
+  const calls = []
+  const feedbackApi = { ...api, post: async (path, body, idempotencyKey) => { calls.push({ path, body, idempotencyKey }); return { feedback: { caseId: 'case-1', status: 'OPEN', duplicate: false } } } }
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer(feedbackApi)
+  const client = new Client({ name: 'feedback-test', version: '1' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  try {
+    const tool = (await client.listTools()).tools.find(item => item.name === 'send_feedback')
+    assert.match(tool?.description ?? '', /get their approval/)
+    assert.match(tool?.description ?? '', /tasks:read/)
+    assert.deepEqual(tool?.inputSchema.required?.sort(), ['details', 'kind', 'summary', 'userConfirmed'])
+    const report = { kind: 'BUG', summary: 'Field dropped', details: 'create_ticket returned null for the field.', tool: 'create_ticket', userConfirmed: true }
+    const response = await client.callTool({ name: 'send_feedback', arguments: report })
+    assert.notEqual(response.isError, true)
+    assert.deepEqual(calls, [{ path: '/api/external/feedback', body: report, idempotencyKey: undefined }])
+    const unapproved = await client.callTool({ name: 'send_feedback', arguments: { ...report, userConfirmed: false } })
+    assert.equal(unapproved.isError, true)
+    assert.equal(calls.length, 1)
   } finally { await client.close(); await server.close() }
 })
 
