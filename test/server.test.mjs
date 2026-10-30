@@ -185,6 +185,7 @@ test('discovers the bounded production tool surface', async () => {
   assert.equal(listTicketsTool?.inputSchema.properties?.limit?.maximum, 100)
   assert.equal(createLaneTool?.inputSchema.properties?.entryActions?.maxItems, 6)
   assert.match(JSON.stringify(createLaneTool?.inputSchema.properties?.entryActions), /REQUEST_REVIEW/)
+  assert.match(JSON.stringify(createLaneTool?.inputSchema.properties?.entryActions), /SET_AGENT_ASSIGNEE/)
   assert.equal(listReviewsTool?.inputSchema.properties?.limit?.maximum, 50)
   assert.match(createReviewTool?.description || '', /do not change ticket status/)
   assert.deepEqual(Object.keys(uploadDocumentTool?.inputSchema.properties || {}), [
@@ -333,7 +334,7 @@ test('serializes project, plan, section, Note, and supporting tools', async () =
     const expectedUpdatedAt = '2026-07-29T12:00:00.000Z'
     await client.callTool({ name: 'create_board', arguments: { projectId: 'project-1', name: 'Delivery', idempotencyKey: 'plan-key-1' } })
     await client.callTool({ name: 'create_lane', arguments: { projectId: 'project-1', planId: 'plan-1', name: 'Review', entryActions: [{ type: 'SET_STATUS', status: 'REVIEW' }, { type: 'SET_KIND', kind: 'FEATURE' }, { type: 'REQUEST_REVIEW', reviewerIds: ['user-2', 'user-3'], instructions: 'Check the release.' }], idempotencyKey: 'section-key-1' } })
-    await client.callTool({ name: 'update_lane', arguments: { projectId: 'project-1', planId: 'plan-1', sectionId: 'section-1', expectedUpdatedAt, entryActions: [{ type: 'REQUEST_REVIEW', reviewerIds: ['user-2'] }] } })
+    await client.callTool({ name: 'update_lane', arguments: { projectId: 'project-1', planId: 'plan-1', sectionId: 'section-1', expectedUpdatedAt, entryActions: [{ type: 'REQUEST_REVIEW', reviewerIds: ['user-2'] }, { type: 'SET_AGENT_ASSIGNEE', apiClientId: 'client-1' }] } })
     await client.callTool({ name: 'create_ticket', arguments: { projectId: 'project-1', planId: 'plan-1', sectionId: 'section-1', title: 'Feature work', kind: 'FEATURE', idempotencyKey: 'task-key-1' } })
     await client.callTool({ name: 'move_lane', arguments: { projectId: 'project-1', planId: 'plan-1', sectionId: 'section-1', position: 0, expectedUpdatedAt } })
     await client.callTool({ name: 'list_project_members', arguments: { projectId: 'project-1', page: 1, limit: 20 } })
@@ -350,7 +351,7 @@ test('serializes project, plan, section, Note, and supporting tools', async () =
     assert.deepEqual(calls, [
       { method: 'POST', path: '/api/external/projects/project-1/plans', body: { name: 'Delivery' }, idempotencyKey: 'plan-key-1' },
       { method: 'POST', path: '/api/external/projects/project-1/plans/plan-1/sections', body: { name: 'Review', entryActions: [{ type: 'SET_STATUS', status: 'REVIEW' }, { type: 'SET_KIND', kind: 'FEATURE' }, { type: 'REQUEST_REVIEW', reviewerIds: ['user-2', 'user-3'], instructions: 'Check the release.' }] }, idempotencyKey: 'section-key-1' },
-      { method: 'PUT', path: '/api/external/projects/project-1/plans/plan-1/sections/section-1', body: { expectedUpdatedAt, entryActions: [{ type: 'REQUEST_REVIEW', reviewerIds: ['user-2'] }] } },
+      { method: 'PUT', path: '/api/external/projects/project-1/plans/plan-1/sections/section-1', body: { expectedUpdatedAt, entryActions: [{ type: 'REQUEST_REVIEW', reviewerIds: ['user-2'] }, { type: 'SET_AGENT_ASSIGNEE', apiClientId: 'client-1' }] } },
       { method: 'POST', path: '/api/external/tasks', body: { projectId: 'project-1', planId: 'plan-1', sectionId: 'section-1', title: 'Feature work', kind: 'FEATURE' }, idempotencyKey: 'task-key-1' },
       { method: 'PUT', path: '/api/external/projects/project-1/plans/plan-1/sections/section-1', body: { position: 0, expectedUpdatedAt } },
       { method: 'GET', path: '/api/external/projects/project-1/members', query: { page: 1, limit: 20 } },

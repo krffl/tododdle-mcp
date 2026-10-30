@@ -72,6 +72,7 @@ const sectionEntryActionSchema = z.discriminatedUnion('type', [
   z.object({ type: z.literal('SET_PRIORITY'), priority: prioritySchema }),
   z.object({ type: z.literal('SET_KIND'), kind: taskKindSchema }),
   z.object({ type: z.literal('SET_ASSIGNEE'), assigneeId: z.string().min(1).nullable() }),
+  z.object({ type: z.literal('SET_AGENT_ASSIGNEE'), apiClientId: z.string().min(1).nullable() }),
   z.object({
     type: z.literal('REQUEST_REVIEW'),
     reviewerIds: z
