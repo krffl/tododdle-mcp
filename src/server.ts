@@ -3266,6 +3266,56 @@ export function createToDoddleMcpServer(
   );
 
   server.registerTool(
+    'send_feedback',
+    {
+      description:
+        "Report a problem with ToDoddle itself to the ToDoddle team: a tool that failed or behaved wrongly, a field that was silently dropped, a confusing result, or a missing capability. Do not use it for project work, questions about the user's tickets, or ordinary validation errors you can fix. Before you call it, show the user the exact report and get their approval, then set userConfirmed to true. Leave out ticket content, secrets, and personal data; describe the tool call instead. The report opens a support case that the user can see. The same report on the same day returns the existing case (duplicate: true), and a connection can open 5 new cases a day. Needs `tasks:read`.",
+      inputSchema: z.object({
+        kind: z.enum(['BUG', 'CONFUSING', 'SUGGESTION']),
+        summary: z
+          .string()
+          .trim()
+          .min(3)
+          .max(150)
+          .describe('One line, for example "create_ticket drops agentAssigneeApiClientId".'),
+        details: z
+          .string()
+          .trim()
+          .min(1)
+          .max(4000)
+          .describe('What you called and what happened. No project content or secrets.'),
+        expected: z.string().trim().min(1).max(2000).optional(),
+        tool: z
+          .string()
+          .trim()
+          .min(1)
+          .max(100)
+          .regex(/^[A-Za-z0-9_.:-]+$/)
+          .optional()
+          .describe('The ToDoddle tool involved.'),
+        requestId: z
+          .string()
+          .trim()
+          .min(1)
+          .max(200)
+          .optional()
+          .describe('The requestId from the failing result, if any.'),
+        errorCode: z.string().trim().min(1).max(100).optional(),
+        userConfirmed: z
+          .literal(true)
+          .describe('true only after the user has seen and approved this report.'),
+      }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: true,
+      },
+    },
+    async (body) => toolResult(await api.post('/api/external/feedback', body))
+  );
+
+  server.registerTool(
     'acknowledge_agent_reply',
     {
       description: 'Mark one inbox reply as handled by this Agent Connection.',

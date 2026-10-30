@@ -480,6 +480,7 @@ The release raises `@modelcontextprotocol/sdk` to `^1.32.1` to fix [GHSA-6qxp-vc
 
 ### Unreleased
 
+- New `send_feedback` tool (`tasks:read`). An agent reports a problem with ToDoddle itself, after the user approves the exact report. It opens a support case that the user can see. Repeats on the same day return the existing case, and a connection can open 5 new cases a day. Needs the matching ToDoddle API.
 - Lane `entryActions` in `update_lane` and `create_lane` accept `SET_AGENT_ASSIGNEE` with `apiClientId` (an Agent Connection ID, or `null`). A ticket that enters the lane gets that agent assignee. Needs the matching ToDoddle API.
 
 ### 3.13.0 release

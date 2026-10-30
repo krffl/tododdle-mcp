@@ -108,6 +108,7 @@
     "add_ticket_comment": ["POST /api/external/tasks/[taskId]/comments"],
     "get_agent_inbox": ["GET /api/external/agent-inbox"],
     "get_workspace_setup": ["GET /api/external/workspace-setup"],
+    "send_feedback": ["POST /api/external/feedback"],
     "acknowledge_agent_reply": ["POST /api/external/agent-inbox/[commentId]/acknowledge"],
     "archive_ticket": ["PATCH /api/external/tasks/[taskId]/archive"],
     "get_active_time_entries": ["GET /api/external/time-entries/active"],

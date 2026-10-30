@@ -1757,6 +1757,28 @@ test('reads the workspace setup checklist with absolute settings and upgrade lin
   } finally { await client.close(); await server.close() }
 })
 
+test('sends agent feedback only with user approval', async () => {
+  const calls = []
+  const feedbackApi = { ...api, post: async (path, body, idempotencyKey) => { calls.push({ path, body, idempotencyKey }); return { feedback: { caseId: 'case-1', status: 'OPEN', duplicate: false } } } }
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer(feedbackApi)
+  const client = new Client({ name: 'feedback-test', version: '1' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  try {
+    const tool = (await client.listTools()).tools.find(item => item.name === 'send_feedback')
+    assert.match(tool?.description ?? '', /get their approval/)
+    assert.match(tool?.description ?? '', /tasks:read/)
+    assert.deepEqual(tool?.inputSchema.required?.sort(), ['details', 'kind', 'summary', 'userConfirmed'])
+    const report = { kind: 'BUG', summary: 'Field dropped', details: 'create_ticket returned null for the field.', tool: 'create_ticket', userConfirmed: true }
+    const response = await client.callTool({ name: 'send_feedback', arguments: report })
+    assert.notEqual(response.isError, true)
+    assert.deepEqual(calls, [{ path: '/api/external/feedback', body: report, idempotencyKey: undefined }])
+    const unapproved = await client.callTool({ name: 'send_feedback', arguments: { ...report, userConfirmed: false } })
+    assert.equal(unapproved.isError, true)
+    assert.equal(calls.length, 1)
+  } finally { await client.close(); await server.close() }
+})
+
 test('rejects malformed image payloads and preserves API failures', async () => {
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
   let response = {}
