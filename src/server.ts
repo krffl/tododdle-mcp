@@ -151,6 +151,14 @@ const releaseFieldsSchema = {
     .optional()
     .describe('HTTPS build link without credentials. Send an empty string to clear it.'),
   metadata: releaseMetadataSchema.optional(),
+  releaseNotes: z
+    .string()
+    .trim()
+    .max(20_000)
+    .optional()
+    .describe(
+      'Public Markdown notes for the project changelog. A person decides in ToDoddle whether the release shows on the changelog; agents cannot publish it.'
+    ),
 };
 // Release and Testbench routes carry no Ticket ID. Run headers are optional,
 // but an agent that holds a run sends them with the run's own Ticket ID.

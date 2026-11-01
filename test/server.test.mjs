@@ -1964,6 +1964,8 @@ test('exposes release and Testbench tools with read, write, and approval annotat
     assert.equal(tool('list_releases')?.inputSchema.properties?.limit, undefined)
     assert.equal(tool('create_release')?.inputSchema.properties?.status, undefined)
     assert.equal(tool('update_release')?.inputSchema.properties?.status, undefined)
+    assert.match(tool('create_release')?.inputSchema.properties?.releaseNotes?.description ?? '', /cannot publish/)
+    assert.equal(tool('update_release')?.inputSchema.properties?.showOnChangelog, undefined)
     assert.deepEqual(tool('create_release')?.inputSchema.required, ['projectId', 'version'])
     assert.match(JSON.stringify(tool('update_ticket')?.inputSchema.properties?.releaseId), /"null"/)
     assert.match(JSON.stringify(tool('create_ticket')?.inputSchema.properties?.releaseId), /"null"/)
@@ -2010,6 +2012,7 @@ test('serializes release, Testbench, and ticket release calls with parent-to-chi
       buildUrl: 'https://ci.example/builds/42', metadata: { commit: 'abc123' }, idempotencyKey: 'release-key-1',
     })
     await call('update_release', { projectId: 'project-1', releaseId: 'release-1', expectedRevision: 3, title: null, buildUrl: '' })
+    await call('update_release', { projectId: 'project-1', releaseId: 'release-1', expectedRevision: 4, releaseNotes: '- Faster sync' })
     await call('list_testbench_rounds', { projectId: 'project-1', status: 'DRAFT' })
     await call('set_round_release', { projectId: 'project-1', roundId: 'round-1', releaseId: 'release-1', expectedRevision: roundRevision })
     await call('set_round_release', { projectId: 'project-1', roundId: 'round-1', releaseId: null, expectedRevision: roundRevision })
@@ -2032,6 +2035,7 @@ test('serializes release, Testbench, and ticket release calls with parent-to-chi
         runContext: undefined,
       },
       { method: 'PATCH', path: '/api/external/projects/project-1/releases/release-1', body: { expectedRevision: 3, title: null, buildUrl: '' }, runContext: undefined },
+      { method: 'PATCH', path: '/api/external/projects/project-1/releases/release-1', body: { expectedRevision: 4, releaseNotes: '- Faster sync' }, runContext: undefined },
       { method: 'GET', path: '/api/external/projects/project-1/testbench/rounds', query: { status: 'DRAFT', page: 1, limit: 25 }, runContext: undefined },
       { method: 'PATCH', path: '/api/external/projects/project-1/testbench/rounds/round-1/release', body: { releaseId: 'release-1', expectedRevision: roundRevision }, runContext: undefined },
       { method: 'PATCH', path: '/api/external/projects/project-1/testbench/rounds/round-1/release', body: { releaseId: null, expectedRevision: roundRevision }, runContext: undefined },
