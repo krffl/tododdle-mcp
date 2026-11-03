@@ -478,7 +478,7 @@ This release also includes changes made since 3.7.0: the read-only `list_securit
 
 The release raises `@modelcontextprotocol/sdk` to `^1.32.1` to fix [GHSA-6qxp-vccf-f47h](https://github.com/advisories/GHSA-6qxp-vccf-f47h), where SDK versions before 1.31.0 could send OAuth client credentials to an authorization server chosen by the MCP server.
 
-### Unreleased
+### 3.15.0 release
 
 - `create_release` and `update_release` accept `releaseNotes`: public Markdown for the project changelog. Only a person can show a release on the changelog.
 
