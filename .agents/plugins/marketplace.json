@@ -8,8 +8,8 @@
       "name": "tododdle",
       "source": {
         "source": "npm",
-        "package": "tododdle-mcp",
-        "version": "^3.15.0",
+        "package": "@krffl/tododdle-mcp",
+        "version": "^3.16.0",
         "registry": "https://registry.npmjs.org"
       },
       "policy": {

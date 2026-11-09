@@ -145,7 +145,7 @@ test('turns update-required responses into direct agent guidance', async () => {
     details: {
       installedVersion: '2.8.0',
       minimumCompatibilityLevel: 3,
-      updateCommand: 'npx --yes --prefer-online tododdle-mcp@latest',
+      updateCommand: 'npx --yes --prefer-online @krffl/tododdle-mcp@latest',
       documentationUrl: 'https://www.tododdle.com/docs/agents/install-mcp',
       restartRequired: true,
     },

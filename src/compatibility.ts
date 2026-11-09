@@ -1,4 +1,4 @@
-export const MCP_PACKAGE_VERSION = '3.15.0';
+export const MCP_PACKAGE_VERSION = '3.16.0';
 export const MCP_COMPATIBILITY_LEVEL = 3;
 export const MCP_VERSION_HEADER = 'x-tododdle-mcp-version';
 export const MCP_COMPATIBILITY_HEADER = 'x-tododdle-mcp-compatibility';
@@ -21,7 +21,7 @@ export function formatMcpUpdateRequiredMessage(message: string, details: unknown
   const updateCommand =
     typeof value.updateCommand === 'string'
       ? value.updateCommand
-      : 'npx --yes --prefer-online tododdle-mcp@latest';
+      : 'npx --yes --prefer-online @krffl/tododdle-mcp@latest';
   const documentation =
     typeof value.documentationUrl === 'string' ? ` See ${value.documentationUrl}.` : '';
 
