@@ -4,7 +4,7 @@ The official Model Context Protocol stdio server for [ToDoddle](https://tododdle
 
 The package contains no ToDoddle application or database code. It is a small stdio client that authenticates as an Agent Connection and calls the hosted API.
 
-Version 3 sends its package version and compatibility level with every token and API request. If ToDoddle returns `MCP_UPDATE_REQUIRED`, run `npx --yes --prefer-online tododdle-mcp@latest` and restart the MCP host. The error includes the installed version, minimum supported level, update command, and current troubleshooting guide.
+Version 3 sends its package version and compatibility level with every token and API request. If ToDoddle returns `MCP_UPDATE_REQUIRED`, run `npx --yes --prefer-online @krffl/tododdle-mcp@latest` and restart the MCP host. The error includes the installed version, minimum supported level, update command, and current troubleshooting guide.
 
 Agent work claims let any connected agent indicate that it is actively handling a ticket without becoming the human assignee. Claims use the configured Agent Connection label, an opaque run ID, and an expiring lease. Each claim also starts or resumes a durable Agent Run. The agent can record a terminal result, evidence, and optional usage telemetry without changing ticket status.
 
@@ -28,7 +28,7 @@ Add the server from a terminal:
 codex mcp add tododdle \
   --env TODODDLE_CLIENT_ID=your_client_id \
   --env TODODDLE_CLIENT_SECRET=your_client_secret \
-  -- npx --yes --prefer-online tododdle-mcp@latest
+  -- npx --yes --prefer-online @krffl/tododdle-mcp@latest
 
 codex mcp list
 ```
@@ -45,7 +45,7 @@ Install the server for your user account so it is available across projects:
 claude mcp add tododdle --scope user \
   --env TODODDLE_CLIENT_ID=your_client_id \
   --env TODODDLE_CLIENT_SECRET=your_client_secret \
-  -- npx --yes --prefer-online tododdle-mcp@latest
+  -- npx --yes --prefer-online @krffl/tododdle-mcp@latest
 
 claude mcp get tododdle
 ```
@@ -61,7 +61,7 @@ Add this configuration to `~/.cursor/mcp.json` for all projects, or to `.cursor/
   "mcpServers": {
     "tododdle": {
       "command": "npx",
-      "args": ["--yes", "--prefer-online", "tododdle-mcp@latest"],
+      "args": ["--yes", "--prefer-online", "@krffl/tododdle-mcp@latest"],
       "env": {
         "TODODDLE_CLIENT_ID": "your_client_id",
         "TODODDLE_CLIENT_SECRET": "your_client_secret"
@@ -155,7 +155,7 @@ Simple lookups should skip the brief and full context entirely. Use `search_proj
 
 ### Version 3 migration
 
-Version 3 replaces Plan, Section, and Task tool names with Board, Lane, and Ticket names. The hosted API paths and stable ID fields do not change. Version 2 clients must update to `tododdle-mcp@latest` and restart their agent host. The API returns `MCP_UPDATE_REQUIRED` with the exact update command when an old client identifies itself.
+Version 3 replaces Plan, Section, and Task tool names with Board, Lane, and Ticket names. The hosted API paths and stable ID fields do not change. Version 2 clients must update to `@krffl/tododdle-mcp@latest` and restart their agent host. The API returns `MCP_UPDATE_REQUIRED` with the exact update command when an old client identifies itself.
 
 The server returns authoritative website URLs with records so an agent can hand work back to a human without reconstructing routes. Access remains the intersection of the Agent Connection's scopes, explicit project grants, and authorizing user's current ACL on every call.
 
@@ -477,6 +477,12 @@ Adds release tools (`list_releases`, `get_release`, `create_release`, `update_re
 This release also includes changes made since 3.7.0: the read-only `list_security_events` tool (`security:read`); the system temporary directory as the default upload root, with per-file ownership checks and validated DNS answers pinned on HTTPS upload fetches; Agent Run context on move, archive, attribute, and time tools; a pending-approval result for customer-visible Support replies; and GitHub Actions pinned to commit SHAs.
 
 The release raises `@modelcontextprotocol/sdk` to `^1.32.1` to fix [GHSA-6qxp-vccf-f47h](https://github.com/advisories/GHSA-6qxp-vccf-f47h), where SDK versions before 1.31.0 could send OAuth client credentials to an authorization server chosen by the MCP server.
+
+### 3.16.0 release
+
+- The package is now `@krffl/tododdle-mcp`. Update your MCP config to run `npx --yes --prefer-online @krffl/tododdle-mcp@latest`. The command name stays `tododdle-mcp`.
+- The old `tododdle-mcp` package is deprecated and gets no new versions. Old clients that ToDoddle asks to update are given the new command.
+- No tool changes.
 
 ### 3.15.0 release
 
