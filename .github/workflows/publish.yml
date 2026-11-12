@@ -61,10 +61,8 @@ jobs:
           echo "tarball=${TARBALL}" >> "$GITHUB_OUTPUT"
           echo "sha256=$(sha256sum "package-artifact/${TARBALL}" | cut -d ' ' -f 1)" >> "$GITHUB_OUTPUT"
 
-      # No commit SHA for this action could be verified offline when this
-      # workflow was split; pin it to a full commit SHA.
       - name: Upload package
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7
         with:
           name: package-tarball
           path: package-artifact/${{ steps.pack.outputs.tarball }}
@@ -86,10 +84,8 @@ jobs:
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
 
-      # No commit SHA for this action could be verified offline when this
-      # workflow was split; pin it to a full commit SHA.
       - name: Download package
-        uses: actions/download-artifact@v8
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8
         with:
           name: package-tarball
           path: package-artifact
