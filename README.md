@@ -434,7 +434,7 @@ The npm `prepack` lifecycle builds `dist/` automatically. `prepublishOnly` runs 
 ## Release Safety
 
 - Review `npm pack --dry-run` and verify that only the declared runtime, plugin, skill, examples, parity manifest, documentation, license, and package metadata are present.
-- Publish from a tagged release with npm trusted publishing/provenance where available.
+- Publish from a tagged release with npm trusted publishing/provenance where available. The publish workflow has two jobs. `build` has read-only permissions: it checks that the release tag is on `main`, runs `npm ci`, formatting, types, tests with coverage, and the audit, then packs the tarball. `publish` has the `id-token: write` permission only: it downloads that tarball, checks its SHA-256, and runs `npm publish <tarball> --provenance --ignore-scripts` without installing anything.
 - Treat tool removal, renaming, or incompatible input changes as major releases.
 - Keep generated ToDoddle connection snippets pinned to a tested package version.
 
@@ -487,6 +487,7 @@ The release raises `@modelcontextprotocol/sdk` to `^1.32.1` to fix [GHSA-6qxp-vc
 - HTTPS upload sources now reject more special-purpose addresses: `0.0.0.0/8`, `100.64.0.0/10`, `192.0.0.0/24`, `198.18.0.0/15`, `224.0.0.0/4`, `240.0.0.0/4` (with `255.255.255.255`), documentation ranges, and all of `fe80::/10`, `fec0::/10`, `fc00::/7`, and `ff00::/8`. IPv6 forms that carry an IPv4 address (mapped, including hex such as `::ffff:7f00:1`; compatible; NAT64 `64:ff9b::/96`; and 6to4 `2002::/16`) are checked as that IPv4 address. A value that is not an IP address is treated as private.
 - Local uploads open the file once with `O_NOFOLLOW` and stream from the checked descriptor, so a path swap after the checks cannot change what is sent. `ToDoddleApi.uploadFile` now takes an open `FileHandle` instead of a path. After a confirmed upload, the MCP deletes a local file only when it is directly in a `tododdle-upload-*` directory in the system temporary directory (for example one made with `mktemp -d "${TMPDIR:-/tmp}/tododdle-upload-XXXXXX"`). Before, it deleted any uploaded file in the temporary directory.
 - `send_feedback` needs `tasks:write`, not `tasks:read`, because it opens a support case. The ToDoddle API and the hosted gateway enforce the new scope.
+- The publish workflow is split into a read-only `build` job and a `publish` job that holds `id-token: write`. The npm token never sees `npm ci` or the test run, and a release tag that is not on `main` fails the workflow.
 
 ### 3.16.0 release
 
