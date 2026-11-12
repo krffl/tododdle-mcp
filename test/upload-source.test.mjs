@@ -7,7 +7,9 @@ import { getDefaultManagedUploadRoot } from '../dist/config.js'
 import {
   createValidatingLookup,
   fetchWithSafeRedirects,
+  isPrivateAddress,
   prepareUploadSource,
+  STAGING_DIRECTORY_PREFIX,
 } from '../dist/upload-source.js'
 
 test('local uploads need the managed temp root and ignore any other folder', async () => {
@@ -30,7 +32,7 @@ test('local uploads need the managed temp root and ignore any other folder', asy
 test('managed root is the real system temp directory and cleans up only after confirmed success', async () => {
   const managedRoot = getDefaultManagedUploadRoot()
   assert.equal(managedRoot, await realpath(tmpdir()))
-  const stagingDirectory = await mkdtemp(join(tmpdir(), 'tododdle-managed-test-'))
+  const stagingDirectory = await mkdtemp(join(tmpdir(), STAGING_DIRECTORY_PREFIX))
   const filePath = join(stagingDirectory, 'file.txt')
   try {
     await writeFile(filePath, 'hello', { mode: 0o600 })
@@ -48,6 +50,77 @@ test('managed root is the real system temp directory and cleans up only after co
     assert.ok((await lstat(managedRoot)).isDirectory())
   } finally {
     await rm(stagingDirectory, { recursive: true, force: true })
+  }
+})
+
+test('confirmed cleanup never deletes a file the MCP did not stage', async () => {
+  const managedRoot = getDefaultManagedUploadRoot()
+  const otherDirectory = await mkdtemp(join(tmpdir(), 'tododdle-not-staged-'))
+  const nestedDirectory = await mkdtemp(join(tmpdir(), STAGING_DIRECTORY_PREFIX))
+  const looseFile = join(tmpdir(), `${STAGING_DIRECTORY_PREFIX}loose-${process.pid}-${Date.now()}.txt`)
+  const otherFile = join(otherDirectory, 'keep.txt')
+  const nestedFile = join(nestedDirectory, 'sub', 'keep.txt')
+  try {
+    await writeFile(otherFile, 'keep')
+    await mkdir(join(nestedDirectory, 'sub'))
+    await writeFile(nestedFile, 'keep')
+    await writeFile(looseFile, 'keep')
+    for (const filePath of [otherFile, nestedFile, looseFile]) {
+      const source = await prepareUploadSource({ filePath }, 100, managedRoot)
+      await source.cleanup(true)
+      assert.equal(await readFile(filePath, 'utf8'), 'keep', filePath)
+    }
+  } finally {
+    await rm(otherDirectory, { recursive: true, force: true })
+    await rm(nestedDirectory, { recursive: true, force: true })
+    await rm(looseFile, { force: true })
+  }
+})
+
+test('reads the checked file even if the path is swapped for a symlink', { skip: process.platform === 'win32' }, async () => {
+  const managedRoot = getDefaultManagedUploadRoot()
+  const stagingDirectory = await mkdtemp(join(tmpdir(), STAGING_DIRECTORY_PREFIX))
+  const secretDirectory = await mkdtemp(join(tmpdir(), 'tododdle-secret-'))
+  const filePath = join(stagingDirectory, 'file.txt')
+  const secret = join(secretDirectory, 'secret.txt')
+  try {
+    await writeFile(filePath, 'hello')
+    await writeFile(secret, 'secret')
+    const source = await prepareUploadSource({ filePath }, 100, managedRoot)
+    await rm(filePath)
+    await symlink(secret, filePath)
+
+    let uploaded = ''
+    for await (const chunk of source.file.createReadStream({ start: 0, end: source.fileSize - 1, autoClose: false })) {
+      uploaded += chunk
+    }
+    assert.equal(uploaded, 'hello')
+
+    // The path now names a different file, so confirmed cleanup leaves it alone.
+    await source.cleanup(true)
+    assert.ok((await lstat(filePath)).isSymbolicLink())
+    assert.equal(await readFile(secret, 'utf8'), 'secret')
+  } finally {
+    await rm(stagingDirectory, { recursive: true, force: true })
+    await rm(secretDirectory, { recursive: true, force: true })
+  }
+})
+
+test('rejects a file whose size is zero or over the limit when opened', async () => {
+  const directory = await mkdtemp(join(tmpdir(), STAGING_DIRECTORY_PREFIX))
+  try {
+    const empty = join(directory, 'empty.txt')
+    const large = join(directory, 'large.txt')
+    await writeFile(empty, '')
+    await writeFile(large, 'x'.repeat(101))
+    for (const filePath of [empty, large]) {
+      await assert.rejects(
+        prepareUploadSource({ filePath }, 100, getDefaultManagedUploadRoot()),
+        /size is not allowed/,
+      )
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true })
   }
 })
 
@@ -112,6 +185,7 @@ test('infers the SVG content type from the extension', async () => {
   try {
     const source = await prepareUploadSource({ filePath }, 1000, getDefaultManagedUploadRoot())
     assert.equal(source.contentType, 'image/svg+xml')
+    await source.cleanup()
   } finally {
     await rm(directory, { recursive: true, force: true })
   }
@@ -196,3 +270,49 @@ test('URL fetch connects only through the validating lookup and rejects private 
   await assert.rejects(fetchWithSafeRedirects('https://[::1]/a'), /private or reserved/)
 })
 
+
+const privateAddressCases = [
+  ['0.0.0.0/8', ['0.0.0.0', '0.255.255.255']],
+  ['10.0.0.0/8', ['10.0.0.1', '10.255.255.255']],
+  ['100.64.0.0/10', ['100.64.0.1', '100.127.255.254']],
+  ['127.0.0.0/8', ['127.0.0.1', '127.255.255.255']],
+  ['169.254.0.0/16', ['169.254.169.254']],
+  ['172.16.0.0/12', ['172.16.0.1', '172.31.255.255']],
+  ['192.0.0.0/24', ['192.0.0.8', '192.0.0.255']],
+  ['192.0.2.0/24', ['192.0.2.1']],
+  ['192.168.0.0/16', ['192.168.1.1']],
+  ['198.18.0.0/15', ['198.18.0.1', '198.19.255.255']],
+  ['198.51.100.0/24 and 203.0.113.0/24', ['198.51.100.7', '203.0.113.9']],
+  ['224.0.0.0/4', ['224.0.0.1', '239.255.255.250']],
+  ['240.0.0.0/4', ['240.0.0.1', '250.1.2.3']],
+  ['255.255.255.255', ['255.255.255.255']],
+  ['IPv6 unspecified and loopback', ['::', '::1', '[::1]', '0:0:0:0:0:0:0:1']],
+  ['IPv4-mapped', ['::ffff:127.0.0.1', '::ffff:7f00:1', '[::ffff:7f00:1]', '::ffff:a9fe:a9fe', '0:0:0:0:0:ffff:c0a8:101']],
+  ['IPv4-compatible', ['::7f00:1', '::127.0.0.1', '::808:808']],
+  ['NAT64 64:ff9b::/96', ['64:ff9b::7f00:1', '64:ff9b::10.0.0.1', '64:ff9b::a9fe:a9fe']],
+  ['local NAT64 64:ff9b:1::/48', ['64:ff9b:1::808:808']],
+  ['6to4 2002::/16', ['2002:7f00:1::', '2002:a00:1::1', '2002:c0a8:101::1']],
+  ['Teredo and documentation', ['2001::1', '2001:db8::1']],
+  ['unique local fc00::/7', ['fc00::1', 'fd12:3456::1']],
+  ['link-local fe80::/10', ['fe80::1', 'fe9a::1', 'febf:ffff::1', 'fe80::1%en0']],
+  ['site-local fec0::/10', ['fec0::1', 'feff::1']],
+  ['multicast ff00::/8', ['ff02::1']],
+  ['not an IP literal', ['', 'localhost', 'example.com', '1.2.3', '::ffff:999.0.0.1', '1::2::3']],
+]
+
+for (const [range, addresses] of privateAddressCases) {
+  test(`private address check blocks ${range}`, () => {
+    for (const address of addresses) assert.equal(isPrivateAddress(address), true, address)
+  })
+}
+
+test('private address check allows public unicast addresses', () => {
+  for (const address of [
+    '1.1.1.1', '8.8.8.8', '93.184.216.34', '100.63.255.255', '100.128.0.0', '172.15.255.255',
+    '172.32.0.0', '192.0.1.1', '198.17.255.255', '198.20.0.0', '223.255.255.255',
+    '2606:4700:4700::1111', '2a00:1450:4009:81f::200e', '::ffff:8.8.8.8', '::ffff:808:808',
+    '64:ff9b::808:808', '2002:808:808::1', 'fe7f::1', 'fbff::1',
+  ]) {
+    assert.equal(isPrivateAddress(address), false, address)
+  }
+})

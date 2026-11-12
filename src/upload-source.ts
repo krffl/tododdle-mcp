@@ -1,10 +1,19 @@
-import { createWriteStream } from 'node:fs';
-import { lstat, mkdtemp, realpath, rm, rmdir } from 'node:fs/promises';
+import { constants as fsConstants, createWriteStream, type Stats } from 'node:fs';
+import {
+  lstat,
+  mkdtemp,
+  open,
+  realpath,
+  rm,
+  rmdir,
+  unlink,
+  type FileHandle,
+} from 'node:fs/promises';
 import { lookup as dnsLookup } from 'node:dns/promises';
 import type { LookupAddress } from 'node:dns';
 import type { IncomingMessage } from 'node:http';
 import { request as httpsRequest } from 'node:https';
-import { isIP } from 'node:net';
+import { BlockList, isIP } from 'node:net';
 import { basename, dirname, extname, relative, resolve, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Transform } from 'node:stream';
@@ -21,7 +30,10 @@ export interface UploadSourceInput {
 }
 
 export interface PreparedUpload {
+  /** Path for messages only. Read the bytes from `file`, never by reopening the path. */
   filePath: string;
+  /** Open, read-only handle to the checked file. `cleanup` closes it. */
+  file: FileHandle;
   fileName: string;
   fileSize: number;
   contentType: string;
@@ -63,6 +75,63 @@ function sanitizeFileName(value: string): string {
 }
 
 /**
+ * A directory directly in the managed root whose name starts with this prefix
+ * holds files staged for upload. The MCP creates one for each HTTPS source, and
+ * an agent can create one with
+ * `mktemp -d "${TMPDIR:-/tmp}/tododdle-upload-XXXXXX"`. After a confirmed
+ * upload, the MCP deletes a local file only when it is in such a directory.
+ */
+export const STAGING_DIRECTORY_PREFIX = 'tododdle-upload-';
+
+// O_NOFOLLOW refuses a symlink as the final path component at open time, so a
+// swap after the checks cannot redirect the read. O_NONBLOCK stops a FIFO swap
+// from blocking the open; fstat then rejects it.
+const OPEN_FLAGS =
+  fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0);
+
+function isManagedStagingFile(filePath: string, managedRoot: string): boolean {
+  const directory = dirname(filePath);
+  return (
+    dirname(directory) === managedRoot && basename(directory).startsWith(STAGING_DIRECTORY_PREFIX)
+  );
+}
+
+function sameFile(a: Stats, b: Stats): boolean {
+  return a.dev === b.dev && a.ino === b.ino;
+}
+
+/**
+ * Opens a file once and checks the open descriptor, not the path: it must be a
+ * regular file owned by the current user and within the size limit. The caller
+ * streams from the returned handle and must close it.
+ */
+async function openCheckedFile(
+  filePath: string,
+  maxBytes: number
+): Promise<{ handle: FileHandle; stats: Stats }> {
+  const handle = await open(filePath, OPEN_FLAGS).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ELOOP' || error.code === 'EMLINK') {
+      throw new Error('Local upload source must be a regular file');
+    }
+    throw error;
+  });
+  try {
+    const stats = await handle.stat();
+    if (!stats.isFile()) throw new Error('Local upload source must be a regular file');
+    if (process.platform !== 'win32' && typeof process.getuid === 'function') {
+      if (stats.uid !== process.getuid()) {
+        throw new Error('Local upload source must be owned by the current user');
+      }
+    }
+    if (stats.size <= 0 || stats.size > maxBytes) throw new Error('Local file size is not allowed');
+    return { handle, stats };
+  } catch (error) {
+    await handle.close().catch(() => undefined);
+    throw error;
+  }
+}
+
+/**
  * Local uploads come only from the system temporary directory (the managed
  * root). The old TODODDLE_UPLOAD_ROOTS allow-list is gone.
  */
@@ -89,53 +158,144 @@ async function prepareLocalSource(
   if (!resolvedManagedRoot || !isInsideRoot(resolvedFile, resolvedManagedRoot)) {
     throw new Error(`Local file must be inside ${allowedLocations}. Copy it there, then retry.`);
   }
-  const stats = await lstat(resolvedFile);
-  if (!stats.isFile()) throw new Error('Local upload source must be a regular file');
-  if (process.platform !== 'win32' && typeof process.getuid === 'function') {
-    if (stats.uid !== process.getuid()) {
-      throw new Error('Local upload source must be owned by the current user');
+  const { handle, stats } = await openCheckedFile(resolvedFile, maxBytes);
+  try {
+    // The descriptor must still be the file at the checked path inside the root.
+    const [currentPath, currentStats] = await Promise.all([
+      realpath(resolvedFile),
+      lstat(resolvedFile),
+    ]);
+    if (currentPath !== resolvedFile || !sameFile(currentStats, stats)) {
+      throw new Error('Local upload source changed while it was being checked');
     }
+  } catch (error) {
+    await handle.close().catch(() => undefined);
+    throw error;
   }
-  if (stats.size <= 0 || stats.size > maxBytes) throw new Error('Local file size is not allowed');
   const fileName = sanitizeFileName(input.fileName || basename(resolvedFile));
+  const managed = isManagedStagingFile(resolvedFile, resolvedManagedRoot);
   return {
     filePath: resolvedFile,
+    file: handle,
     fileName,
     fileSize: stats.size,
     contentType: input.contentType || inferContentType(fileName),
     cleanup: async (uploadConfirmed = false) => {
-      if (!uploadConfirmed) return;
-      await rm(resolvedFile, { force: true });
-      const stagingDirectory = dirname(resolvedFile);
-      if (stagingDirectory !== resolvedManagedRoot) {
-        await rmdir(stagingDirectory).catch(() => undefined);
+      try {
+        // Delete only a file this flow staged, and only the same file that was uploaded.
+        if (!uploadConfirmed || !managed) return;
+        const current = await lstat(resolvedFile).catch(() => null);
+        if (!current || !sameFile(current, stats)) return;
+        await unlink(resolvedFile);
+        await rmdir(dirname(resolvedFile)).catch(() => undefined);
+      } finally {
+        await handle.close().catch(() => undefined);
       }
     },
   };
 }
 
-function isPrivateAddress(address: string): boolean {
-  const normalized = address.toLowerCase();
-  if (normalized.startsWith('::ffff:')) return isPrivateAddress(normalized.slice(7));
-  if (
-    normalized === '::1' ||
-    normalized === '::' ||
-    normalized.startsWith('fe80:') ||
-    normalized.startsWith('fc') ||
-    normalized.startsWith('fd')
-  )
-    return true;
-  if (isIP(address) !== 4) return false;
-  const [a, b] = address.split('.').map(Number);
-  return (
-    a === 10 ||
-    a === 127 ||
-    a === 0 ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) ||
-    (a === 100 && b >= 64 && b <= 127)
-  );
+const blockedAddresses = new BlockList();
+// IPv4 special-purpose ranges (RFC 6890 and the IANA registry) that must never
+// be fetched: "this network", private, shared/CGNAT, loopback, link-local,
+// IETF protocol assignments, documentation, benchmarking, multicast, and
+// reserved (which includes 255.255.255.255).
+for (const [network, prefix] of [
+  ['0.0.0.0', 8],
+  ['10.0.0.0', 8],
+  ['100.64.0.0', 10],
+  ['127.0.0.0', 8],
+  ['169.254.0.0', 16],
+  ['172.16.0.0', 12],
+  ['192.0.0.0', 24],
+  ['192.0.2.0', 24],
+  ['192.88.99.0', 24],
+  ['192.168.0.0', 16],
+  ['198.18.0.0', 15],
+  ['198.51.100.0', 24],
+  ['203.0.113.0', 24],
+  ['224.0.0.0', 4],
+  ['240.0.0.0', 4],
+] as const) {
+  blockedAddresses.addSubnet(network, prefix, 'ipv4');
+}
+// IPv6 ranges that are not public unicast. Forms that embed an IPv4 address
+// (mapped, compatible, NAT64, 6to4) are checked as that IPv4 address instead.
+for (const [network, prefix] of [
+  // Unspecified, loopback, and the deprecated IPv4-compatible block.
+  ['::', 96],
+  ['::1', 128],
+  ['64:ff9b:1::', 48],
+  ['100::', 64],
+  ['2001::', 32],
+  ['2001:db8::', 32],
+  ['fc00::', 7],
+  ['fe80::', 10],
+  ['fec0::', 10],
+  ['ff00::', 8],
+] as const) {
+  blockedAddresses.addSubnet(network, prefix, 'ipv6');
+}
+
+/** Expands an IPv6 literal into eight 16-bit groups, or null when it is not valid. */
+function ipv6Groups(address: string): number[] | null {
+  let text = address.split('%')[0];
+  const dotted = /(\d+\.\d+\.\d+\.\d+)$/.exec(text);
+  if (dotted) {
+    if (isIP(dotted[1]) !== 4) return null;
+    const [a, b, c, d] = dotted[1].split('.').map(Number);
+    text =
+      text.slice(0, -dotted[1].length) +
+      `${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}`;
+  }
+  const halves = text.split('::');
+  if (halves.length > 2) return null;
+  const parse = (part: string) => (part ? part.split(':') : []);
+  const head = parse(halves[0]);
+  const tail = halves.length === 2 ? parse(halves[1]) : [];
+  const missing = 8 - head.length - tail.length;
+  if (halves.length === 2 ? missing < 1 : missing !== 0) return null;
+  const groups = [...head, ...Array<string>(halves.length === 2 ? missing : 0).fill('0'), ...tail];
+  if (groups.some((group) => !/^[0-9a-f]{1,4}$/i.test(group))) return null;
+  return groups.map((group) => parseInt(group, 16));
+}
+
+function ipv4FromGroups(high: number, low: number): string {
+  return [high >> 8, high & 0xff, low >> 8, low & 0xff].join('.');
+}
+
+/**
+ * Returns the IPv4 address that an IPv6 address carries, for the forms a
+ * network can route to that IPv4 host: IPv4-mapped (::ffff:a.b.c.d, also in
+ * hex such as ::ffff:7f00:1), IPv4-compatible (::a.b.c.d), NAT64
+ * (64:ff9b::/96), and 6to4 (2002::/16).
+ */
+function embeddedIpv4(groups: number[]): string | null {
+  const zeros = (from: number, to: number) => groups.slice(from, to).every((group) => group === 0);
+  if (zeros(0, 5) && groups[5] === 0xffff) return ipv4FromGroups(groups[6], groups[7]);
+  if (zeros(0, 6)) return ipv4FromGroups(groups[6], groups[7]);
+  if (groups[0] === 0x64 && groups[1] === 0xff9b && zeros(2, 6)) {
+    return ipv4FromGroups(groups[6], groups[7]);
+  }
+  if (groups[0] === 0x2002) return ipv4FromGroups(groups[1], groups[2]);
+  return null;
+}
+
+/**
+ * True when an address is not a public unicast address. Anything that is not
+ * a valid IP literal counts as private, so the check fails closed.
+ */
+export function isPrivateAddress(address: string): boolean {
+  const literal = address.trim().replace(/^\[|\]$/g, '');
+  const version = isIP(literal.split('%')[0]);
+  if (version === 4) return blockedAddresses.check(literal, 'ipv4');
+  if (version !== 6) return true;
+  const groups = ipv6Groups(literal);
+  if (!groups) return true;
+  const ipv4 = embeddedIpv4(groups);
+  if (ipv4 && blockedAddresses.check(ipv4, 'ipv4')) return true;
+  const canonical = groups.map((group) => group.toString(16)).join(':');
+  return blockedAddresses.check(canonical, 'ipv6');
 }
 
 type HostResolver = (hostname: string) => Promise<Array<{ address: string; family: number }>>;
@@ -249,7 +409,7 @@ async function prepareUrlSource(
     throw new Error('Remote file exceeds the maximum upload size');
   }
 
-  const directory = await mkdtemp(resolve(tmpdir(), 'tododdle-upload-'));
+  const directory = await mkdtemp(resolve(tmpdir(), STAGING_DIRECTORY_PREFIX));
   const sourceName = basename(new URL(response.url).pathname) || 'download';
   const fileName = sanitizeFileName(input.fileName || sourceName);
   const stagedPath = resolve(directory, fileName);
@@ -269,15 +429,20 @@ async function prepareUrlSource(
       createWriteStream(stagedPath, { flags: 'wx', mode: 0o600 })
     );
     if (bytes <= 0) throw new Error('Remote file is empty');
+    const { handle } = await openCheckedFile(stagedPath, maxBytes);
     return {
       filePath: stagedPath,
+      file: handle,
       fileName,
       fileSize: bytes,
       contentType:
         input.contentType ||
         response.headers['content-type']?.split(';')[0] ||
         inferContentType(fileName),
-      cleanup: async () => rm(directory, { recursive: true, force: true }),
+      cleanup: async () => {
+        await handle.close().catch(() => undefined);
+        await rm(directory, { recursive: true, force: true });
+      },
     };
   } catch (error) {
     await rm(directory, { recursive: true, force: true });

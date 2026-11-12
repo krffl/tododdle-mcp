@@ -7,7 +7,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { loadMcpConfig } from '../dist/config.js'
 import { ToDoddleApiClient, ToDoddleApiError } from '../dist/api-client.js'
-import { createToDoddleMcpServer } from '../dist/server.js'
+import { absolutizeLinks, createToDoddleMcpServer } from '../dist/server.js'
 
 const parity = JSON.parse(
   await readFile(new URL('../config/external-api-parity.json', import.meta.url), 'utf8')
@@ -322,7 +322,7 @@ test('serializes project, plan, section, Note, and supporting tools', async () =
     get: async (path, query) => { calls.push({ method: 'GET', path, query }); return { items: [] } },
     post: async (path, body, idempotencyKey) => { calls.push({ method: 'POST', path, body, idempotencyKey }); return { entity: {} } },
     put: async (path, body) => { calls.push({ method: 'PUT', path, body }); return { entity: {} } },
-    patch: async (path, body) => { calls.push({ method: 'PATCH', path, body }); return { entity: {} } },
+    patch: async (path, body, _runContext, query) => { calls.push({ method: 'PATCH', path, body, ...(query ? { query } : {}) }); return { entity: {} } },
     delete: async (path, body) => { calls.push({ method: 'DELETE', path, body }); return { entity: {} } },
   }
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
@@ -362,7 +362,7 @@ test('serializes project, plan, section, Note, and supporting tools', async () =
       { method: 'PUT', path: '/api/external/notes/note-1', body: { projectId: 'project-1', expectedUpdatedAt, title: 'Updated runbook' } },
       { method: 'DELETE', path: '/api/external/notes/note-1', body: { projectId: 'project-1', expectedUpdatedAt } },
       { method: 'POST', path: '/api/external/projects/project-1/artifacts', body: { type: 'SPEC', title: 'Child spec', summary: 'A nested project specification.', parentArtifactId: 'artifact-parent' }, idempotencyKey: 'artifact-key-1' },
-      { method: 'PATCH', path: '/api/external/projects/project-1/artifacts/artifact-1?detail=summary', body: { expectedUpdatedAt, parentArtifactId: null, changeNote: 'Move the artifact to the top level.' } },
+      { method: 'PATCH', path: '/api/external/projects/project-1/artifacts/artifact-1', body: { expectedUpdatedAt, parentArtifactId: null, changeNote: 'Move the artifact to the top level.' }, query: { detail: 'summary' } },
       { method: 'GET', path: '/api/external/projects/project-1/artifacts/artifact-1/revisions', query: undefined },
     ])
   } finally {
@@ -1349,8 +1349,10 @@ test('previews and executes cross-plan task moves', async () => {
 })
 
 test('uploads a local file and attaches it to a task through the hosted API', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'tododdle-mcp-test-'))
-  const filePath = join(directory, 'evidence.txt')
+  const directory = await realpath(await mkdtemp(join(tmpdir(), 'tododdle-mcp-test-')))
+  const stagingDirectory = join(directory, 'tododdle-upload-1')
+  const filePath = join(stagingDirectory, 'evidence.txt')
+  await mkdir(stagingDirectory)
   await writeFile(filePath, 'verified evidence')
   const calls = []
   const uploadApi = {
@@ -1371,8 +1373,10 @@ test('uploads a local file and attaches it to a task through the hosted API', as
       }
       return { entity: { document: { id: 'document-1' } }, requestId: 'request-1' }
     },
-    uploadFile: async (url, headers, uploadedPath, fileSize) => {
-      calls.push({ url, headers, uploadedPath, fileSize, content: await readFile(uploadedPath, 'utf8') })
+    uploadFile: async (url, headers, file, fileSize) => {
+      let content = ''
+      for await (const chunk of file.createReadStream({ start: 0, end: fileSize - 1, autoClose: false })) content += chunk
+      calls.push({ url, headers, fileSize, content })
     },
   }
 
@@ -1393,6 +1397,7 @@ test('uploads a local file and attaches it to a task through the hosted API', as
     assert.equal(calls[2].path, '/api/external/projects/project-1/documents/document-1/finalize')
     assert.deepEqual(calls[2].body, { success: true, taskId: 'task-1' })
     await assert.rejects(readFile(filePath, 'utf8'), { code: 'ENOENT' })
+    await assert.rejects(readFile(stagingDirectory), { code: 'ENOENT' })
   } finally {
     await client.close()
     await server.close()
@@ -1631,8 +1636,8 @@ test('sends artifact section edits and asks for a slim response unless verbose',
   let changedFields = ['content']
   const artifactApi = {
     ...api,
-    patch: async (path, body) => {
-      calls.push({ path, body })
+    patch: async (path, body, _runContext, query) => {
+      calls.push({ path, body, query })
       return { entity: { id: 'brief-1', version: 6 }, changedFields }
     },
   }
@@ -1645,11 +1650,13 @@ test('sends artifact section edits and asks for a slim response unless verbose',
   try {
     const slim = await client.callTool({ name: 'update_project_artifact', arguments: { ...base, contentEdits, baseVersion: 5 } })
     assert.equal(slim.isError, undefined)
-    assert.equal(calls[0].path, '/api/external/projects/project-1/artifacts/brief-1?detail=summary')
+    assert.equal(calls[0].path, '/api/external/projects/project-1/artifacts/brief-1')
+    assert.deepEqual(calls[0].query, { detail: 'summary' })
     assert.deepEqual(calls[0].body, { expectedUpdatedAt: base.expectedUpdatedAt, contentEdits, baseVersion: 5 })
 
     await client.callTool({ name: 'update_project_artifact', arguments: { ...base, title: 'Brief', verbose: true } })
     assert.equal(calls[1].path, '/api/external/projects/project-1/artifacts/brief-1')
+    assert.equal(calls[1].query, undefined)
     assert.equal('verbose' in calls[1].body, false)
 
     // An older server drops contentEdits it does not know and reports success.
@@ -1767,7 +1774,7 @@ test('sends agent feedback only with user approval', async () => {
   try {
     const tool = (await client.listTools()).tools.find(item => item.name === 'send_feedback')
     assert.match(tool?.description ?? '', /get their approval/)
-    assert.match(tool?.description ?? '', /tasks:read/)
+    assert.match(tool?.description ?? '', /Needs `tasks:write`/)
     assert.deepEqual(tool?.inputSchema.required?.sort(), ['details', 'kind', 'summary', 'userConfirmed'])
     const report = { kind: 'BUG', summary: 'Field dropped', details: 'create_ticket returned null for the field.', tool: 'create_ticket', userConfirmed: true }
     const response = await client.callTool({ name: 'send_feedback', arguments: report })
@@ -2209,4 +2216,65 @@ test('rejects invalid release and Testbench input before calling the API', async
     await client.close()
     await server.close()
   }
+})
+
+test('rejects crafted IDs before they reach an API path', async () => {
+  const calls = []
+  const recordingApi = {
+    ...api,
+    get: async (path) => { calls.push(path); return { items: [] } },
+    post: async (path) => { calls.push(path); return { entity: {} } },
+    patch: async (path) => { calls.push(path); return { entity: {} } },
+    delete: async (path) => { calls.push(path); return { entity: {} } },
+  }
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer(recordingApi)
+  const client = new Client({ name: 'id-test', version: '1.0.0' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  try {
+    for (const projectId of ['abc/../../notes/N?', 'a/b', 'a?b', 'a#b', 'a%2Fb', 'a\\b', '..', 'a b', '', 'x'.repeat(201)]) {
+      const result = await client.callTool({ name: 'get_project_context', arguments: { projectId } })
+      assert.equal(result.isError, true, projectId)
+    }
+    const statusLine = await client.callTool({
+      name: 'set_project_status_line',
+      arguments: { projectId: 'abc/../../notes/N?', text: null },
+    })
+    assert.equal(statusLine.isError, true)
+    const ticket = await client.callTool({ name: 'get_ticket', arguments: { projectId: 'eTPg74ysbg', taskId: '../x' } })
+    assert.equal(ticket.isError, true)
+    await assert.rejects(client.readResource({ uri: 'tododdle://tickets/..%2Fnotes' }))
+    assert.deepEqual(calls, [])
+
+    for (const id of ['eTPg74ysbg', '73xK3j5w_S', 'P3YENZ-eyN', 'clx1abc2d0000qwer1234tyui']) {
+      const result = await client.callTool({ name: 'get_project_context', arguments: { projectId: id } })
+      assert.equal(result.isError, undefined, id)
+    }
+    assert.equal(calls.length, 4)
+  } finally {
+    await client.close()
+    await server.close()
+  }
+})
+
+test('absolutizes app links only when they stay on the app origin', () => {
+  const origin = 'https://app.tododdle.com'
+  const result = absolutizeLinks({
+    uiUrl: '/dashboard/project/eTPg74ysbg',
+    nested: [{ href: '/dashboard/tasks/73xK3j5w_S?tab=comments' }],
+    upgradeHref: '/\\evil.example/x',
+    other: { href: '/\\\\evil.example/x' },
+    protocolRelative: { href: '//evil.example/x' },
+    absolute: { href: 'https://elsewhere.example/x' },
+    notALink: '/dashboard/raw',
+  }, origin)
+  assert.deepEqual(result, {
+    uiUrl: 'https://app.tododdle.com/dashboard/project/eTPg74ysbg',
+    nested: [{ href: 'https://app.tododdle.com/dashboard/tasks/73xK3j5w_S?tab=comments' }],
+    upgradeHref: '/\\evil.example/x',
+    other: { href: '/\\\\evil.example/x' },
+    protocolRelative: { href: '//evil.example/x' },
+    absolute: { href: 'https://elsewhere.example/x' },
+    notALink: '/dashboard/raw',
+  })
 })

@@ -1,9 +1,9 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, open, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
-import { ToDoddleApiClient, ToDoddleApiError } from '../dist/api-client.js'
+import { ToDoddleApiClient, ToDoddleApiError, resolveApiPath } from '../dist/api-client.js'
 import {
   MCP_COMPATIBILITY_HEADER,
   MCP_COMPATIBILITY_LEVEL,
@@ -196,18 +196,70 @@ test('reports direct-storage upload failures without parsing untrusted bodies', 
   const directory = await mkdtemp(join(tmpdir(), 'tododdle-api-upload-'))
   const filePath = join(directory, 'upload.txt')
   await writeFile(filePath, 'upload')
+  const file = await open(filePath, 'r')
   const originalFetch = globalThis.fetch
-  globalThis.fetch = async () => new Response('too large', { status: 413 })
+  let sent = ''
+  globalThis.fetch = async (_url, init) => {
+    for await (const chunk of init.body) sent += chunk
+    return new Response('too large', { status: 413 })
+  }
 
   try {
     await assert.rejects(
       () => new ToDoddleApiClient(config).uploadFile(
-        'https://storage.example/upload', { 'Content-Type': 'text/plain' }, filePath, 6,
+        'https://storage.example/upload', { 'Content-Type': 'text/plain' }, file, 6,
       ),
       /Direct upload failed \(413\)/,
     )
+    assert.equal(sent, 'upload')
+    // The caller owns the handle; uploadFile leaves it open.
+    assert.equal((await file.stat()).size, 6)
   } finally {
     globalThis.fetch = originalFetch
+    await file.close()
     await rm(directory, { recursive: true, force: true })
+  }
+})
+
+test('refuses API paths that could leave the intended route', async () => {
+  const base = 'https://app.tododdle.com'
+  assert.equal(
+    resolveApiPath('/api/external/projects/eTPg74ysbg/tasks/73xK3j5w_S', base).href,
+    'https://app.tododdle.com/api/external/projects/eTPg74ysbg/tasks/73xK3j5w_S',
+  )
+  for (const path of [
+    '/api/external/projects/abc/../../notes/N?/status-line',
+    '/api/external/projects/abc/..',
+    '/api/external/projects/abc?x=1',
+    '/api/external/projects/abc#frag',
+    '/api/external/projects/abc%2F..%2Fnotes',
+    '/api/external/projects/abc%2f..%2fnotes',
+    '/api/external/projects/%2e%2e/notes',
+    '/api/external/projects/abc\\notes',
+    '//evil.example/api/external/projects',
+    'api/external/projects',
+    'https://evil.example/api/external/projects',
+    '/api/external/projects/a b',
+  ]) {
+    assert.throws(() => resolveApiPath(path, base), /Refusing unsafe ToDoddle API path/, path)
+  }
+
+  const originalFetch = globalThis.fetch
+  const requested = []
+  globalThis.fetch = async input => {
+    requested.push(String(input))
+    return new Response(JSON.stringify({ access_token: 'token', expires_in: 3600 }), { status: 200 })
+  }
+  try {
+    const client = new ToDoddleApiClient(config)
+    await assert.rejects(
+      client.delete('/api/external/projects/abc/../../notes/N?/status-line', undefined),
+      /Refusing unsafe ToDoddle API path/,
+    )
+    assert.equal(requested.some(url => url.includes('/notes/')), false)
+    await client.patch('/api/external/projects/p1/artifacts/a1', {}, undefined, { detail: 'summary' })
+    assert.equal(requested.at(-1), 'https://www.tododdle.com/api/external/projects/p1/artifacts/a1?detail=summary')
+  } finally {
+    globalThis.fetch = originalFetch
   }
 })

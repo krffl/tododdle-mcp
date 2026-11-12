@@ -352,9 +352,11 @@ Omit `projectId` to work with workspace Notes. Supply `projectId` to work with N
 
 Each tool accepts either an approved local `filePath` or an HTTPS `sourceUrl`. A missing file, or a file outside the system temporary directory, returns a message that names that directory. ToDoddle stores SVG, HTML, and other active content as `application/octet-stream` so it can never run in a browser; when the stored type differs from the requested one, the upload result includes a `notice` that says so. Image uploads (PNG, JPEG, GIF, WebP, and SVG) also return `embedMarkdown`, such as `![map.png](/api/documents/<id>/embed)`, to paste into a Note or Context; an SVG embeds through its PNG rendering at `/thumbnail`. The image shows only to people who can open that document. Local files must be regular files in the system temporary directory (`os.tmpdir()`, resolved through symlinks), and the current user must own them. The MCP rejects symlinks, directories, devices, and files owned by another user. Files stream directly from this local MCP process to ToDoddle's short-lived Bunny upload URL; file bodies are never placed in MCP JSON messages.
 
-If an agent copies a source file into a dedicated ToDoddle upload directory only to satisfy the local path restriction, it should remove that temporary copy after the tool confirms success. It should retain the copy after a failed or uncertain upload so the upload can be retried. It must never remove the original source or a pre-existing file. Temporary files that the MCP creates for HTTPS sources are removed automatically.
+The MCP opens a local file once, with `O_NOFOLLOW`, and checks the open descriptor: it must be a regular file, owned by the current user, and within the size limit. It then streams the bytes from that descriptor. If the path is swapped for a symlink or another file after the checks, the upload still sends the checked file.
 
-For a pasted or clipboard image, create a private temporary directory in the system temporary directory (for example with `mktemp -d`). Save or copy the image attachment there with a suitable image extension. Never alter the original clipboard attachment. The MCP removes the staged file after confirmed success. It keeps the file after a failed or uncertain upload so the agent can retry and report the path.
+To stage a copy, create a staging directory with `mktemp -d "${TMPDIR:-/tmp}/tododdle-upload-XXXXXX"` and copy the file into it. After the tool confirms success, the MCP deletes a local file and its empty parent directory only when the file is directly in a `tododdle-upload-*` directory in the system temporary directory, and only if the path still names the file it uploaded. It never deletes any other file. An agent that staged a copy anywhere else should remove that copy itself after confirmed success. Keep the copy after a failed or uncertain upload so the upload can be retried. Never remove the original source or a pre-existing file. Temporary files that the MCP creates for HTTPS sources are removed automatically.
+
+For a pasted or clipboard image, create a staging directory with `mktemp -d "${TMPDIR:-/tmp}/tododdle-upload-XXXXXX"`. Save or copy the image attachment there with a suitable image extension. Never alter the original clipboard attachment. The MCP removes the staged file after confirmed success. It keeps the file after a failed or uncertain upload so the agent can retry and report the path.
 
 Remote clients use `begin_upload` and `complete_upload`. Call `begin_upload` with file metadata and an idempotency key. Upload the file bytes from the user's device directly to the returned short-lived URL with the returned headers. Then call `complete_upload` with the document ID and a new idempotency key. Do not print, log, or store the signed URL. A client that cannot send the direct HTTPS upload cannot use remote attachments. The hosted gateway and Vercel never receive or stage the file bytes.
 
@@ -384,7 +386,7 @@ Common scopes include:
 - `releases:read` and `releases:write`
 - `testbench:read` and `testbench:write`
 
-Uploading a project document requires `projects:read` and `documents:write`. Attaching a new upload to a task also requires `tasks:write`.
+Uploading a project document requires `projects:read` and `documents:write`. Attaching a new upload to a task also requires `tasks:write`. `send_feedback` requires `tasks:write` because it opens a support case.
 
 ## Environment
 
@@ -432,7 +434,7 @@ The npm `prepack` lifecycle builds `dist/` automatically. `prepublishOnly` runs 
 ## Release Safety
 
 - Review `npm pack --dry-run` and verify that only the declared runtime, plugin, skill, examples, parity manifest, documentation, license, and package metadata are present.
-- Publish from a tagged release with npm trusted publishing/provenance where available.
+- Publish from a tagged release with npm trusted publishing/provenance where available. The publish workflow has two jobs. `build` has read-only permissions: it checks that the release tag is on `main`, runs `npm ci`, formatting, types, tests with coverage, and the audit, then packs the tarball. `publish` has the `id-token: write` permission only: it downloads that tarball, checks its SHA-256, and runs `npm publish <tarball> --provenance --ignore-scripts` without installing anything.
 - Treat tool removal, renaming, or incompatible input changes as major releases.
 - Keep generated ToDoddle connection snippets pinned to a tested package version.
 
@@ -477,6 +479,15 @@ Adds release tools (`list_releases`, `get_release`, `create_release`, `update_re
 This release also includes changes made since 3.7.0: the read-only `list_security_events` tool (`security:read`); the system temporary directory as the default upload root, with per-file ownership checks and validated DNS answers pinned on HTTPS upload fetches; Agent Run context on move, archive, attribute, and time tools; a pending-approval result for customer-visible Support replies; and GitHub Actions pinned to commit SHAs.
 
 The release raises `@modelcontextprotocol/sdk` to `^1.32.1` to fix [GHSA-6qxp-vccf-f47h](https://github.com/advisories/GHSA-6qxp-vccf-f47h), where SDK versions before 1.31.0 could send OAuth client credentials to an authorization server chosen by the MCP server.
+
+### 3.17.0 release
+
+- Every ID that goes into an API path must be a ToDoddle ID: letters, digits, `_`, or `-` (up to 200 characters). Tools reject other values before they call the API. The API client also refuses any path with `..`, `?`, `#`, `\`, or an encoded `/`, `\`, or `.`, and any path that resolves to a different route. Query strings go through the client's `query` argument. `ToDoddleApi.patch` takes an optional fourth `query` argument, which `update_project_artifact` uses for `detail=summary`. A hosted gateway that implements `ToDoddleApi` must pass that argument on.
+- Link fields (`uiUrl`, `href`, `upgradeHref`) become absolute only when the result stays on the app origin. A value such as `/\evil.example/x` is left unchanged.
+- HTTPS upload sources now reject more special-purpose addresses: `0.0.0.0/8`, `100.64.0.0/10`, `192.0.0.0/24`, `198.18.0.0/15`, `224.0.0.0/4`, `240.0.0.0/4` (with `255.255.255.255`), documentation ranges, and all of `fe80::/10`, `fec0::/10`, `fc00::/7`, and `ff00::/8`. IPv6 forms that carry an IPv4 address (mapped, including hex such as `::ffff:7f00:1`; compatible; NAT64 `64:ff9b::/96`; and 6to4 `2002::/16`) are checked as that IPv4 address. A value that is not an IP address is treated as private.
+- Local uploads open the file once with `O_NOFOLLOW` and stream from the checked descriptor, so a path swap after the checks cannot change what is sent. `ToDoddleApi.uploadFile` now takes an open `FileHandle` instead of a path. After a confirmed upload, the MCP deletes a local file only when it is directly in a `tododdle-upload-*` directory in the system temporary directory (for example one made with `mktemp -d "${TMPDIR:-/tmp}/tododdle-upload-XXXXXX"`). Before, it deleted any uploaded file in the temporary directory.
+- `send_feedback` needs `tasks:write`, not `tasks:read`, because it opens a support case. The ToDoddle API and the hosted gateway enforce the new scope.
+- The publish workflow is split into a read-only `build` job and a `publish` job that holds `id-token: write`. The npm token never sees `npm ci` or the test run, and a release tag that is not on `main` fails the workflow.
 
 ### 3.16.0 release
 
