@@ -480,7 +480,7 @@ This release also includes changes made since 3.7.0: the read-only `list_securit
 
 The release raises `@modelcontextprotocol/sdk` to `^1.32.1` to fix [GHSA-6qxp-vccf-f47h](https://github.com/advisories/GHSA-6qxp-vccf-f47h), where SDK versions before 1.31.0 could send OAuth client credentials to an authorization server chosen by the MCP server.
 
-### Unreleased
+### 3.17.0 release
 
 - Every ID that goes into an API path must be a ToDoddle ID: letters, digits, `_`, or `-` (up to 200 characters). Tools reject other values before they call the API. The API client also refuses any path with `..`, `?`, `#`, `\`, or an encoded `/`, `\`, or `.`, and any path that resolves to a different route. Query strings go through the client's `query` argument. `ToDoddleApi.patch` takes an optional fourth `query` argument, which `update_project_artifact` uses for `detail=summary`. A hosted gateway that implements `ToDoddleApi` must pass that argument on.
 - Link fields (`uiUrl`, `href`, `upgradeHref`) become absolute only when the result stays on the app origin. A value such as `/\evil.example/x` is left unchanged.
