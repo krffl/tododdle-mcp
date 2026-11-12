@@ -386,7 +386,7 @@ Common scopes include:
 - `releases:read` and `releases:write`
 - `testbench:read` and `testbench:write`
 
-Uploading a project document requires `projects:read` and `documents:write`. Attaching a new upload to a task also requires `tasks:write`.
+Uploading a project document requires `projects:read` and `documents:write`. Attaching a new upload to a task also requires `tasks:write`. `send_feedback` requires `tasks:write` because it opens a support case.
 
 ## Environment
 
@@ -486,6 +486,7 @@ The release raises `@modelcontextprotocol/sdk` to `^1.32.1` to fix [GHSA-6qxp-vc
 - Link fields (`uiUrl`, `href`, `upgradeHref`) become absolute only when the result stays on the app origin. A value such as `/\evil.example/x` is left unchanged.
 - HTTPS upload sources now reject more special-purpose addresses: `0.0.0.0/8`, `100.64.0.0/10`, `192.0.0.0/24`, `198.18.0.0/15`, `224.0.0.0/4`, `240.0.0.0/4` (with `255.255.255.255`), documentation ranges, and all of `fe80::/10`, `fec0::/10`, `fc00::/7`, and `ff00::/8`. IPv6 forms that carry an IPv4 address (mapped, including hex such as `::ffff:7f00:1`; compatible; NAT64 `64:ff9b::/96`; and 6to4 `2002::/16`) are checked as that IPv4 address. A value that is not an IP address is treated as private.
 - Local uploads open the file once with `O_NOFOLLOW` and stream from the checked descriptor, so a path swap after the checks cannot change what is sent. `ToDoddleApi.uploadFile` now takes an open `FileHandle` instead of a path. After a confirmed upload, the MCP deletes a local file only when it is directly in a `tododdle-upload-*` directory in the system temporary directory (for example one made with `mktemp -d "${TMPDIR:-/tmp}/tododdle-upload-XXXXXX"`). Before, it deleted any uploaded file in the temporary directory.
+- `send_feedback` needs `tasks:write`, not `tasks:read`, because it opens a support case. The ToDoddle API and the hosted gateway enforce the new scope.
 
 ### 3.16.0 release
 

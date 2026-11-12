@@ -1774,7 +1774,7 @@ test('sends agent feedback only with user approval', async () => {
   try {
     const tool = (await client.listTools()).tools.find(item => item.name === 'send_feedback')
     assert.match(tool?.description ?? '', /get their approval/)
-    assert.match(tool?.description ?? '', /tasks:read/)
+    assert.match(tool?.description ?? '', /Needs `tasks:write`/)
     assert.deepEqual(tool?.inputSchema.required?.sort(), ['details', 'kind', 'summary', 'userConfirmed'])
     const report = { kind: 'BUG', summary: 'Field dropped', details: 'create_ticket returned null for the field.', tool: 'create_ticket', userConfirmed: true }
     const response = await client.callTool({ name: 'send_feedback', arguments: report })
