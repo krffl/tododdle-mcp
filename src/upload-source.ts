@@ -4,7 +4,7 @@ import { lookup as dnsLookup } from 'node:dns/promises';
 import type { LookupAddress } from 'node:dns';
 import type { IncomingMessage } from 'node:http';
 import { request as httpsRequest } from 'node:https';
-import { isIP } from 'node:net';
+import { BlockList, isIP } from 'node:net';
 import { basename, dirname, extname, relative, resolve, sep } from 'node:path';
 import { tmpdir } from 'node:os';
 import { Transform } from 'node:stream';
@@ -114,28 +114,107 @@ async function prepareLocalSource(
   };
 }
 
-function isPrivateAddress(address: string): boolean {
-  const normalized = address.toLowerCase();
-  if (normalized.startsWith('::ffff:')) return isPrivateAddress(normalized.slice(7));
-  if (
-    normalized === '::1' ||
-    normalized === '::' ||
-    normalized.startsWith('fe80:') ||
-    normalized.startsWith('fc') ||
-    normalized.startsWith('fd')
-  )
-    return true;
-  if (isIP(address) !== 4) return false;
-  const [a, b] = address.split('.').map(Number);
-  return (
-    a === 10 ||
-    a === 127 ||
-    a === 0 ||
-    (a === 169 && b === 254) ||
-    (a === 172 && b >= 16 && b <= 31) ||
-    (a === 192 && b === 168) ||
-    (a === 100 && b >= 64 && b <= 127)
-  );
+const blockedAddresses = new BlockList();
+// IPv4 special-purpose ranges (RFC 6890 and the IANA registry) that must never
+// be fetched: "this network", private, shared/CGNAT, loopback, link-local,
+// IETF protocol assignments, documentation, benchmarking, multicast, and
+// reserved (which includes 255.255.255.255).
+for (const [network, prefix] of [
+  ['0.0.0.0', 8],
+  ['10.0.0.0', 8],
+  ['100.64.0.0', 10],
+  ['127.0.0.0', 8],
+  ['169.254.0.0', 16],
+  ['172.16.0.0', 12],
+  ['192.0.0.0', 24],
+  ['192.0.2.0', 24],
+  ['192.88.99.0', 24],
+  ['192.168.0.0', 16],
+  ['198.18.0.0', 15],
+  ['198.51.100.0', 24],
+  ['203.0.113.0', 24],
+  ['224.0.0.0', 4],
+  ['240.0.0.0', 4],
+] as const) {
+  blockedAddresses.addSubnet(network, prefix, 'ipv4');
+}
+// IPv6 ranges that are not public unicast. Forms that embed an IPv4 address
+// (mapped, compatible, NAT64, 6to4) are checked as that IPv4 address instead.
+for (const [network, prefix] of [
+  // Unspecified, loopback, and the deprecated IPv4-compatible block.
+  ['::', 96],
+  ['::1', 128],
+  ['64:ff9b:1::', 48],
+  ['100::', 64],
+  ['2001::', 32],
+  ['2001:db8::', 32],
+  ['fc00::', 7],
+  ['fe80::', 10],
+  ['fec0::', 10],
+  ['ff00::', 8],
+] as const) {
+  blockedAddresses.addSubnet(network, prefix, 'ipv6');
+}
+
+/** Expands an IPv6 literal into eight 16-bit groups, or null when it is not valid. */
+function ipv6Groups(address: string): number[] | null {
+  let text = address.split('%')[0];
+  const dotted = /(\d+\.\d+\.\d+\.\d+)$/.exec(text);
+  if (dotted) {
+    if (isIP(dotted[1]) !== 4) return null;
+    const [a, b, c, d] = dotted[1].split('.').map(Number);
+    text =
+      text.slice(0, -dotted[1].length) +
+      `${((a << 8) | b).toString(16)}:${((c << 8) | d).toString(16)}`;
+  }
+  const halves = text.split('::');
+  if (halves.length > 2) return null;
+  const parse = (part: string) => (part ? part.split(':') : []);
+  const head = parse(halves[0]);
+  const tail = halves.length === 2 ? parse(halves[1]) : [];
+  const missing = 8 - head.length - tail.length;
+  if (halves.length === 2 ? missing < 1 : missing !== 0) return null;
+  const groups = [...head, ...Array<string>(halves.length === 2 ? missing : 0).fill('0'), ...tail];
+  if (groups.some((group) => !/^[0-9a-f]{1,4}$/i.test(group))) return null;
+  return groups.map((group) => parseInt(group, 16));
+}
+
+function ipv4FromGroups(high: number, low: number): string {
+  return [high >> 8, high & 0xff, low >> 8, low & 0xff].join('.');
+}
+
+/**
+ * Returns the IPv4 address that an IPv6 address carries, for the forms a
+ * network can route to that IPv4 host: IPv4-mapped (::ffff:a.b.c.d, also in
+ * hex such as ::ffff:7f00:1), IPv4-compatible (::a.b.c.d), NAT64
+ * (64:ff9b::/96), and 6to4 (2002::/16).
+ */
+function embeddedIpv4(groups: number[]): string | null {
+  const zeros = (from: number, to: number) => groups.slice(from, to).every((group) => group === 0);
+  if (zeros(0, 5) && groups[5] === 0xffff) return ipv4FromGroups(groups[6], groups[7]);
+  if (zeros(0, 6)) return ipv4FromGroups(groups[6], groups[7]);
+  if (groups[0] === 0x64 && groups[1] === 0xff9b && zeros(2, 6)) {
+    return ipv4FromGroups(groups[6], groups[7]);
+  }
+  if (groups[0] === 0x2002) return ipv4FromGroups(groups[1], groups[2]);
+  return null;
+}
+
+/**
+ * True when an address is not a public unicast address. Anything that is not
+ * a valid IP literal counts as private, so the check fails closed.
+ */
+export function isPrivateAddress(address: string): boolean {
+  const literal = address.trim().replace(/^\[|\]$/g, '');
+  const version = isIP(literal.split('%')[0]);
+  if (version === 4) return blockedAddresses.check(literal, 'ipv4');
+  if (version !== 6) return true;
+  const groups = ipv6Groups(literal);
+  if (!groups) return true;
+  const ipv4 = embeddedIpv4(groups);
+  if (ipv4 && blockedAddresses.check(ipv4, 'ipv4')) return true;
+  const canonical = groups.map((group) => group.toString(16)).join(':');
+  return blockedAddresses.check(canonical, 'ipv6');
 }
 
 type HostResolver = (hostname: string) => Promise<Array<{ address: string; family: number }>>;

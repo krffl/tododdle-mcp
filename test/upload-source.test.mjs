@@ -7,6 +7,7 @@ import { getDefaultManagedUploadRoot } from '../dist/config.js'
 import {
   createValidatingLookup,
   fetchWithSafeRedirects,
+  isPrivateAddress,
   prepareUploadSource,
 } from '../dist/upload-source.js'
 
@@ -196,3 +197,49 @@ test('URL fetch connects only through the validating lookup and rejects private 
   await assert.rejects(fetchWithSafeRedirects('https://[::1]/a'), /private or reserved/)
 })
 
+
+const privateAddressCases = [
+  ['0.0.0.0/8', ['0.0.0.0', '0.255.255.255']],
+  ['10.0.0.0/8', ['10.0.0.1', '10.255.255.255']],
+  ['100.64.0.0/10', ['100.64.0.1', '100.127.255.254']],
+  ['127.0.0.0/8', ['127.0.0.1', '127.255.255.255']],
+  ['169.254.0.0/16', ['169.254.169.254']],
+  ['172.16.0.0/12', ['172.16.0.1', '172.31.255.255']],
+  ['192.0.0.0/24', ['192.0.0.8', '192.0.0.255']],
+  ['192.0.2.0/24', ['192.0.2.1']],
+  ['192.168.0.0/16', ['192.168.1.1']],
+  ['198.18.0.0/15', ['198.18.0.1', '198.19.255.255']],
+  ['198.51.100.0/24 and 203.0.113.0/24', ['198.51.100.7', '203.0.113.9']],
+  ['224.0.0.0/4', ['224.0.0.1', '239.255.255.250']],
+  ['240.0.0.0/4', ['240.0.0.1', '250.1.2.3']],
+  ['255.255.255.255', ['255.255.255.255']],
+  ['IPv6 unspecified and loopback', ['::', '::1', '[::1]', '0:0:0:0:0:0:0:1']],
+  ['IPv4-mapped', ['::ffff:127.0.0.1', '::ffff:7f00:1', '[::ffff:7f00:1]', '::ffff:a9fe:a9fe', '0:0:0:0:0:ffff:c0a8:101']],
+  ['IPv4-compatible', ['::7f00:1', '::127.0.0.1', '::808:808']],
+  ['NAT64 64:ff9b::/96', ['64:ff9b::7f00:1', '64:ff9b::10.0.0.1', '64:ff9b::a9fe:a9fe']],
+  ['local NAT64 64:ff9b:1::/48', ['64:ff9b:1::808:808']],
+  ['6to4 2002::/16', ['2002:7f00:1::', '2002:a00:1::1', '2002:c0a8:101::1']],
+  ['Teredo and documentation', ['2001::1', '2001:db8::1']],
+  ['unique local fc00::/7', ['fc00::1', 'fd12:3456::1']],
+  ['link-local fe80::/10', ['fe80::1', 'fe9a::1', 'febf:ffff::1', 'fe80::1%en0']],
+  ['site-local fec0::/10', ['fec0::1', 'feff::1']],
+  ['multicast ff00::/8', ['ff02::1']],
+  ['not an IP literal', ['', 'localhost', 'example.com', '1.2.3', '::ffff:999.0.0.1', '1::2::3']],
+]
+
+for (const [range, addresses] of privateAddressCases) {
+  test(`private address check blocks ${range}`, () => {
+    for (const address of addresses) assert.equal(isPrivateAddress(address), true, address)
+  })
+}
+
+test('private address check allows public unicast addresses', () => {
+  for (const address of [
+    '1.1.1.1', '8.8.8.8', '93.184.216.34', '100.63.255.255', '100.128.0.0', '172.15.255.255',
+    '172.32.0.0', '192.0.1.1', '198.17.255.255', '198.20.0.0', '223.255.255.255',
+    '2606:4700:4700::1111', '2a00:1450:4009:81f::200e', '::ffff:8.8.8.8', '::ffff:808:808',
+    '64:ff9b::808:808', '2002:808:808::1', 'fe7f::1', 'fbff::1',
+  ]) {
+    assert.equal(isPrivateAddress(address), false, address)
+  }
+})
