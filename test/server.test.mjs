@@ -1349,8 +1349,10 @@ test('previews and executes cross-plan task moves', async () => {
 })
 
 test('uploads a local file and attaches it to a task through the hosted API', async () => {
-  const directory = await mkdtemp(join(tmpdir(), 'tododdle-mcp-test-'))
-  const filePath = join(directory, 'evidence.txt')
+  const directory = await realpath(await mkdtemp(join(tmpdir(), 'tododdle-mcp-test-')))
+  const stagingDirectory = join(directory, 'tododdle-upload-1')
+  const filePath = join(stagingDirectory, 'evidence.txt')
+  await mkdir(stagingDirectory)
   await writeFile(filePath, 'verified evidence')
   const calls = []
   const uploadApi = {
@@ -1371,8 +1373,10 @@ test('uploads a local file and attaches it to a task through the hosted API', as
       }
       return { entity: { document: { id: 'document-1' } }, requestId: 'request-1' }
     },
-    uploadFile: async (url, headers, uploadedPath, fileSize) => {
-      calls.push({ url, headers, uploadedPath, fileSize, content: await readFile(uploadedPath, 'utf8') })
+    uploadFile: async (url, headers, file, fileSize) => {
+      let content = ''
+      for await (const chunk of file.createReadStream({ start: 0, end: fileSize - 1, autoClose: false })) content += chunk
+      calls.push({ url, headers, fileSize, content })
     },
   }
 
@@ -1393,6 +1397,7 @@ test('uploads a local file and attaches it to a task through the hosted API', as
     assert.equal(calls[2].path, '/api/external/projects/project-1/documents/document-1/finalize')
     assert.deepEqual(calls[2].body, { success: true, taskId: 'task-1' })
     await assert.rejects(readFile(filePath, 'utf8'), { code: 'ENOENT' })
+    await assert.rejects(readFile(stagingDirectory), { code: 'ENOENT' })
   } finally {
     await client.close()
     await server.close()

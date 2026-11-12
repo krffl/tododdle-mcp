@@ -593,7 +593,7 @@ async function uploadDocument(
         idempotencyKey
       )
     );
-    await api.uploadFile(session.uploadUrl, session.headers, prepared.filePath, prepared.fileSize);
+    await api.uploadFile(session.uploadUrl, session.headers, prepared.file, prepared.fileSize);
     bytesUploaded = true;
     const result = await api.post(
       `/api/external/projects/${input.projectId}/documents/${session.documentId}/finalize`,

@@ -1,5 +1,14 @@
-import { createWriteStream } from 'node:fs';
-import { lstat, mkdtemp, realpath, rm, rmdir } from 'node:fs/promises';
+import { constants as fsConstants, createWriteStream, type Stats } from 'node:fs';
+import {
+  lstat,
+  mkdtemp,
+  open,
+  realpath,
+  rm,
+  rmdir,
+  unlink,
+  type FileHandle,
+} from 'node:fs/promises';
 import { lookup as dnsLookup } from 'node:dns/promises';
 import type { LookupAddress } from 'node:dns';
 import type { IncomingMessage } from 'node:http';
@@ -21,7 +30,10 @@ export interface UploadSourceInput {
 }
 
 export interface PreparedUpload {
+  /** Path for messages only. Read the bytes from `file`, never by reopening the path. */
   filePath: string;
+  /** Open, read-only handle to the checked file. `cleanup` closes it. */
+  file: FileHandle;
   fileName: string;
   fileSize: number;
   contentType: string;
@@ -63,6 +75,63 @@ function sanitizeFileName(value: string): string {
 }
 
 /**
+ * A directory directly in the managed root whose name starts with this prefix
+ * holds files staged for upload. The MCP creates one for each HTTPS source, and
+ * an agent can create one with
+ * `mktemp -d "${TMPDIR:-/tmp}/tododdle-upload-XXXXXX"`. After a confirmed
+ * upload, the MCP deletes a local file only when it is in such a directory.
+ */
+export const STAGING_DIRECTORY_PREFIX = 'tododdle-upload-';
+
+// O_NOFOLLOW refuses a symlink as the final path component at open time, so a
+// swap after the checks cannot redirect the read. O_NONBLOCK stops a FIFO swap
+// from blocking the open; fstat then rejects it.
+const OPEN_FLAGS =
+  fsConstants.O_RDONLY | (fsConstants.O_NOFOLLOW ?? 0) | (fsConstants.O_NONBLOCK ?? 0);
+
+function isManagedStagingFile(filePath: string, managedRoot: string): boolean {
+  const directory = dirname(filePath);
+  return (
+    dirname(directory) === managedRoot && basename(directory).startsWith(STAGING_DIRECTORY_PREFIX)
+  );
+}
+
+function sameFile(a: Stats, b: Stats): boolean {
+  return a.dev === b.dev && a.ino === b.ino;
+}
+
+/**
+ * Opens a file once and checks the open descriptor, not the path: it must be a
+ * regular file owned by the current user and within the size limit. The caller
+ * streams from the returned handle and must close it.
+ */
+async function openCheckedFile(
+  filePath: string,
+  maxBytes: number
+): Promise<{ handle: FileHandle; stats: Stats }> {
+  const handle = await open(filePath, OPEN_FLAGS).catch((error: NodeJS.ErrnoException) => {
+    if (error.code === 'ELOOP' || error.code === 'EMLINK') {
+      throw new Error('Local upload source must be a regular file');
+    }
+    throw error;
+  });
+  try {
+    const stats = await handle.stat();
+    if (!stats.isFile()) throw new Error('Local upload source must be a regular file');
+    if (process.platform !== 'win32' && typeof process.getuid === 'function') {
+      if (stats.uid !== process.getuid()) {
+        throw new Error('Local upload source must be owned by the current user');
+      }
+    }
+    if (stats.size <= 0 || stats.size > maxBytes) throw new Error('Local file size is not allowed');
+    return { handle, stats };
+  } catch (error) {
+    await handle.close().catch(() => undefined);
+    throw error;
+  }
+}
+
+/**
  * Local uploads come only from the system temporary directory (the managed
  * root). The old TODODDLE_UPLOAD_ROOTS allow-list is gone.
  */
@@ -89,26 +158,38 @@ async function prepareLocalSource(
   if (!resolvedManagedRoot || !isInsideRoot(resolvedFile, resolvedManagedRoot)) {
     throw new Error(`Local file must be inside ${allowedLocations}. Copy it there, then retry.`);
   }
-  const stats = await lstat(resolvedFile);
-  if (!stats.isFile()) throw new Error('Local upload source must be a regular file');
-  if (process.platform !== 'win32' && typeof process.getuid === 'function') {
-    if (stats.uid !== process.getuid()) {
-      throw new Error('Local upload source must be owned by the current user');
+  const { handle, stats } = await openCheckedFile(resolvedFile, maxBytes);
+  try {
+    // The descriptor must still be the file at the checked path inside the root.
+    const [currentPath, currentStats] = await Promise.all([
+      realpath(resolvedFile),
+      lstat(resolvedFile),
+    ]);
+    if (currentPath !== resolvedFile || !sameFile(currentStats, stats)) {
+      throw new Error('Local upload source changed while it was being checked');
     }
+  } catch (error) {
+    await handle.close().catch(() => undefined);
+    throw error;
   }
-  if (stats.size <= 0 || stats.size > maxBytes) throw new Error('Local file size is not allowed');
   const fileName = sanitizeFileName(input.fileName || basename(resolvedFile));
+  const managed = isManagedStagingFile(resolvedFile, resolvedManagedRoot);
   return {
     filePath: resolvedFile,
+    file: handle,
     fileName,
     fileSize: stats.size,
     contentType: input.contentType || inferContentType(fileName),
     cleanup: async (uploadConfirmed = false) => {
-      if (!uploadConfirmed) return;
-      await rm(resolvedFile, { force: true });
-      const stagingDirectory = dirname(resolvedFile);
-      if (stagingDirectory !== resolvedManagedRoot) {
-        await rmdir(stagingDirectory).catch(() => undefined);
+      try {
+        // Delete only a file this flow staged, and only the same file that was uploaded.
+        if (!uploadConfirmed || !managed) return;
+        const current = await lstat(resolvedFile).catch(() => null);
+        if (!current || !sameFile(current, stats)) return;
+        await unlink(resolvedFile);
+        await rmdir(dirname(resolvedFile)).catch(() => undefined);
+      } finally {
+        await handle.close().catch(() => undefined);
       }
     },
   };
@@ -328,7 +409,7 @@ async function prepareUrlSource(
     throw new Error('Remote file exceeds the maximum upload size');
   }
 
-  const directory = await mkdtemp(resolve(tmpdir(), 'tododdle-upload-'));
+  const directory = await mkdtemp(resolve(tmpdir(), STAGING_DIRECTORY_PREFIX));
   const sourceName = basename(new URL(response.url).pathname) || 'download';
   const fileName = sanitizeFileName(input.fileName || sourceName);
   const stagedPath = resolve(directory, fileName);
@@ -348,15 +429,20 @@ async function prepareUrlSource(
       createWriteStream(stagedPath, { flags: 'wx', mode: 0o600 })
     );
     if (bytes <= 0) throw new Error('Remote file is empty');
+    const { handle } = await openCheckedFile(stagedPath, maxBytes);
     return {
       filePath: stagedPath,
+      file: handle,
       fileName,
       fileSize: bytes,
       contentType:
         input.contentType ||
         response.headers['content-type']?.split(';')[0] ||
         inferContentType(fileName),
-      cleanup: async () => rm(directory, { recursive: true, force: true }),
+      cleanup: async () => {
+        await handle.close().catch(() => undefined);
+        await rm(directory, { recursive: true, force: true });
+      },
     };
   } catch (error) {
     await rm(directory, { recursive: true, force: true });

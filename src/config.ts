@@ -13,7 +13,8 @@ export interface McpConfig {
 /**
  * The managed upload root is the system temporary directory itself, resolved through symlinks
  * (for example macOS /var/folders/.../T becomes /private/var/folders/.../T). No subfolder is
- * created. Safety comes from the per-file checks in prepareUploadSource.
+ * created. Safety comes from the per-file checks in prepareUploadSource. Cleanup deletes only
+ * files in a tododdle-upload-* directory directly inside this root.
  */
 export function getDefaultManagedUploadRoot(temporaryDirectory = tmpdir()): string {
   try {

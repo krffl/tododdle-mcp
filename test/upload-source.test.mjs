@@ -9,6 +9,7 @@ import {
   fetchWithSafeRedirects,
   isPrivateAddress,
   prepareUploadSource,
+  STAGING_DIRECTORY_PREFIX,
 } from '../dist/upload-source.js'
 
 test('local uploads need the managed temp root and ignore any other folder', async () => {
@@ -31,7 +32,7 @@ test('local uploads need the managed temp root and ignore any other folder', asy
 test('managed root is the real system temp directory and cleans up only after confirmed success', async () => {
   const managedRoot = getDefaultManagedUploadRoot()
   assert.equal(managedRoot, await realpath(tmpdir()))
-  const stagingDirectory = await mkdtemp(join(tmpdir(), 'tododdle-managed-test-'))
+  const stagingDirectory = await mkdtemp(join(tmpdir(), STAGING_DIRECTORY_PREFIX))
   const filePath = join(stagingDirectory, 'file.txt')
   try {
     await writeFile(filePath, 'hello', { mode: 0o600 })
@@ -49,6 +50,77 @@ test('managed root is the real system temp directory and cleans up only after co
     assert.ok((await lstat(managedRoot)).isDirectory())
   } finally {
     await rm(stagingDirectory, { recursive: true, force: true })
+  }
+})
+
+test('confirmed cleanup never deletes a file the MCP did not stage', async () => {
+  const managedRoot = getDefaultManagedUploadRoot()
+  const otherDirectory = await mkdtemp(join(tmpdir(), 'tododdle-not-staged-'))
+  const nestedDirectory = await mkdtemp(join(tmpdir(), STAGING_DIRECTORY_PREFIX))
+  const looseFile = join(tmpdir(), `${STAGING_DIRECTORY_PREFIX}loose-${process.pid}-${Date.now()}.txt`)
+  const otherFile = join(otherDirectory, 'keep.txt')
+  const nestedFile = join(nestedDirectory, 'sub', 'keep.txt')
+  try {
+    await writeFile(otherFile, 'keep')
+    await mkdir(join(nestedDirectory, 'sub'))
+    await writeFile(nestedFile, 'keep')
+    await writeFile(looseFile, 'keep')
+    for (const filePath of [otherFile, nestedFile, looseFile]) {
+      const source = await prepareUploadSource({ filePath }, 100, managedRoot)
+      await source.cleanup(true)
+      assert.equal(await readFile(filePath, 'utf8'), 'keep', filePath)
+    }
+  } finally {
+    await rm(otherDirectory, { recursive: true, force: true })
+    await rm(nestedDirectory, { recursive: true, force: true })
+    await rm(looseFile, { force: true })
+  }
+})
+
+test('reads the checked file even if the path is swapped for a symlink', { skip: process.platform === 'win32' }, async () => {
+  const managedRoot = getDefaultManagedUploadRoot()
+  const stagingDirectory = await mkdtemp(join(tmpdir(), STAGING_DIRECTORY_PREFIX))
+  const secretDirectory = await mkdtemp(join(tmpdir(), 'tododdle-secret-'))
+  const filePath = join(stagingDirectory, 'file.txt')
+  const secret = join(secretDirectory, 'secret.txt')
+  try {
+    await writeFile(filePath, 'hello')
+    await writeFile(secret, 'secret')
+    const source = await prepareUploadSource({ filePath }, 100, managedRoot)
+    await rm(filePath)
+    await symlink(secret, filePath)
+
+    let uploaded = ''
+    for await (const chunk of source.file.createReadStream({ start: 0, end: source.fileSize - 1, autoClose: false })) {
+      uploaded += chunk
+    }
+    assert.equal(uploaded, 'hello')
+
+    // The path now names a different file, so confirmed cleanup leaves it alone.
+    await source.cleanup(true)
+    assert.ok((await lstat(filePath)).isSymbolicLink())
+    assert.equal(await readFile(secret, 'utf8'), 'secret')
+  } finally {
+    await rm(stagingDirectory, { recursive: true, force: true })
+    await rm(secretDirectory, { recursive: true, force: true })
+  }
+})
+
+test('rejects a file whose size is zero or over the limit when opened', async () => {
+  const directory = await mkdtemp(join(tmpdir(), STAGING_DIRECTORY_PREFIX))
+  try {
+    const empty = join(directory, 'empty.txt')
+    const large = join(directory, 'large.txt')
+    await writeFile(empty, '')
+    await writeFile(large, 'x'.repeat(101))
+    for (const filePath of [empty, large]) {
+      await assert.rejects(
+        prepareUploadSource({ filePath }, 100, getDefaultManagedUploadRoot()),
+        /size is not allowed/,
+      )
+    }
+  } finally {
+    await rm(directory, { recursive: true, force: true })
   }
 })
 
@@ -113,6 +185,7 @@ test('infers the SVG content type from the extension', async () => {
   try {
     const source = await prepareUploadSource({ filePath }, 1000, getDefaultManagedUploadRoot())
     assert.equal(source.contentType, 'image/svg+xml')
+    await source.cleanup()
   } finally {
     await rm(directory, { recursive: true, force: true })
   }

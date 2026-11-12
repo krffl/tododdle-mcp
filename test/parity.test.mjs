@@ -129,7 +129,7 @@ test('every discovered tool validates and serializes only to documented External
       if (tool.name === 'upload_project_document' || tool.name === 'attach_file_to_ticket') {
         argumentsValue.projectId = 'projectId-value'
         argumentsValue.filePath = filePath
-        // A confirmed upload removes the staged file, so stage it for each tool.
+        // Write the file again so each upload tool starts from the same source.
         await writeFile(filePath, 'parity evidence')
         if (tool.name === 'attach_file_to_ticket') argumentsValue.taskId = 'taskId-value'
       }

@@ -1,5 +1,5 @@
 import type { McpConfig } from './config.js';
-import { createReadStream } from 'node:fs';
+import type { FileHandle } from 'node:fs/promises';
 import { MCP_REQUEST_HEADERS, formatMcpUpdateRequiredMessage } from './compatibility.js';
 
 interface TokenResponse {
@@ -115,10 +115,11 @@ export interface ToDoddleApi {
     body: unknown,
     runContext?: AgentRunRequestContext
   ): Promise<Record<string, unknown>>;
+  /** Streams `fileSize` bytes from an open file. The caller owns and closes `file`. */
   uploadFile(
     url: string,
     headers: Record<string, string>,
-    filePath: string,
+    file: FileHandle,
     fileSize: number
   ): Promise<void>;
 }
@@ -274,13 +275,14 @@ export class ToDoddleApiClient implements ToDoddleApi {
   async uploadFile(
     url: string,
     headers: Record<string, string>,
-    filePath: string,
+    file: FileHandle,
     fileSize: number
   ): Promise<void> {
     const response = await fetch(url, {
       method: 'PUT',
       headers: { ...headers, 'content-length': String(fileSize) },
-      body: createReadStream(filePath) as never,
+      // Read from the descriptor that was checked, so a path swap cannot change the bytes.
+      body: file.createReadStream({ start: 0, end: fileSize - 1, autoClose: false }) as never,
       duplex: 'half',
     } as RequestInit & { duplex: 'half' });
     if (!response.ok) {

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict'
 import test from 'node:test'
-import { mkdtemp, rm, writeFile } from 'node:fs/promises'
+import { mkdtemp, open, rm, writeFile } from 'node:fs/promises'
 import { tmpdir } from 'node:os'
 import { join } from 'node:path'
 import { ToDoddleApiClient, ToDoddleApiError, resolveApiPath } from '../dist/api-client.js'
@@ -196,18 +196,27 @@ test('reports direct-storage upload failures without parsing untrusted bodies', 
   const directory = await mkdtemp(join(tmpdir(), 'tododdle-api-upload-'))
   const filePath = join(directory, 'upload.txt')
   await writeFile(filePath, 'upload')
+  const file = await open(filePath, 'r')
   const originalFetch = globalThis.fetch
-  globalThis.fetch = async () => new Response('too large', { status: 413 })
+  let sent = ''
+  globalThis.fetch = async (_url, init) => {
+    for await (const chunk of init.body) sent += chunk
+    return new Response('too large', { status: 413 })
+  }
 
   try {
     await assert.rejects(
       () => new ToDoddleApiClient(config).uploadFile(
-        'https://storage.example/upload', { 'Content-Type': 'text/plain' }, filePath, 6,
+        'https://storage.example/upload', { 'Content-Type': 'text/plain' }, file, 6,
       ),
       /Direct upload failed \(413\)/,
     )
+    assert.equal(sent, 'upload')
+    // The caller owns the handle; uploadFile leaves it open.
+    assert.equal((await file.stat()).size, 6)
   } finally {
     globalThis.fetch = originalFetch
+    await file.close()
     await rm(directory, { recursive: true, force: true })
   }
 })
