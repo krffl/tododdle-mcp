@@ -7,7 +7,7 @@ import { Client } from '@modelcontextprotocol/sdk/client/index.js'
 import { InMemoryTransport } from '@modelcontextprotocol/sdk/inMemory.js'
 import { loadMcpConfig } from '../dist/config.js'
 import { ToDoddleApiClient, ToDoddleApiError } from '../dist/api-client.js'
-import { createToDoddleMcpServer } from '../dist/server.js'
+import { absolutizeLinks, createToDoddleMcpServer } from '../dist/server.js'
 
 const parity = JSON.parse(
   await readFile(new URL('../config/external-api-parity.json', import.meta.url), 'utf8')
@@ -2250,4 +2250,26 @@ test('rejects crafted IDs before they reach an API path', async () => {
     await client.close()
     await server.close()
   }
+})
+
+test('absolutizes app links only when they stay on the app origin', () => {
+  const origin = 'https://app.tododdle.com'
+  const result = absolutizeLinks({
+    uiUrl: '/dashboard/project/eTPg74ysbg',
+    nested: [{ href: '/dashboard/tasks/73xK3j5w_S?tab=comments' }],
+    upgradeHref: '/\\evil.example/x',
+    other: { href: '/\\\\evil.example/x' },
+    protocolRelative: { href: '//evil.example/x' },
+    absolute: { href: 'https://elsewhere.example/x' },
+    notALink: '/dashboard/raw',
+  }, origin)
+  assert.deepEqual(result, {
+    uiUrl: 'https://app.tododdle.com/dashboard/project/eTPg74ysbg',
+    nested: [{ href: 'https://app.tododdle.com/dashboard/tasks/73xK3j5w_S?tab=comments' }],
+    upgradeHref: '/\\evil.example/x',
+    other: { href: '/\\\\evil.example/x' },
+    protocolRelative: { href: '//evil.example/x' },
+    absolute: { href: 'https://elsewhere.example/x' },
+    notALink: '/dashboard/raw',
+  })
 })

@@ -481,6 +481,7 @@ The release raises `@modelcontextprotocol/sdk` to `^1.32.1` to fix [GHSA-6qxp-vc
 ### Unreleased
 
 - Every ID that goes into an API path must be a ToDoddle ID: letters, digits, `_`, or `-` (up to 200 characters). Tools reject other values before they call the API. The API client also refuses any path with `..`, `?`, `#`, `\`, or an encoded `/`, `\`, or `.`, and any path that resolves to a different route. Query strings go through the client's `query` argument. `ToDoddleApi.patch` takes an optional fourth `query` argument, which `update_project_artifact` uses for `detail=summary`. A hosted gateway that implements `ToDoddleApi` must pass that argument on.
+- Link fields (`uiUrl`, `href`, `upgradeHref`) become absolute only when the result stays on the app origin. A value such as `/\\evil.example/x` is left unchanged.
 
 ### 3.16.0 release
 

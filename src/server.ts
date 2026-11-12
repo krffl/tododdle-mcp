@@ -316,14 +316,26 @@ export function absolutizeLinks(value: unknown, appOrigin: string): unknown {
   return Object.fromEntries(
     Object.entries(value as Record<string, unknown>).map(([key, item]) => [
       key,
-      LINK_KEYS.has(key) &&
-      typeof item === 'string' &&
-      item.startsWith('/') &&
-      !item.startsWith('//')
-        ? new URL(item, appOrigin).toString()
+      LINK_KEYS.has(key) && typeof item === 'string'
+        ? absolutizeLink(item, appOrigin)
         : absolutizeLinks(item, appOrigin),
     ])
   );
+}
+
+/**
+ * Resolves one app path on the app origin. A value that would resolve to
+ * another origin, such as `/\\evil.example/x`, stays as it was.
+ */
+function absolutizeLink(link: string, appOrigin: string): string {
+  if (!link.startsWith('/') || link.startsWith('//')) return link;
+  try {
+    const origin = new URL(appOrigin).origin;
+    const resolved = new URL(link, origin);
+    return resolved.origin === origin ? resolved.toString() : link;
+  } catch {
+    return link;
+  }
 }
 
 type ToolCallResult = { structuredContent?: Record<string, unknown>; content?: unknown };
