@@ -64,6 +64,29 @@ function scopeDenial(payload: Record<string, unknown>): ToDoddleScopeDenial | un
   return { requiredScopes, missingScopes, grantedScopes };
 }
 
+type QueryParams = Record<string, string | number | boolean | undefined>;
+
+/** Matches path text that could leave the intended route or smuggle a query. */
+const UNSAFE_PATH_PATTERN = /\.\.|[?#\\]|%2f|%5c|%2e/i;
+
+/**
+ * Resolves an API path against the base URL and refuses anything that is not a
+ * plain absolute path on that origin. Query strings go through `query`, never
+ * through the path, so `?` and `#` are rejected too. This is the last guard if
+ * an ID with `/`, `..`, or an encoded separator ever reaches a path.
+ */
+export function resolveApiPath(path: string, baseUrl: string): URL {
+  if (!path.startsWith('/') || path.startsWith('//') || UNSAFE_PATH_PATTERN.test(path)) {
+    throw new Error(`Refusing unsafe ToDoddle API path: ${JSON.stringify(path)}`);
+  }
+  const base = new URL(baseUrl);
+  const url = new URL(path, base);
+  if (url.origin !== base.origin || url.pathname !== path) {
+    throw new Error(`Refusing unsafe ToDoddle API path: ${JSON.stringify(path)}`);
+  }
+  return url;
+}
+
 export interface ToDoddleApi {
   get(
     path: string,
@@ -84,7 +107,8 @@ export interface ToDoddleApi {
   patch(
     path: string,
     body: unknown,
-    runContext?: AgentRunRequestContext
+    runContext?: AgentRunRequestContext,
+    query?: QueryParams
   ): Promise<Record<string, unknown>>;
   delete(
     path: string,
@@ -143,7 +167,7 @@ export class ToDoddleApiClient implements ToDoddleApi {
     retry = true,
     runContext?: AgentRunRequestContext
   ): Promise<Record<string, unknown>> {
-    const url = new URL(path, this.config.baseUrl);
+    const url = resolveApiPath(path, this.config.baseUrl);
     Object.entries(query || {}).forEach(([key, value]) => {
       if (value !== undefined) url.searchParams.set(key, String(value));
     });
@@ -239,8 +263,8 @@ export class ToDoddleApiClient implements ToDoddleApi {
     return this.request('PUT', path, body, undefined, undefined, true, runContext);
   }
 
-  patch(path: string, body: unknown, runContext?: AgentRunRequestContext) {
-    return this.request('PATCH', path, body, undefined, undefined, true, runContext);
+  patch(path: string, body: unknown, runContext?: AgentRunRequestContext, query?: QueryParams) {
+    return this.request('PATCH', path, body, query, undefined, true, runContext);
   }
 
   delete(path: string, body: unknown, runContext?: AgentRunRequestContext) {
