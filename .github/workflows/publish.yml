@@ -99,4 +99,4 @@ jobs:
       - name: Publish package
         env:
           TARBALL: ${{ needs.build.outputs.tarball }}
-        run: npm publish "package-artifact/${TARBALL}" --provenance --ignore-scripts
+        run: npm publish "./package-artifact/${TARBALL}" --provenance --ignore-scripts
