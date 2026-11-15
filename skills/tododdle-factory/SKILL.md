@@ -1,6 +1,6 @@
 ---
 name: tododdle-factory
-description: Run a supervised, bounded software delivery loop through ToDoddle. Use only when the user explicitly asks for a factory run or autonomous delivery of tracked work. Use tododdle-workflow for ordinary ledger updates, planning, status checks, or manual implementation.
+description: Run a supervised, bounded software delivery loop through ToDoddle. Use only when the user explicitly asks for a factory run or autonomous delivery of tracked work. Use tododdle-workflow for ordinary ticket updates, planning, status checks, or manual implementation.
 ---
 
 # ToDoddle Factory

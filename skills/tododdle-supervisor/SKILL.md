@@ -5,7 +5,7 @@ description: Use current ToDoddle supervision assessments to guide coding work a
 
 # ToDoddle Supervisor
 
-Read [tododdle-workflow](../tododdle-workflow/SKILL.md) first. Follow its authority, claim, status, evidence, and handoff rules. This skill adds optional decision guidance. It does not replace the work ledger.
+Read [tododdle-workflow](../tododdle-workflow/SKILL.md) first. Follow its authority, claim, status, evidence, and handoff rules. This skill adds optional decision guidance. It does not replace the tracked tickets in ToDoddle.
 
 ## Check Availability
 

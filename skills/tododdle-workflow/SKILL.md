@@ -1,6 +1,6 @@
 ---
 name: tododdle-workflow
-description: Use ToDoddle as the work ledger for project boards, lanes, tickets, implementation, status updates, blockers, comments, time tracking, and safe recurring checks. Trigger when the user asks to inspect, plan, start, update, complete, report on, or schedule work managed in ToDoddle, or when repository instructions require ToDoddle updates. Do not trigger for casual discussion that does not change or review tracked work.
+description: Use ToDoddle to track work: project boards, lanes, tickets, implementation, status updates, blockers, comments, time tracking, and safe recurring checks. Trigger when the user asks to inspect, plan, start, update, complete, report on, or schedule work managed in ToDoddle, or when repository instructions require ToDoddle updates. Do not trigger for casual discussion that does not change or review tracked work.
 ---
 
 # ToDoddle Workflow
