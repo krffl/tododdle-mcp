@@ -213,7 +213,7 @@ test('factory skill scopes autonomous delivery and preserves human control', asy
   );
 
   assert.match(skill, /only when the user explicitly asks for a factory run or autonomous delivery/);
-  assert.match(skill, /Use tododdle-workflow for ordinary ledger updates/);
+  assert.match(skill, /Use tododdle-workflow for ordinary ticket updates/);
   assert.match(skill, /\.\.\/tododdle-workflow\/SKILL\.md/);
   assert.match(skill, /unique opaque run ID/);
   assert.match(skill, /claim_ticket/);
@@ -312,4 +312,24 @@ test('README documents separate Claude Code MCP and workflow plugin setup', asyn
   assert.match(readme, /Keep the existing ToDoddle MCP connection/);
   assert.match(readme, /does not start another MCP server/);
   assert.match(readme, /claim substantial ticket work/);
+});
+
+test('agent-facing instructions do not describe ToDoddle as a ledger', async () => {
+  const files = [
+    '../README.md',
+    '../examples/AGENTS.tododdle.md',
+    '../.codex-plugin/plugin.json',
+    '../.claude-plugin/plugin.json',
+    '../.claude-plugin/marketplace.json',
+    '../skills/tododdle-workflow/SKILL.md',
+    '../skills/tododdle-supervisor/SKILL.md',
+    '../skills/tododdle-factory/SKILL.md',
+    '../skills/tododdle-bootstrap/SKILL.md',
+    '../skills/tododdle-bootstrap/scripts/update-agents.mjs',
+    '../src/server.ts',
+  ];
+  for (const file of files) {
+    const text = await readFile(new URL(file, import.meta.url), 'utf8');
+    assert.doesNotMatch(text, /ledger/i, `${file} uses the ledger metaphor`);
+  }
 });

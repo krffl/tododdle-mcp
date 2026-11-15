@@ -23,7 +23,7 @@ export const buildManagedBlock = ({ projectId, projectName, eol = '\n' }) => {
 
   return [
     START_MARKER,
-    '## ToDoddle Work Ledger',
+    '## ToDoddle Work Tracking',
     '',
     `Use \`$tododdle-workflow\` and the \`tododdle\` MCP server for work tracked in ToDoddle project \`${projectId}\` (${projectName}).`,
     '',
@@ -55,7 +55,7 @@ export const buildManagedBlock = ({ projectId, projectName, eol = '\n' }) => {
     '- If they differ, set `REVIEW` and call `create_review_request` for the creator, unless a workspace rule already opened one. Set `COMPLETE` only after the creator approves.',
     '- A `REVIEW_REQUEST_MISSING` warning means nobody was asked to review. Create the review request straight away.',
     '',
-    'If ToDoddle access is missing, report the exact missing server, scope, or project grant. Do not claim that a ledger update succeeded.',
+    'If ToDoddle access is missing, report the exact missing server, scope, or project grant. Do not claim that a ToDoddle update succeeded.',
     END_MARKER,
   ].join(eol);
 };

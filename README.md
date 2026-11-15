@@ -81,7 +81,7 @@ The MCP server provides capabilities. The package distributes four optional skil
 
 | Skill | Use |
 | --- | --- |
-| `tododdle-workflow` | Manage ordinary tracked work and use ToDoddle as the durable ledger. |
+| `tododdle-workflow` | Manage ordinary tracked work and keep it current on the ToDoddle board. |
 | `tododdle-bootstrap` | Bind an existing repository to one verified ToDoddle project. |
 | `tododdle-factory` | Run one explicit, supervised autonomous delivery attempt with an Agent Run and stable evidence. |
 | `tododdle-supervisor` | Use current ToDoddle supervision assessments at meaningful workflow decisions when a compatible backend is available. |
@@ -161,7 +161,7 @@ The server returns authoritative website URLs with records so an agent can hand 
 
 ### Repository Policy
 
-When adding ToDoddle to an existing repository, invoke `$tododdle-bootstrap`. It verifies the ToDoddle project and adds a managed work-ledger block to the effective root instruction file. It uses `AGENTS.override.md` when that file already exists. Otherwise, it updates or creates `AGENTS.md`.
+When adding ToDoddle to an existing repository, invoke `$tododdle-bootstrap`. It verifies the ToDoddle project and adds a managed work-tracking block to the effective root instruction file. It uses `AGENTS.override.md` when that file already exists. Otherwise, it updates or creates `AGENTS.md`.
 
 The bootstrap updater preserves every instruction outside `<!-- tododdle:start -->` and `<!-- tododdle:end -->`. It updates an existing block instead of adding a duplicate. It stops on malformed markers. Run its dry mode first and review the diff before writing. The updater never commits, pushes, or stores credentials.
 
@@ -479,6 +479,10 @@ Adds release tools (`list_releases`, `get_release`, `create_release`, `update_re
 This release also includes changes made since 3.7.0: the read-only `list_security_events` tool (`security:read`); the system temporary directory as the default upload root, with per-file ownership checks and validated DNS answers pinned on HTTPS upload fetches; Agent Run context on move, archive, attribute, and time tools; a pending-approval result for customer-visible Support replies; and GitHub Actions pinned to commit SHAs.
 
 The release raises `@modelcontextprotocol/sdk` to `^1.32.1` to fix [GHSA-6qxp-vccf-f47h](https://github.com/advisories/GHSA-6qxp-vccf-f47h), where SDK versions before 1.31.0 could send OAuth client credentials to an authorization server chosen by the MCP server.
+
+### 3.17.1 release
+
+- The skills, the plugin descriptions, the README and the bootstrap `AGENTS.md` block now describe ToDoddle in plain terms such as "track work" and "ticket updates". The bootstrap block heading is now `## ToDoddle Work Tracking`. Re-run `$tododdle-bootstrap` to update an existing block; it replaces the text between the managed markers. No tool or API behavior changes.
 
 ### 3.17.0 release
 
