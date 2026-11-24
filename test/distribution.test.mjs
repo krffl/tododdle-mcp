@@ -112,7 +112,8 @@ test('workflow skill declares the MCP dependency and core safety rules', async (
   assert.match(skill, /If they match, set `COMPLETE` after the result is achieved and verified/);
   assert.match(skill, /If they differ, move the ticket to its existing `REVIEW` status/);
   assert.match(skill, /until that person records acceptance, then set `COMPLETE`/);
-  assert.match(skill, /Do not add a ticket status/);
+  assert.match(skill, /Do not add other ticket statuses/);
+  assert.match(skill, /`ACCEPTED` sits between `REVIEW` and `COMPLETE`/);
   assert.match(skill, /Agent Run success and supervision assessment are evidence, not human acceptance/);
   assert.match(projectWork, /A formal review request is optional/);
   assert.match(projectWork, /Keep it in `REVIEW` until that person records acceptance/);
