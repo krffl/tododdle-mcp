@@ -194,6 +194,8 @@ test('discovers the bounded production tool surface', async () => {
     assert.match(result.tools.find(tool => tool.name === name)?.description || '', /finish_agent_run/, name)
   }
   assert.match(result.tools.find(tool => tool.name === 'transition_ticket')?.description || '', /RUN_STILL_OPEN/)
+  assert.match(result.tools.find(tool => tool.name === 'transition_ticket')?.description || '', /ACCEPTED means a person approved/)
+  assert.ok(result.tools.find(tool => tool.name === 'transition_ticket')?.inputSchema.properties?.status?.enum?.includes('ACCEPTED'))
   assert.match(result.tools.find(tool => tool.name === 'finish_agent_run')?.description || '', /end of every claim/)
   assert.deepEqual(Object.keys(uploadDocumentTool?.inputSchema.properties || {}), [
     'projectId', 'filePath', 'sourceUrl', 'fileName', 'contentType', 'description', 'folderId',

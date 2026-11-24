@@ -480,6 +480,12 @@ This release also includes changes made since 3.7.0: the read-only `list_securit
 
 The release raises `@modelcontextprotocol/sdk` to `^1.32.1` to fix [GHSA-6qxp-vccf-f47h](https://github.com/advisories/GHSA-6qxp-vccf-f47h), where SDK versions before 1.31.0 could send OAuth client credentials to an authorization server chosen by the MCP server.
 
+### 3.18.0 release
+
+- Tickets have a new status, `ACCEPTED`, between `REVIEW` and `COMPLETE`. It means a person approved the work and it is waiting to ship. `update_ticket`, `transition_ticket` and the lane and rule tools accept it. Deploy the matching ToDoddle API first.
+- An agent may set `ACCEPTED` on another user's ticket only after its review is approved, the same rule as `COMPLETE`. An agent may set a ticket that is already `ACCEPTED` to `COMPLETE` after it ships the work.
+- The workflow skill and the bootstrap `AGENTS.md` block explain the status. Re-run `$tododdle-bootstrap` to update an existing block.
+
 ### 3.17.2 release
 
 - Agents must now end every claim with `finish_agent_run`. The server instructions say so, and so do the `claim_ticket`, `claim_next_ticket`, `transition_ticket`, `release_ticket` and `finish_agent_run` descriptions. Before, agents often set a ticket to `REVIEW` or `COMPLETE` and stopped. The claim then blocked other agents until its lease ran out, and the run was recorded as abandoned with no outcome.

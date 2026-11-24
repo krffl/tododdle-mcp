@@ -25,6 +25,7 @@ test('creates a managed block for an empty instruction file', () => {
   assert.match(result.content, /call `create_review_request` for the creator/);
   assert.match(result.content, /`REVIEW_REQUEST_MISSING` warning/);
   assert.match(result.content, /End every claim with `finish_agent_run`/);
+  assert.match(result.content, /`ACCEPTED` means a person approved the work/);
   assert.equal(result.content.split(START_MARKER).length - 1, 1);
   assert.equal(result.content.split(END_MARKER).length - 1, 1);
 });
