@@ -480,6 +480,12 @@ This release also includes changes made since 3.7.0: the read-only `list_securit
 
 The release raises `@modelcontextprotocol/sdk` to `^1.32.1` to fix [GHSA-6qxp-vccf-f47h](https://github.com/advisories/GHSA-6qxp-vccf-f47h), where SDK versions before 1.31.0 could send OAuth client credentials to an authorization server chosen by the MCP server.
 
+### 3.17.2 release
+
+- Agents must now end every claim with `finish_agent_run`. The server instructions say so, and so do the `claim_ticket`, `claim_next_ticket`, `transition_ticket`, `release_ticket` and `finish_agent_run` descriptions. Before, agents often set a ticket to `REVIEW` or `COMPLETE` and stopped. The claim then blocked other agents until its lease ran out, and the run was recorded as abandoned with no outcome.
+- The ToDoddle API now returns a `RUN_STILL_OPEN` warning when a status change hands off a ticket while the caller's run is still open. The descriptions tell agents what it means.
+- The bootstrap `AGENTS.md` block names `finish_agent_run` and says a status change does not close the run. Re-run `$tododdle-bootstrap` to update an existing block.
+
 ### 3.17.1 release
 
 - The skills, the plugin descriptions, the README and the bootstrap `AGENTS.md` block now describe ToDoddle in plain terms such as "track work" and "ticket updates". The bootstrap block heading is now `## ToDoddle Work Tracking`. Re-run `$tododdle-bootstrap` to update an existing block; it replaces the text between the managed markers. No tool or API behavior changes.

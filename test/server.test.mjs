@@ -56,6 +56,8 @@ test('discovers the bounded production tool surface', async () => {
   assert.match(client.getInstructions() || '', /Brief: settled direction, priorities, and current state/)
   assert.match(client.getInstructions() || '', /briefFreshness\.stale/)
   assert.match(client.getInstructions() || '', /never build links on www\.tododdle\.com/)
+  assert.match(client.getInstructions() || '', /Every claim must end with finish_agent_run/)
+  assert.match(client.getInstructions() || '', /RUN_STILL_OPEN/)
   assert.equal(result.tools.length, Object.keys(parity.tools).length)
   assert.equal(names.includes('delete_task'), false)
   assert.equal(names.includes('archive_task'), false)
@@ -188,6 +190,11 @@ test('discovers the bounded production tool surface', async () => {
   assert.match(JSON.stringify(createLaneTool?.inputSchema.properties?.entryActions), /SET_AGENT_ASSIGNEE/)
   assert.equal(listReviewsTool?.inputSchema.properties?.limit?.maximum, 50)
   assert.match(createReviewTool?.description || '', /do not change ticket status/)
+  for (const name of ['claim_ticket', 'claim_next_ticket', 'transition_ticket']) {
+    assert.match(result.tools.find(tool => tool.name === name)?.description || '', /finish_agent_run/, name)
+  }
+  assert.match(result.tools.find(tool => tool.name === 'transition_ticket')?.description || '', /RUN_STILL_OPEN/)
+  assert.match(result.tools.find(tool => tool.name === 'finish_agent_run')?.description || '', /end of every claim/)
   assert.deepEqual(Object.keys(uploadDocumentTool?.inputSchema.properties || {}), [
     'projectId', 'filePath', 'sourceUrl', 'fileName', 'contentType', 'description', 'folderId',
     'idempotencyKey',

@@ -47,7 +47,7 @@ export const buildManagedBlock = ({ projectId, projectName, eol = '\n' }) => {
     '- Claim the ticket before implementation.',
     '- Keep its status, assignee, lane, priority, due date, parent, and blockers current.',
     '- Add one concise handoff with verification evidence.',
-    '- Finish the Agent Run when work succeeds. Release the claim when work stops without a terminal result.',
+    '- End every claim with `finish_agent_run` (`SUCCEEDED`, `FAILED`, or `CANCELLED`). Setting the ticket to `REVIEW` or `COMPLETE` does not close the run. Use `release_ticket` only when work stops without a result.',
     '',
     'When work is done:',
     '',
