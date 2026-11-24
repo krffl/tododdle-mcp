@@ -2102,7 +2102,8 @@ export function createToDoddleMcpServer(
     'claim_next_ticket',
     {
       description:
-        'Atomically claim the highest-ranked eligible ticket in one project. Reuse a unique stable runId to replay the same live claim safely.',
+        'Atomically claim the highest-ranked eligible ticket in one project. Reuse a unique stable runId to replay the same live claim safely. ' +
+        'When the work ends, always call finish_agent_run with the same runId; a status change does not close the run.',
       inputSchema: z.object({
         projectId: idSchema,
         runId: idSchema,
@@ -2712,7 +2713,8 @@ export function createToDoddleMcpServer(
     'claim_ticket',
     {
       description:
-        'Claim or refresh a ticket for the current Agent Connection without changing its human assignee. Reuse a stable runId and refresh before the lease expires.',
+        'Claim or refresh a ticket for the current Agent Connection without changing its human assignee. Reuse a stable runId and refresh before the lease expires. ' +
+        'When the work ends, always call finish_agent_run with the same runId; a status change does not close the run.',
       inputSchema: z.object({
         taskId: idSchema,
         runId: idSchema,
@@ -2756,7 +2758,7 @@ export function createToDoddleMcpServer(
     'release_ticket',
     {
       description:
-        'Release the current Agent Connection work claim without changing ticket status or human assignment.',
+        'Release the current Agent Connection work claim without changing ticket status or human assignment. The run is recorded as cancelled. Use finish_agent_run instead when you have a result.',
       inputSchema: z.object({
         taskId: idSchema,
         runId: idSchema,
@@ -2814,7 +2816,7 @@ export function createToDoddleMcpServer(
     'finish_agent_run',
     {
       description:
-        'Submit the terminal result for a claimed Agent Run. This releases the matching claim but does not change ticket status or human assignment.',
+        'Submit the terminal result for a claimed Agent Run. Call it once at the end of every claim, including after you set the ticket to REVIEW or COMPLETE. This releases the matching claim but does not change ticket status or human assignment.',
       inputSchema: z.object({
         taskId: idSchema,
         runId: idSchema,
@@ -3086,7 +3088,7 @@ export function createToDoddleMcpServer(
     'update_ticket',
     {
       description:
-        'Update editable ticket fields. Requires the latest updatedAt value to prevent overwriting newer changes. Pass runId and projectId when you hold an active run on this ticket. Completion policy: an agent cannot set COMPLETE on a ticket that another user created until the creator approves its review. The server returns 403 permission_denied. Set REVIEW and call create_review_request; a REVIEW_REQUEST_MISSING warning in the response means nobody was asked yet.',
+        'Update editable ticket fields. Requires the latest updatedAt value to prevent overwriting newer changes. Pass runId and projectId when you hold an active run on this ticket. Completion policy: an agent cannot set COMPLETE on a ticket that another user created until the creator approves its review. The server returns 403 permission_denied. Set REVIEW and call create_review_request; a REVIEW_REQUEST_MISSING warning in the response means nobody was asked yet. Changing the status does not close your Agent Run: call finish_agent_run afterwards. A RUN_STILL_OPEN warning means your run is still open.',
       inputSchema: z.object({
         taskId: idSchema,
         projectId: idSchema.optional(),
@@ -3131,7 +3133,7 @@ export function createToDoddleMcpServer(
     'transition_ticket',
     {
       description:
-        'Transition a ticket to a canonical status. Pass runId and projectId when you hold an active run on this ticket. Completion policy: an agent cannot set COMPLETE on a ticket that another user created until the creator approves its review. The server returns 403 permission_denied. Set REVIEW and call create_review_request; a REVIEW_REQUEST_MISSING warning in the response means nobody was asked yet.',
+        'Transition a ticket to a canonical status. Pass runId and projectId when you hold an active run on this ticket. Completion policy: an agent cannot set COMPLETE on a ticket that another user created until the creator approves its review. The server returns 403 permission_denied. Set REVIEW and call create_review_request; a REVIEW_REQUEST_MISSING warning in the response means nobody was asked yet. Changing the status does not close your Agent Run: call finish_agent_run afterwards. A RUN_STILL_OPEN warning means your run is still open.',
       inputSchema: z.object({
         taskId: idSchema,
         projectId: idSchema.optional(),
@@ -3160,7 +3162,7 @@ export function createToDoddleMcpServer(
     'move_ticket',
     {
       description:
-        'Move a ticket to an active lane, optionally on another board in the same project. Preview first because lane actions may archive the ticket. Pass runId and projectId when you hold an active run on this ticket. Completion policy: a lane that sets COMPLETE follows the same rule as transition_ticket. For a ticket another user created, the server returns 403 permission_denied until the creator approves its review. Move it to a REVIEW lane and call create_review_request; a REVIEW_REQUEST_MISSING warning in the response means nobody was asked yet.',
+        'Move a ticket to an active lane, optionally on another board in the same project. Preview first because lane actions may archive the ticket. Pass runId and projectId when you hold an active run on this ticket. Completion policy: a lane that sets COMPLETE follows the same rule as transition_ticket. For a ticket another user created, the server returns 403 permission_denied until the creator approves its review. Move it to a REVIEW lane and call create_review_request; a REVIEW_REQUEST_MISSING warning in the response means nobody was asked yet. Changing the status does not close your Agent Run: call finish_agent_run afterwards. A RUN_STILL_OPEN warning means your run is still open.',
       inputSchema: z.object({
         taskId: idSchema,
         projectId: idSchema.optional(),
