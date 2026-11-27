@@ -2700,3 +2700,42 @@ test('stages brand pictures as drafts, uploading local files to the documents fi
     await rm(directory, { recursive: true, force: true })
   }
 })
+
+test('records, lists and deletes Social campaign results', async () => {
+  const calls = []
+  const campaignApi = {
+    ...api,
+    get: async (path, query) => { calls.push(['GET', path, query]); return { tokens: [] } },
+    put: async (path, body) => { calls.push(['PUT', path, body]); return { result: body } },
+    delete: async (path, body) => { calls.push(['DELETE', path, body]); return { deleted: true } },
+  }
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer(campaignApi)
+  const client = new Client({ name: 'campaign-test', version: '1' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  try {
+    await client.callTool({ name: 'list_social_campaigns', arguments: { projectId: 'project-1', from: '2026-11-01', campaignToken: 'tt-bio' } })
+    await client.callTool({ name: 'record_social_campaign_result', arguments: { projectId: 'project-1', campaignToken: 'tt-bio', weekStart: '2026-11-27', downloads: 12, impressions: null, source: 'INTEGRATION' } })
+    await client.callTool({ name: 'delete_social_campaign_result', arguments: { projectId: 'project-1', campaignToken: 'tt-bio', weekStart: '2026-11-23' } })
+    assert.deepEqual(calls, [
+      ['GET', '/api/external/projects/project-1/social/campaigns', { from: '2026-11-01', campaignToken: 'tt-bio' }],
+      ['PUT', '/api/external/projects/project-1/social/campaigns', { campaignToken: 'tt-bio', weekStart: '2026-11-27', downloads: 12, impressions: null, source: 'INTEGRATION' }],
+      ['DELETE', '/api/external/projects/project-1/social/campaigns', { campaignToken: 'tt-bio', weekStart: '2026-11-23' }],
+    ])
+    calls.length = 0
+    const negative = await client.callTool({ name: 'record_social_campaign_result', arguments: { projectId: 'project-1', campaignToken: 'tt-bio', weekStart: '2026-11-27', downloads: -1 } })
+    const badDay = await client.callTool({ name: 'record_social_campaign_result', arguments: { projectId: 'project-1', campaignToken: 'tt-bio', weekStart: '27/11/2026' } })
+    const noToken = await client.callTool({ name: 'delete_social_campaign_result', arguments: { projectId: 'project-1', campaignToken: ' ', weekStart: '2026-11-23' } })
+    assert.equal(negative.isError, true)
+    assert.equal(badDay.isError, true)
+    assert.equal(noToken.isError, true)
+    assert.equal(calls.length, 0)
+    const tools = (await client.listTools()).tools
+    const list = tools.find(tool => tool.name === 'list_social_campaigns')
+    assert.match(list.description, /never be split or credited across posts/)
+    assert.equal(tools.find(tool => tool.name === 'delete_social_campaign_result').annotations.destructiveHint, true)
+  } finally {
+    await client.close()
+    await server.close()
+  }
+})

@@ -1882,6 +1882,86 @@ export function createToDoddleMcpServer(
       )
   );
 
+  const campaignTokenSchema = z
+    .string()
+    .trim()
+    .min(1)
+    .max(120)
+    .describe('The campaign token exactly as used on posts, for example tt-bio');
+
+  server.registerTool(
+    'list_social_campaigns',
+    {
+      description: `List Social campaign results: weekly store numbers (impressions, product page views, downloads) per campaign token, with the posts that use each token. Tokens come most downloads first. The range defaults to the last 12 weeks (at most two years); filter with from, to (YYYY-MM-DD) and campaignToken. A bio or profile link token may have no posts: its downloads belong to the token and must never be split or credited across posts. Needs the \`social:read\` scope. ${SOCIAL_UNTRUSTED_TEXT}`,
+      inputSchema: z.object({
+        projectId: idSchema,
+        from: socialDaySchema.optional(),
+        to: socialDaySchema.optional(),
+        campaignToken: campaignTokenSchema.optional(),
+        ...projectRunFieldsSchema,
+      }),
+      annotations: socialReadAnnotations,
+    },
+    async ({ projectId, taskId, runId, ...query }) =>
+      toolResult(
+        await api.get(
+          `${socialPath(projectId)}/campaigns`,
+          query,
+          projectRunContext(runId, projectId, taskId, 'READ_PROJECT_DATA')
+        )
+      )
+  );
+
+  server.registerTool(
+    'record_social_campaign_result',
+    {
+      description:
+        "Record one campaign token's store numbers for one week, for example from App Store Connect. weekStart can be any day in the week; it is stored as that week's Monday. Send only the numbers you have: metrics left out stay as they are, and null clears one. Saving the same token and week again updates it. Use source INTEGRATION for numbers read from a store or analytics API, MANUAL (the default) for numbers a person gave you. Needs the `social:write` scope.",
+      inputSchema: z.object({
+        projectId: idSchema,
+        campaignToken: campaignTokenSchema,
+        weekStart: socialDaySchema.describe('Any day in the week (YYYY-MM-DD)'),
+        impressions: socialMetricValueSchema,
+        productPageViews: socialMetricValueSchema,
+        downloads: socialMetricValueSchema,
+        source: z.enum(['MANUAL', 'INTEGRATION']).optional(),
+        ...projectRunFieldsSchema,
+      }),
+      annotations: socialWriteAnnotations(true),
+    },
+    async ({ projectId, taskId, runId, ...body }) =>
+      toolResult(
+        await api.put(
+          `${socialPath(projectId)}/campaigns`,
+          body,
+          projectRunContext(runId, projectId, taskId, 'UPDATE_INTERNAL_WORKFLOW')
+        )
+      )
+  );
+
+  server.registerTool(
+    'delete_social_campaign_result',
+    {
+      description:
+        "Delete one campaign token's store numbers for one week. Do this only when a person asks. weekStart can be any day in that week. Needs the `social:write` scope.",
+      inputSchema: z.object({
+        projectId: idSchema,
+        campaignToken: campaignTokenSchema,
+        weekStart: socialDaySchema.describe('Any day in the week (YYYY-MM-DD)'),
+        ...projectRunFieldsSchema,
+      }),
+      annotations: socialWriteAnnotations(true, true),
+    },
+    async ({ projectId, campaignToken, weekStart, taskId, runId }) =>
+      toolResult(
+        await api.delete(
+          `${socialPath(projectId)}/campaigns`,
+          { campaignToken, weekStart },
+          projectRunContext(runId, projectId, taskId, 'UPDATE_INTERNAL_WORKFLOW')
+        )
+      )
+  );
+
   server.registerTool(
     'riff_social_asset',
     {

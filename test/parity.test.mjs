@@ -135,6 +135,7 @@ test('every discovered tool validates and serializes only to documented External
       }
       if (tool.name === 'log_completed_work') argumentsValue.taskId = 'taskId-value'
       if (tool.name === 'stage_brand_image') argumentsValue.documentId = 'documentId-value'
+      if ('weekStart' in argumentsValue) argumentsValue.weekStart = '2026-11-23'
       if (tool.name === 'begin_upload') {
         argumentsValue.projectId = 'projectId-value'
         argumentsValue.fileName = 'evidence.txt'
