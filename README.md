@@ -77,7 +77,7 @@ For every client, `npx` downloads the package to npm's cache. Cloning ToDoddle o
 
 ## Workflow Guidance
 
-The MCP server provides capabilities. The package distributes four optional skills:
+The MCP server provides capabilities. The package distributes five optional skills:
 
 | Skill | Use |
 | --- | --- |
@@ -85,6 +85,7 @@ The MCP server provides capabilities. The package distributes four optional skil
 | `tododdle-bootstrap` | Bind an existing repository to one verified ToDoddle project. |
 | `tododdle-factory` | Run one explicit, supervised autonomous delivery attempt with an Agent Run and stable evidence. |
 | `tododdle-supervisor` | Use current ToDoddle supervision assessments at meaningful workflow decisions when a compatible backend is available. |
+| `tododdle-page-graphics` | Plan, make and check one matching picture set for a project's hosted pages (Home, Support, Testbench, workspace card), with exact sizes, then stage them as drafts for the page editor. |
 
 The bootstrap skill has a deterministic updater that adds a small managed block to the effective root agent instructions. The Factory skill reuses the workflow rules and adds bounded delivery, escalation, cleanup, and package staging checks. The Supervisor skill adds optional decision guidance without connecting the coding agent to an external decision or supervision provider.
 
@@ -508,6 +509,8 @@ The release raises `@modelcontextprotocol/sdk` to `^1.32.1` to fix [GHSA-6qxp-vc
 
 - Adds Social tools: `list_social_platforms`, `save_social_platform`, `list_social_assets`, `get_social_asset`, `record_social_asset`, `record_social_post`, `record_social_snapshot`, `update_social_snapshot_metrics`, `delete_social_snapshot`, `list_social_snapshots`, `list_social_due`, `get_social_analytics`, `riff_social_asset`, and `import_social_history`.
 - Agent Connections need the `social:read` or `social:write` scope. Deploy the matching External API Social routes first. The hosted gateway must install this package and map the new scopes before it advertises these tools. Every change is additive, so the compatibility level stays at 3.
+- Adds the optional `tododdle-page-graphics` skill. It plans one matching picture set for a project's hosted pages from a short style card, makes each picture at its slot's size and crop, checks the files, stages them, and gives the user a contact sheet. It never invents a logo and never puts words in pictures.
+- Adds three tools for brand pictures on the hosted pages: `list_brand_images` (slots, live pictures, staged drafts and sizes), `stage_brand_image` (upload a local file or URL to the project documents, or use a `documentId`, and stage it in a slot as a draft) and `discard_brand_image_draft`. Staged pictures never change the live pages: a project owner or admin publishes them in the page editor. They need `projects:read`, `projects:write`, `documents:read` and, to upload a file, `documents:write`. Existing connections with those scopes need no change. They also need project owner or admin access, and the ToDoddle app release that adds `/api/external/projects/{projectId}/brand-images`.
 
 ### 3.18.0 release
 

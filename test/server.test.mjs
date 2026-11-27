@@ -2642,3 +2642,61 @@ test('absolutizes app links only when they stay on the app origin', () => {
     notALink: '/dashboard/raw',
   })
 })
+
+test('stages brand pictures as drafts, uploading local files to the documents first', async () => {
+  const directory = await mkdtemp(join(tmpdir(), 'tododdle-mcp-brand-'))
+  const filePath = join(directory, 'release-hero.png')
+  await writeFile(filePath, 'png-bytes')
+  const calls = []
+  const brandApi = {
+    ...api,
+    get: async (path) => { calls.push(['GET', path]); return { slots: [] } },
+    post: async (path, body) => {
+      calls.push(['POST', path, body])
+      if (path.endsWith('/upload-sessions')) return { session: { documentId: 'doc-1', uploadUrl: 'https://storage.example/upload', headers: {} } }
+      if (path.endsWith('/finalize')) return { entity: { id: 'doc-1', mimeType: 'image/png' } }
+      return { draft: { kind: body.kind, url: 'https://cdn.example/x.webp' }, published: false }
+    },
+    delete: async (path) => { calls.push(['DELETE', path]); return { discarded: 1 } },
+  }
+  const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
+  const server = createToDoddleMcpServer(brandApi, { managedUploadRoot: directory })
+  const client = new Client({ name: 'brand-image-test', version: '1' })
+  await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
+  try {
+    const fromFile = await client.callTool({ name: 'stage_brand_image', arguments: { projectId: 'project-1', kind: 'releaseHero', filePath } })
+    assert.equal(fromFile.isError, undefined)
+    assert.deepEqual(calls.map(call => call[1]), [
+      '/api/external/projects/project-1/documents/upload-sessions',
+      '/api/external/projects/project-1/documents/doc-1/finalize',
+      '/api/external/projects/project-1/brand-images',
+    ])
+    assert.deepEqual(calls[2][2], { kind: 'releaseHero', documentId: 'doc-1' })
+    assert.equal(fromFile.structuredContent.published, false)
+    assert.match(fromFile.structuredContent.notice, /Publish changes/)
+
+    calls.length = 0
+    await client.callTool({ name: 'stage_brand_image', arguments: { projectId: 'project-1', kind: 'logo', documentId: 'doc-2' } })
+    assert.deepEqual(calls, [['POST', '/api/external/projects/project-1/brand-images', { kind: 'logo', documentId: 'doc-2' }]])
+
+    calls.length = 0
+    const none = await client.callTool({ name: 'stage_brand_image', arguments: { projectId: 'project-1', kind: 'logo' } })
+    const both = await client.callTool({ name: 'stage_brand_image', arguments: { projectId: 'project-1', kind: 'logo', documentId: 'doc-2', sourceUrl: 'https://example.com/a.png' } })
+    const badSlot = await client.callTool({ name: 'stage_brand_image', arguments: { projectId: 'project-1', kind: 'banner', documentId: 'doc-2' } })
+    assert.equal(none.isError, true)
+    assert.equal(both.isError, true)
+    assert.equal(badSlot.isError, true)
+    assert.equal(calls.length, 0)
+
+    await client.callTool({ name: 'list_brand_images', arguments: { projectId: 'project-1' } })
+    await client.callTool({ name: 'discard_brand_image_draft', arguments: { projectId: 'project-1', kind: 'supportHero' } })
+    assert.deepEqual(calls, [
+      ['GET', '/api/external/projects/project-1/brand-images'],
+      ['DELETE', '/api/external/projects/project-1/brand-images/supportHero'],
+    ])
+  } finally {
+    await client.close()
+    await server.close()
+    await rm(directory, { recursive: true, force: true })
+  }
+})

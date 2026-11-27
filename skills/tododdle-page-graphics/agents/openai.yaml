@@ -1,0 +1,7 @@
+interface:
+  display_name: "ToDoddle Page Graphics"
+  short_description: "Make a matching picture set for ToDoddle hosted pages"
+  default_prompt: "Use $tododdle-page-graphics to plan, make and check the pictures for this project's ToDoddle hosted pages."
+
+policy:
+  allow_implicit_invocation: true

@@ -624,6 +624,38 @@ const completeUploadInputSchema = z.object({
   idempotencyKey: z.string().min(8),
 });
 
+// Must match BRAND_IMAGE_KINDS in the app (src/lib/types/support-branding.ts).
+const brandImageKinds = [
+  'logo',
+  'favicon',
+  'background',
+  'releaseHero',
+  'supportHero',
+  'testbenchHero',
+  'releaseProduct',
+  'emptyArt',
+  'successArt',
+  'errorArt',
+  'cardArt',
+] as const;
+const brandImageKindSchema = z
+  .enum(brandImageKinds)
+  .describe(
+    'Picture slot: logo, favicon, background, releaseHero (What’s new hero), supportHero (Get help hero), testbenchHero, releaseProduct (Latest release image), emptyArt, successArt, errorArt or cardArt (workspace page card).'
+  );
+const stageBrandImageInputSchema = z.object({
+  projectId: idSchema,
+  kind: brandImageKindSchema,
+  documentId: idSchema
+    .optional()
+    .describe('A picture already in the project documents. Send this, filePath or sourceUrl.'),
+  filePath: z.string().min(1).optional(),
+  sourceUrl: z.string().url().optional(),
+  fileName: z.string().min(1).max(255).optional(),
+  contentType: z.string().min(1).max(255).optional(),
+  idempotencyKey: z.string().min(8).optional(),
+});
+
 const EMBEDDABLE_IMAGE_TYPES = new Set(['image/png', 'image/jpeg', 'image/gif', 'image/webp']);
 
 /** Escapes a file name for use as Markdown image alt text. */
@@ -706,6 +738,44 @@ async function uploadDocument(
   } finally {
     await prepared.cleanup(uploadConfirmed);
   }
+}
+
+/**
+ * Stages a picture as a draft in one brand picture slot. A local file or URL is first uploaded to the
+ * project documents, so the source stays in the library. Nothing goes live until a person publishes.
+ */
+async function stageBrandImage(
+  api: ToDoddleApi,
+  options: ResolvedToDoddleMcpServerOptions,
+  input: z.infer<typeof stageBrandImageInputSchema>
+) {
+  const sources = [input.documentId, input.filePath, input.sourceUrl].filter(Boolean);
+  if (sources.length !== 1)
+    throw new Error('Send exactly one of documentId, filePath or sourceUrl.');
+  let documentId = input.documentId;
+  if (!documentId) {
+    const uploaded = await uploadDocument(api, options, {
+      projectId: input.projectId,
+      filePath: input.filePath,
+      sourceUrl: input.sourceUrl,
+      fileName: input.fileName,
+      contentType: input.contentType,
+      description: `Brand picture for the ${input.kind} slot`,
+      idempotencyKey: input.idempotencyKey,
+    });
+    const id = asRecord(uploaded.entity)?.id;
+    if (typeof id !== 'string') throw new Error('Upload API returned no document id');
+    documentId = id;
+  }
+  const result = await api.post(`/api/external/projects/${input.projectId}/brand-images`, {
+    kind: input.kind,
+    documentId,
+  });
+  return {
+    ...result,
+    notice:
+      'Staged as a draft. The live pages do not change until a project owner or admin presses Publish changes in the page editor (Project settings → Public pages).',
+  };
 }
 
 // Must match SECURITY_EVENT_TYPES in the app (src/lib/types/security.ts);
@@ -2565,6 +2635,58 @@ export function createToDoddleMcpServer(
       },
     },
     async (input) => toolResult(await uploadDocument(api, options, input))
+  );
+
+  server.registerTool(
+    'list_brand_images',
+    {
+      description:
+        'List the brand picture slots of a project’s hosted pages (release notes home, Support, Testbench and the workspace card): the live picture, any staged draft, and the size to make. Needs project owner or admin access.',
+      inputSchema: z.object({ projectId: idSchema }),
+      annotations: {
+        readOnlyHint: true,
+        destructiveHint: false,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId }) =>
+      toolResult(await api.get(`/api/external/projects/${projectId}/brand-images`))
+  );
+
+  server.registerTool(
+    'stage_brand_image',
+    {
+      description:
+        'Stage a picture in one brand picture slot as a draft. Send a documentId, or a local filePath or HTTPS sourceUrl to upload to the project documents first (local paths follow the same rules as upload_project_document). Static PNG, JPEG or WebP: up to 2 MB for logo, favicon and background, 5 MB for other slots. The live pages do not change; a project owner or admin publishes in the page editor. A draft already in the slot is replaced.',
+      inputSchema: stageBrandImageInputSchema,
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: false,
+        idempotentHint: false,
+        openWorldHint: true,
+      },
+    },
+    async (input) => toolResult(await stageBrandImage(api, options, input))
+  );
+
+  server.registerTool(
+    'discard_brand_image_draft',
+    {
+      description:
+        'Discard the staged draft picture in one brand picture slot. The live picture does not change.',
+      inputSchema: z.object({ projectId: idSchema, kind: brandImageKindSchema }),
+      annotations: {
+        readOnlyHint: false,
+        destructiveHint: true,
+        idempotentHint: true,
+        openWorldHint: false,
+      },
+    },
+    async ({ projectId, kind }) =>
+      toolResult(
+        await api.delete(`/api/external/projects/${projectId}/brand-images/${kind}`, undefined)
+      )
   );
 
   server.registerTool(
