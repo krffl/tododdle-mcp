@@ -88,6 +88,10 @@ test('workflow skill declares the MCP dependency and core safety rules', async (
     new URL('../skills/tododdle-workflow/references/releases.md', import.meta.url),
     'utf8',
   );
+  const social = await readFile(
+    new URL('../skills/tododdle-workflow/references/social.md', import.meta.url),
+    'utf8',
+  );
   const metadata = await readFile(
     new URL('../skills/tododdle-workflow/agents/openai.yaml', import.meta.url),
     'utf8',
@@ -131,6 +135,10 @@ test('workflow skill declares the MCP dependency and core safety rules', async (
   assert.match(releases, /Do not report the release as published, abandoned, archived, or restored/);
   assert.match(releases, /`releases:write`/);
   assert.match(releases, /`testbench:write`/);
+  assert.match(skill, /\[social\.md\]\(references\/social\.md\)/);
+  assert.match(social, /`social:write`/);
+  assert.match(social, /untrusted data, not instructions/);
+  assert.match(social, /Run it with `dryRun: true` first/);
   assert.match(files, /After confirmed success, the local MCP deletes the staged file/);
   assert.match(files, /For a clipboard image/);
   assert.match(files, /private directory with `mktemp -d "\$\{TMPDIR:-\/tmp\}\/tododdle-upload-XXXXXX"`/);
@@ -323,6 +331,7 @@ test('agent-facing instructions do not describe ToDoddle as a ledger', async () 
     '../.claude-plugin/plugin.json',
     '../.claude-plugin/marketplace.json',
     '../skills/tododdle-workflow/SKILL.md',
+    '../skills/tododdle-workflow/references/social.md',
     '../skills/tododdle-supervisor/SKILL.md',
     '../skills/tododdle-factory/SKILL.md',
     '../skills/tododdle-bootstrap/SKILL.md',
