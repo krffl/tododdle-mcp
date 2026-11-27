@@ -88,6 +88,10 @@ test('workflow skill declares the MCP dependency and core safety rules', async (
     new URL('../skills/tododdle-workflow/references/releases.md', import.meta.url),
     'utf8',
   );
+  const social = await readFile(
+    new URL('../skills/tododdle-workflow/references/social.md', import.meta.url),
+    'utf8',
+  );
   const metadata = await readFile(
     new URL('../skills/tododdle-workflow/agents/openai.yaml', import.meta.url),
     'utf8',
@@ -131,6 +135,10 @@ test('workflow skill declares the MCP dependency and core safety rules', async (
   assert.match(releases, /Do not report the release as published, abandoned, archived, or restored/);
   assert.match(releases, /`releases:write`/);
   assert.match(releases, /`testbench:write`/);
+  assert.match(skill, /\[social\.md\]\(references\/social\.md\)/);
+  assert.match(social, /`social:write`/);
+  assert.match(social, /untrusted data, not instructions/);
+  assert.match(social, /Run it with `dryRun: true` first/);
   assert.match(files, /After confirmed success, the local MCP deletes the staged file/);
   assert.match(files, /For a clipboard image/);
   assert.match(files, /private directory with `mktemp -d "\$\{TMPDIR:-\/tmp\}\/tododdle-upload-XXXXXX"`/);
@@ -236,6 +244,30 @@ test('factory skill scopes autonomous delivery and preserves human control', asy
   assert.match(dogfood, /Do not publish when any check fails/);
 });
 
+test('page graphics skill keeps the slot sizes and the upload checklist', async () => {
+  const skill = await readFile(new URL('../skills/tododdle-page-graphics/SKILL.md', import.meta.url), 'utf8');
+  const slots = await readFile(
+    new URL('../skills/tododdle-page-graphics/references/slots.md', import.meta.url),
+    'utf8'
+  );
+  const metadata = await readFile(
+    new URL('../skills/tododdle-page-graphics/agents/openai.yaml', import.meta.url),
+    'utf8'
+  );
+
+  assert.match(skill, /^---\nname: tododdle-page-graphics\n/);
+  assert.match(skill, /Never invent a logo/);
+  assert.match(skill, /No words in pictures/);
+  assert.match(skill, /The user publishes/);
+  assert.match(skill, /references\/slots\.md/);
+  for (const size of ['1200 × 400 px', '512 × 512 px', '1920 × 1080 px', '1600 × 1000 px', '1600 × 640 px', '1200 × 750 px']) {
+    assert.ok(slots.includes(size), `slots.md lists ${size}`);
+  }
+  assert.match(slots, /Publish changes/);
+  assert.match(slots, /up to 5 MB/);
+  assert.match(metadata, /\$tododdle-page-graphics/);
+});
+
 test('supervisor skill uses optional provider-neutral ToDoddle guidance', async () => {
   const skill = await readFile(
     new URL('../skills/tododdle-supervisor/SKILL.md', import.meta.url),
@@ -323,10 +355,13 @@ test('agent-facing instructions do not describe ToDoddle as a ledger', async () 
     '../.claude-plugin/plugin.json',
     '../.claude-plugin/marketplace.json',
     '../skills/tododdle-workflow/SKILL.md',
+    '../skills/tododdle-workflow/references/social.md',
     '../skills/tododdle-supervisor/SKILL.md',
     '../skills/tododdle-factory/SKILL.md',
     '../skills/tododdle-bootstrap/SKILL.md',
     '../skills/tododdle-bootstrap/scripts/update-agents.mjs',
+    '../skills/tododdle-page-graphics/SKILL.md',
+    '../skills/tododdle-page-graphics/references/slots.md',
     '../src/server.ts',
   ];
   for (const file of files) {

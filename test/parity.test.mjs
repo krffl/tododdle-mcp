@@ -134,6 +134,7 @@ test('every discovered tool validates and serializes only to documented External
         if (tool.name === 'attach_file_to_ticket') argumentsValue.taskId = 'taskId-value'
       }
       if (tool.name === 'log_completed_work') argumentsValue.taskId = 'taskId-value'
+      if (tool.name === 'stage_brand_image') argumentsValue.documentId = 'documentId-value'
       if (tool.name === 'begin_upload') {
         argumentsValue.projectId = 'projectId-value'
         argumentsValue.fileName = 'evidence.txt'
@@ -175,6 +176,8 @@ test('every discovered tool validates and serializes only to documented External
       if (tool.name === 'update_review_checklist_item') {
         argumentsValue.completed = true
       }
+      if (tool.name === 'record_social_post') argumentsValue.assetId = 'assetId-value'
+      if (tool.name === 'update_social_snapshot_metrics') argumentsValue.metrics = { views: 0 }
       if (tool.name === 'record_assessment') {
         argumentsValue.dimensions = { correctness: { value: true } }
       }
