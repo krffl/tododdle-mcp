@@ -505,7 +505,7 @@ This release also includes changes made since 3.7.0: the read-only `list_securit
 
 The release raises `@modelcontextprotocol/sdk` to `^1.32.1` to fix [GHSA-6qxp-vccf-f47h](https://github.com/advisories/GHSA-6qxp-vccf-f47h), where SDK versions before 1.31.0 could send OAuth client credentials to an authorization server chosen by the MCP server.
 
-### Unreleased
+### 3.19.0 release
 
 - Adds Social tools: `list_social_platforms`, `save_social_platform`, `list_social_assets`, `get_social_asset`, `record_social_asset`, `record_social_post`, `record_social_snapshot`, `update_social_snapshot_metrics`, `delete_social_snapshot`, `list_social_snapshots`, `list_social_due`, `get_social_analytics`, `riff_social_asset`, and `import_social_history`.
 - Agent Connections need the `social:read` or `social:write` scope. Deploy the matching External API Social routes first. The hosted gateway must install this package and map the new scopes before it advertises these tools. Every change is additive, so the compatibility level stays at 3.
