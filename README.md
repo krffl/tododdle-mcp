@@ -77,7 +77,7 @@ For every client, `npx` downloads the package to npm's cache. Cloning ToDoddle o
 
 ## Workflow Guidance
 
-The MCP server provides capabilities. The package distributes four optional skills:
+The MCP server provides capabilities. The package distributes five optional skills:
 
 | Skill | Use |
 | --- | --- |
@@ -85,6 +85,7 @@ The MCP server provides capabilities. The package distributes four optional skil
 | `tododdle-bootstrap` | Bind an existing repository to one verified ToDoddle project. |
 | `tododdle-factory` | Run one explicit, supervised autonomous delivery attempt with an Agent Run and stable evidence. |
 | `tododdle-supervisor` | Use current ToDoddle supervision assessments at meaningful workflow decisions when a compatible backend is available. |
+| `tododdle-page-graphics` | Plan, make and check one matching picture set for a project's hosted pages (Home, Support, Testbench, workspace card), with exact sizes and an upload checklist. |
 
 The bootstrap skill has a deterministic updater that adds a small managed block to the effective root agent instructions. The Factory skill reuses the workflow rules and adds bounded delivery, escalation, cleanup, and package staging checks. The Supervisor skill adds optional decision guidance without connecting the coding agent to an external decision or supervision provider.
 
@@ -479,6 +480,10 @@ Adds release tools (`list_releases`, `get_release`, `create_release`, `update_re
 This release also includes changes made since 3.7.0: the read-only `list_security_events` tool (`security:read`); the system temporary directory as the default upload root, with per-file ownership checks and validated DNS answers pinned on HTTPS upload fetches; Agent Run context on move, archive, attribute, and time tools; a pending-approval result for customer-visible Support replies; and GitHub Actions pinned to commit SHAs.
 
 The release raises `@modelcontextprotocol/sdk` to `^1.32.1` to fix [GHSA-6qxp-vccf-f47h](https://github.com/advisories/GHSA-6qxp-vccf-f47h), where SDK versions before 1.31.0 could send OAuth client credentials to an authorization server chosen by the MCP server.
+
+### Unreleased
+
+Adds the optional `tododdle-page-graphics` skill. It plans one matching picture set for a project's hosted pages from a short style card, makes each picture at its slot's size and crop, checks the files, and gives the user a contact sheet and an upload checklist that matches the page editor. It never invents a logo and never puts words in pictures. No new MCP tool, credential or scope is required.
 
 ### 3.18.0 release
 
