@@ -1623,7 +1623,7 @@ export function createToDoddleMcpServer(
   server.registerTool(
     'list_social_assets',
     {
-      description: `List Social asset summaries, newest first, 25 a page. Filter by search, platform, format, tag, or a from and to date (YYYY-MM-DD). The result also lists the formats and tags used in the project. Needs the \`social:read\` scope. ${SOCIAL_UNTRUSTED_TEXT}`,
+      description: `List Social asset summaries, newest first, 25 a page. Filter by search (matches the title, hook, pack reference, or any post link, so you can find a post by its URL), platform, format, tag, or a from and to date (YYYY-MM-DD). The result also lists the formats and tags used in the project. Needs the \`social:read\` scope. ${SOCIAL_UNTRUSTED_TEXT}`,
       inputSchema: z.object({
         projectId: idSchema,
         search: z.string().trim().max(200).optional(),
