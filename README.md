@@ -505,9 +505,10 @@ This release also includes changes made since 3.7.0: the read-only `list_securit
 
 The release raises `@modelcontextprotocol/sdk` to `^1.32.1` to fix [GHSA-6qxp-vccf-f47h](https://github.com/advisories/GHSA-6qxp-vccf-f47h), where SDK versions before 1.31.0 could send OAuth client credentials to an authorization server chosen by the MCP server.
 
-### Unreleased
+### 3.20.0 release
 
-- Adds Social campaign result tools: `list_social_campaigns` (`social:read`), `record_social_campaign_result` and `delete_social_campaign_result` (`social:write`). They record weekly store numbers (impressions, product page views, downloads) per campaign token. A bio token's downloads stay with the token and are never credited across posts. They need the ToDoddle app release that adds `/api/external/projects/{projectId}/social/campaigns`. The hosted gateway must map the three tools to `social:read` and `social:write` when it installs this package.
+- Adds Social campaign result tools: `list_social_campaigns` (`social:read`), `record_social_campaign_result` and `delete_social_campaign_result` (`social:write`). They record weekly store numbers (impressions, product page views, downloads) per campaign token. A bio token's downloads stay with the token and are never credited across posts. They need the ToDoddle app release that adds `/api/external/projects/{projectId}/social/campaigns` (in production since 2026-11-27).
+- `list_social_assets` search also matches post links, so an integration can find a post by its URL. The hosted gateway must map the three tools to `social:read` and `social:write` when it installs this package.
 
 ### 3.19.0 release
 
