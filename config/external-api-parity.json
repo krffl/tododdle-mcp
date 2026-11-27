@@ -2,6 +2,9 @@
   "source": "ToDoddle External API inventory, reviewed 2026-10-15",
   "tools": {
     "get_document_image": ["GET /api/external/projects/[projectId]/documents/[documentId]/image"],
+    "list_brand_images": ["GET /api/external/projects/[projectId]/brand-images"],
+    "stage_brand_image": ["POST /api/external/projects/[projectId]/documents/upload-sessions", "POST /api/external/projects/[projectId]/documents/[documentId]/finalize", "POST /api/external/projects/[projectId]/brand-images"],
+    "discard_brand_image_draft": ["DELETE /api/external/projects/[projectId]/brand-images/[kind]"],
     "list_projects": ["GET /api/external/projects"],
     "get_project": ["GET /api/external/projects/[projectId]"],
     "create_project": ["POST /api/external/projects"],

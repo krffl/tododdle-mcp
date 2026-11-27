@@ -1,11 +1,11 @@
 ---
 name: tododdle-page-graphics
-description: Plan, make, check and hand over the pictures for a project's hosted ToDoddle pages (release notes home, Support portal, Testbench and the workspace page card) as one matching set. Trigger when the user asks for graphics, art, images, a logo set, hero pictures or a brand pack for their ToDoddle public pages, page editor or portal, or says setting up those pages is slow. Do not trigger for ordinary ticket work or for in-app UI design.
+description: Plan, make, check and stage the pictures for a project's hosted ToDoddle pages (release notes home, Support portal, Testbench and the workspace page card) as one matching set. Trigger when the user asks for graphics, art, images, a logo set, hero pictures or a brand pack for their ToDoddle public pages, page editor or portal, or says setting up those pages is slow. Do not trigger for ordinary ticket work or for in-app UI design.
 ---
 
 # ToDoddle Page Graphics
 
-A project's hosted pages use up to 11 pictures. People find the setup slow because each slot has its own size and crop, and pictures made one at a time do not match. This skill makes the whole set in one pass, in one style, at the right sizes, and tells the user exactly where each file goes.
+A project's hosted pages use up to 11 pictures. People find the setup slow because each slot has its own size and crop, and pictures made one at a time do not match. This skill makes the whole set in one pass, in one style, at the right sizes, and stages each picture in its slot for the user to publish.
 
 Slot sizes, crops and upload places are in [references/slots.md](references/slots.md). Read it before you plan.
 
@@ -17,7 +17,7 @@ Slot sizes, crops and upload places are in [references/slots.md](references/slot
 - **Only the slots in use.** Ask which pages are on: Home (release notes), Support, Testbench, the workspace card. Skip the rest.
 - **No real people, brands or trademarks** in generated pictures, and nothing that looks like a screenshot of another product.
 - **Follow the environment's image rules.** If the user's instructions say how images are made (a tool, a quota, a booking step, where files go), follow them. Large raw files and drafts do not go in a code repository.
-- **The user publishes.** You prepare files and a checklist. The user uploads them in the page editor and presses **Publish changes**. Do not sign in or upload for them.
+- **The user publishes.** You stage pictures as drafts with `stage_brand_image`. Staged pictures never change the live pages. A project owner or admin checks them in the page editor preview and presses **Publish changes**. Do not sign in to the web app or publish for them.
 
 ## Steps
 
@@ -70,18 +70,23 @@ Make the hero pictures first and check they match before you make the rest.
 ### 5. Fit and check
 
 - Crop and resize to the exact size in the slot table. Use whatever is installed (`sips` on macOS, ImageMagick, `sharp`, or `ffmpeg`), and keep the subject centred.
-- Check each file: the size is exact, the format is PNG, JPEG or WebP, it is under 5 MB, and state art and the logo have transparent corners.
+- Check each file: the size is exact, the format is PNG, JPEG or WebP, it is under 2 MB for the logo, favicon and background and under 5 MB for the rest, and state art and the logo have transparent corners.
 - Check the crops. Hero pictures are cropped to cover a box 200–340 px tall that is wide on phones and about half the page on desktop. The subject must survive a crop to the centre half in both directions. State art is shown at 88 px; it must still read at that size.
 - Check readability. Put the page heading colour on the background picture and confirm the text is still easy to read.
 - Make one contact sheet (all pictures on one image, each labelled with its slot) so the user can approve the set at a glance.
 
-### 6. Hand over
+### 6. Stage and hand over
 
-Give the user:
+Call `list_brand_images` first. It shows each slot's live picture, any picture already staged, and the size to make. It needs project owner or admin access; if it is refused, use the manual checklist below.
+
+Stage each approved picture with `stage_brand_image` (`projectId`, `kind` from the slot table, and `filePath` to the final file). The tool uploads the file to the project documents and puts it in the slot as a draft. A picture staged again in the same slot replaces the earlier draft. Use `discard_brand_image_draft` to take one back.
+
+Then give the user:
 
 1. The contact sheet.
 2. The folder of final files, named by slot.
-3. The upload checklist from [references/slots.md](references/slots.md), only for the slots you made, in click order.
-4. A reminder: press **Publish changes** in the page editor, then open the live page and check it on a phone width.
+3. The next step: open **Project settings → Public pages**. The staged pictures show in the preview with a note. Press **Publish changes** to make them live, or **Remove staged pictures** to drop them. Then open the live page and check it on a phone width.
+
+If the `stage_brand_image` tool is not available (an older ToDoddle MCP, or no owner or admin access), give the upload checklist from [references/slots.md](references/slots.md) instead, only for the slots you made, in click order.
 
 Keep the style card and prompts next to the files so the set can be extended later in the same style.

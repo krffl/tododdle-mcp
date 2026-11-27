@@ -85,7 +85,7 @@ The MCP server provides capabilities. The package distributes five optional skil
 | `tododdle-bootstrap` | Bind an existing repository to one verified ToDoddle project. |
 | `tododdle-factory` | Run one explicit, supervised autonomous delivery attempt with an Agent Run and stable evidence. |
 | `tododdle-supervisor` | Use current ToDoddle supervision assessments at meaningful workflow decisions when a compatible backend is available. |
-| `tododdle-page-graphics` | Plan, make and check one matching picture set for a project's hosted pages (Home, Support, Testbench, workspace card), with exact sizes and an upload checklist. |
+| `tododdle-page-graphics` | Plan, make and check one matching picture set for a project's hosted pages (Home, Support, Testbench, workspace card), with exact sizes, then stage them as drafts for the page editor. |
 
 The bootstrap skill has a deterministic updater that adds a small managed block to the effective root agent instructions. The Factory skill reuses the workflow rules and adds bounded delivery, escalation, cleanup, and package staging checks. The Supervisor skill adds optional decision guidance without connecting the coding agent to an external decision or supervision provider.
 
@@ -483,7 +483,9 @@ The release raises `@modelcontextprotocol/sdk` to `^1.32.1` to fix [GHSA-6qxp-vc
 
 ### Unreleased
 
-Adds the optional `tododdle-page-graphics` skill. It plans one matching picture set for a project's hosted pages from a short style card, makes each picture at its slot's size and crop, checks the files, and gives the user a contact sheet and an upload checklist that matches the page editor. It never invents a logo and never puts words in pictures. No new MCP tool, credential or scope is required.
+Adds the optional `tododdle-page-graphics` skill. It plans one matching picture set for a project's hosted pages from a short style card, makes each picture at its slot's size and crop, checks the files, stages them, and gives the user a contact sheet. It never invents a logo and never puts words in pictures.
+
+Adds three tools for brand pictures on the hosted pages: `list_brand_images` (slots, live pictures, staged drafts and sizes), `stage_brand_image` (upload a local file or URL to the project documents, or use a `documentId`, and stage it in a slot as a draft) and `discard_brand_image_draft`. Staged pictures never change the live pages: a project owner or admin publishes them in the page editor. They need `projects:read`, `projects:write`, `documents:read` and, to upload a file, `documents:write`. Existing connections with those scopes need no change. They also need and project owner or admin access. They need the ToDoddle app release that adds `/api/external/projects/{projectId}/brand-images`.
 
 ### 3.18.0 release
 
