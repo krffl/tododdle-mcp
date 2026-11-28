@@ -505,6 +505,10 @@ This release also includes changes made since 3.7.0: the read-only `list_securit
 
 The release raises `@modelcontextprotocol/sdk` to `^1.32.1` to fix [GHSA-6qxp-vccf-f47h](https://github.com/advisories/GHSA-6qxp-vccf-f47h), where SDK versions before 1.31.0 could send OAuth client credentials to an authorization server chosen by the MCP server.
 
+### 3.20.1 release
+
+- Fixes `stage_brand_image` with a `filePath` or `sourceUrl`, which failed with "Upload API returned no document id": the External API returns the uploaded document as `entity.document`. The same fix restores the `embedMarkdown` hint after `upload_project_document`, `attach_file_to_ticket` and `complete_upload`.
+
 ### 3.20.0 release
 
 - Adds Social campaign result tools: `list_social_campaigns` (`social:read`), `record_social_campaign_result` and `delete_social_campaign_result` (`social:write`). They record weekly store numbers (impressions, product page views, downloads) per campaign token. A bio token's downloads stay with the token and are never credited across posts. They need the ToDoddle app release that adds `/api/external/projects/{projectId}/social/campaigns` (in production since 2026-11-27).
