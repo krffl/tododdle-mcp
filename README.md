@@ -505,7 +505,7 @@ This release also includes changes made since 3.7.0: the read-only `list_securit
 
 The release raises `@modelcontextprotocol/sdk` to `^1.32.1` to fix [GHSA-6qxp-vccf-f47h](https://github.com/advisories/GHSA-6qxp-vccf-f47h), where SDK versions before 1.31.0 could send OAuth client credentials to an authorization server chosen by the MCP server.
 
-### Unreleased
+### 3.20.1 release
 
 - Fixes `stage_brand_image` with a `filePath` or `sourceUrl`, which failed with "Upload API returned no document id": the External API returns the uploaded document as `entity.document`. The same fix restores the `embedMarkdown` hint after `upload_project_document`, `attach_file_to_ticket` and `complete_upload`.
 
