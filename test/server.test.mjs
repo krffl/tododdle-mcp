@@ -1431,7 +1431,8 @@ test('says when the server stores an upload as a safer type', async () => {
         current = body.fileName
         return { session: { documentId: 'document-1', uploadUrl: 'https://storage.example/upload', headers: {} } }
       }
-      return { entity: { id: 'document-1', mimeType: stored[current] } }
+      // The real finalize response nests the document under entity.document.
+      return { entity: { document: { id: 'document-1', fileName: current, mimeType: stored[current] }, attachment: null }, changedFields: ['uploadStatus'] }
     },
   }
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
@@ -1462,7 +1463,9 @@ test('adds embed Markdown after a remote complete_upload', async () => {
     { id: 'doc-zip', fileName: 'bundle.zip', mimeType: 'application/zip' },
   ]
   const [clientTransport, serverTransport] = InMemoryTransport.createLinkedPair()
-  const server = createToDoddleMcpServer({ ...api, post: async () => ({ entity: entities.shift() }) })
+  // The first answer has the current shape (entity.document); the second the older flat entity.
+  let calls = 0
+  const server = createToDoddleMcpServer({ ...api, post: async () => (calls++ === 0 ? { entity: { document: entities.shift(), attachment: null } } : { entity: entities.shift() }) })
   const client = new Client({ name: 'complete-upload-test', version: '1' })
   await Promise.all([server.connect(serverTransport), client.connect(clientTransport)])
   try {
@@ -2654,7 +2657,8 @@ test('stages brand pictures as drafts, uploading local files to the documents fi
     post: async (path, body) => {
       calls.push(['POST', path, body])
       if (path.endsWith('/upload-sessions')) return { session: { documentId: 'doc-1', uploadUrl: 'https://storage.example/upload', headers: {} } }
-      if (path.endsWith('/finalize')) return { entity: { id: 'doc-1', mimeType: 'image/png' } }
+      // Regression: stage_brand_image read entity.id, so the real response (entity.document.id) failed with "Upload API returned no document id".
+      if (path.endsWith('/finalize')) return { entity: { document: { id: 'doc-1', fileName: 'release-hero.png', mimeType: 'image/png' }, attachment: null }, changedFields: ['uploadStatus'] }
       return { draft: { kind: body.kind, url: 'https://cdn.example/x.webp' }, published: false }
     },
     delete: async (path) => { calls.push(['DELETE', path]); return { discarded: 1 } },

@@ -669,8 +669,17 @@ function markdownAlt(value: string): string {
  * SVG, HTML, and other active content as an opaque file so it never runs in a
  * browser; an SVG previews and embeds through a PNG rendering instead.
  */
-function withUploadHints(result: Record<string, unknown>, requestedType: string, fileName: string) {
+/**
+ * The document a finalize call returns. The External API sends `entity.document` (with
+ * `entity.attachment` for ticket attachments); older servers sent the document as `entity`.
+ */
+function finalizedDocument(result: Record<string, unknown>): Record<string, unknown> | undefined {
   const entity = asRecord(result.entity);
+  return asRecord(entity?.document) ?? entity;
+}
+
+function withUploadHints(result: Record<string, unknown>, requestedType: string, fileName: string) {
+  const entity = finalizedDocument(result);
   const storedType = entity?.mimeType;
   const id = typeof entity?.id === 'string' ? entity.id : undefined;
   const isSvg = /\.svg$/i.test(fileName);
@@ -763,7 +772,7 @@ async function stageBrandImage(
       description: `Brand picture for the ${input.kind} slot`,
       idempotencyKey: input.idempotencyKey,
     });
-    const id = asRecord(uploaded.entity)?.id;
+    const id = finalizedDocument(uploaded)?.id;
     if (typeof id !== 'string') throw new Error('Upload API returned no document id');
     documentId = id;
   }
@@ -2692,7 +2701,7 @@ export function createToDoddleMcpServer(
         idempotencyKey
       );
       // The remote client sent the bytes, so the stored type is the only type to compare.
-      const entity = asRecord(result.entity);
+      const entity = finalizedDocument(result);
       const fileName = typeof entity?.fileName === 'string' ? entity.fileName : '';
       const storedType = typeof entity?.mimeType === 'string' ? entity.mimeType : '';
       return toolResult(
